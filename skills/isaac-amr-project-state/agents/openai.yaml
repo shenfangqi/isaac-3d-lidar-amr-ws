@@ -1,0 +1,4 @@
+interface:
+  display_name: "Isaac AMR Project State"
+  short_description: "Resume the Isaac AMR navigation and v3 map workflow"
+  default_prompt: "Use $isaac-amr-project-state to resume the current Isaac AMR debugging and v3 map workflow."

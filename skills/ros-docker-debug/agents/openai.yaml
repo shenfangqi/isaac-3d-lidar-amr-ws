@@ -1,0 +1,4 @@
+interface:
+  display_name: "ROS Docker Debug"
+  short_description: "Enter and diagnose the project ROS Docker containers"
+  default_prompt: "Use $ros-docker-debug to enter the correct container and diagnose the ROS 2 system."

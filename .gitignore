@@ -1,0 +1,43 @@
+# ROS 2 / colcon generated output
+**/build/
+**/install/
+**/log/
+**/logs/
+
+# Nested repository metadata; keep the vendored source only
+**/.git/
+
+# Python and test caches
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE and OS metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+**/.thumbs/
+
+# Runtime captures and local datasets
+bags/
+datasets/
+*.bag
+*.db3
+*.mcap
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*credentials*
+*secret*
+
+# Temporary files
+*.swp
+*.swo
+*~

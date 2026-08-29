@@ -1,0 +1,28 @@
+frontier_explorer:
+  ros__parameters:
+    use_sim_time: true
+    map_topic: /nvblox_node/static_occupancy_grid
+    global_frame: odom
+    robot_base_frame: base_link
+    navigate_action: /navigate_to_pose
+    cmd_vel_topic: /cmd_vel
+    reject_unexpected_cmd_vel_publishers: true
+    allowed_cmd_vel_publishers: [velocity_smoother, behavior_server]
+    start_enabled: false
+    planning_period_sec: 2.0
+    map_stale_timeout_sec: 5.0
+    goal_timeout_sec: 120.0
+    blacklist_duration_sec: 180.0
+    blacklist_radius_m: 0.75
+    free_threshold: 20
+    occupied_threshold: 65
+    min_frontier_length_m: 0.30
+    goal_clearance_m: 0.55
+    goal_unknown_clearance_m: 0.40
+    goal_search_radius_m: 1.00
+    boundary_margin_m: 0.60
+    min_goal_distance_m: 0.80
+    max_goal_distance_m: 15.0
+    information_gain_weight: 1.0
+    distance_weight: 0.35
+    completion_cycles: 5

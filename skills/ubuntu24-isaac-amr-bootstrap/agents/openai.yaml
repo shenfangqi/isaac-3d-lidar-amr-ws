@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ubuntu 24 Isaac AMR Bootstrap"
+  short_description: "Provision and launch this AMR stack on Ubuntu 24"
+  default_prompt: "Use $ubuntu24-isaac-amr-bootstrap to provision this project on a fresh Ubuntu 24.04 NVIDIA workstation and launch validated warehouse_v3 navigation."

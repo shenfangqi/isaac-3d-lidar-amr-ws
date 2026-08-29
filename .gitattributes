@@ -1,0 +1,11 @@
+# Large/generated robotics assets are binary and should not be text-diffed.
+*.nvblx binary
+*.ply binary
+*.pgm binary
+*.usd binary
+*.bag binary
+*.db3 binary
+*.mcap binary
+
+# Notebook diffs are noisy and may contain embedded binary output.
+*.ipynb -diff

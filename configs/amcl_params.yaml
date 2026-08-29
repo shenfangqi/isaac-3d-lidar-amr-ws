@@ -1,0 +1,53 @@
+map_server:
+  ros__parameters:
+    use_sim_time: true
+    yaml_filename: /workspace/ros-humble/isaac_3d_lidar_amr_ws/maps/2d/warehouse_v3.yaml
+
+amcl:
+  ros__parameters:
+    use_sim_time: true
+    base_frame_id: "base_link"
+    odom_frame_id: "odom"
+    global_frame_id: "map"
+    scan_topic: "/scan"
+    tf_broadcast: true
+
+    # The projected 3D scan is dense and Isaac's odometry is much cleaner
+    # than AMCL's generic defaults assume. Smaller motion-noise terms and
+    # more frequent updates avoid infrequent, visible map->odom jumps.
+    robot_model_type: "nav2_amcl::DifferentialMotionModel"
+    alpha1: 0.01
+    alpha2: 0.01
+    alpha3: 0.01
+    # alpha4 injects translational uncertainty while rotating. Isaac odom
+    # has negligible wheel slip; a generic 0.2 (or even 0.05) makes the
+    # estimated robot position visibly orbit during an in-place turn.
+    alpha4: 0.005
+    alpha5: 0.01
+    update_min_d: 0.10
+    update_min_a: 0.10
+    resample_interval: 2
+
+    # Use most of the 361-ray scan. Probability likelihood-field beam
+    # skipping makes localization tolerant of incomplete nvblox cells and
+    # objects which were not present when the map was saved.
+    laser_model_type: "likelihood_field_prob"
+    laser_min_range: 0.5
+    laser_max_range: 20.0
+    max_beams: 180
+    laser_likelihood_max_dist: 2.0
+    sigma_hit: 0.20
+    z_hit: 0.80
+    z_rand: 0.20
+    z_max: 0.0
+    z_short: 0.0
+    do_beamskip: true
+    beam_skip_distance: 0.5
+    beam_skip_threshold: 0.3
+    beam_skip_error_threshold: 0.9
+
+    min_particles: 800
+    max_particles: 3000
+    pf_err: 0.03
+    pf_z: 0.99
+    transform_tolerance: 0.3
