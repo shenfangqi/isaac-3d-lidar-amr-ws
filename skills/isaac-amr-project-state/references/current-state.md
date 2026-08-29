@@ -2,14 +2,13 @@
 
 ## Live checkpoint: 2026-08-29
 
-This is the newest authoritative state.
+This is the newest authoritative state after validating and stopping all three launch modes.
 
-- `./start_nav_all.sh` completed a full cold start and ended with `[ OK ] All startup health checks passed.`
-- `isaac-sim`, `isaac-ros-nvblox`, and `ros2-dev-humble` are running.
-- Isaac Sim is headless. Warehouse_v3 is loaded through one nvblox instance, AMCL uses the simulation-only `odom_identity` initializer mode, and the one-shot initializer exited successfully.
-- Exactly one RViz runs with Fixed Frame `map` and simulation time. Nav2 lifecycle nodes and NavigateToPose/Spin/BackUp Actions are ready.
-- Warehouse_v3 is `417 x 424` at `0.05 m`; live `/scan`, nvblox occupancy, minimum LiDAR range `0.5 m`, unknown-space rejection, and `map -> base_link` TF all passed the 2026-08-29 read-only health recheck.
-- The user confirmed RViz `2D Goal Pose` moves the robot. RViz `Publish Point` publishes `/clicked_point`, but the current stack has no subscriber bridge and therefore does not navigate from it.
+- `ISAAC_WEBRTC=1 ./start_nav_all.sh` completed with `[ OK ] All startup health checks passed.` The same Isaac instance provided WebRTC, loaded and played the warehouse automatically, and supplied the full nvblox/Nav2/RViz stack.
+- The AppImage connected to `127.0.0.1`; the native Isaac UI showed `/nova_carter_ROS111` and the Pause control while RViz remained open behind it.
+- A separate default `./start_nav_all.sh` cold-start regression also completed with all health checks passed and `Isaac WebRTC : disabled`, preserving the original low-overhead behavior.
+- The standalone `/isaac-sim/runheadless.sh` route and AppImage connection to `127.0.0.1` were also validated for Isaac-only UI access.
+- The latest `./stop_nav_all.sh` run stopped `isaac-sim`, `isaac-ros-nvblox`, and `ros2-dev-humble`; the standalone WebRTC Client and server processes were also closed. The next session starts from a clean stopped state.
 
 ## Cold-start baseline: 2026-07-19 end of day
 
@@ -18,6 +17,7 @@ Use this baseline after shutdown or whenever inspection confirms that no project
 - The host was shut down after documentation synchronization. `ros2-dev-humble`, `isaac-ros-nvblox`, and `isaac-sim` were verified stopped; no ROS process survives that shutdown.
 - `start_nav_all.sh` and `stop_nav_all.sh` passed Bash syntax validation. The workspace Isaac launcher passed Python syntax validation.
 - For the next saved-map navigation session, run `./start_nav_all.sh` from `/home/shenfq/projects/ros-humble`.
+- Use `ISAAC_WEBRTC=1 ./start_nav_all.sh` when RViz and the Isaac WebRTC UI are both required.
 - The launcher starts Isaac Sim headlessly, loads `warehouse_v3` through nvblox, starts AMCL/Nav2, and opens only RViz2. Require the final line `[ OK ] All startup health checks passed.`
 - Aggregate logs are `logs/start_nav_all/{isaac_sim,nvblox,navigation,rviz}.log`; the immediately preceding run is retained as `.previous`.
 - Use `./start_nav_all.sh --health-check` for a read-only recheck of an already running stack. Use `./stop_nav_all.sh` for the project shutdown path.

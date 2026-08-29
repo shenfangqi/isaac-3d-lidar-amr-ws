@@ -2,6 +2,13 @@
 
 Use this file for regression comparison or parameter provenance. It is historical evidence, not current process state.
 
+## Unified WebRTC and RViz acceptance
+
+- `ISAAC_WEBRTC=1 ./start_nav_all.sh` used one `runheadless.sh` Kit process plus `streaming_auto_play.py`; the server, streaming app, warehouse load, timeline Play, `/clock`, odometry, and 3D LiDAR gates all passed.
+- The WebRTC AppImage connected to `127.0.0.1` and displayed the playing warehouse while RViz remained live. The full nvblox/Nav2/AMCL health check passed without duplicate Isaac or ROS nodes.
+- The default non-streaming `./start_nav_all.sh` was cold-started separately after the change and also passed every health check.
+- `./stop_nav_all.sh` cleanly stopped all three containers after both modes.
+
 ## Final saved-map startup acceptance
 
 - A full cold start with all three containers stopped completed end to end and passed every health check.

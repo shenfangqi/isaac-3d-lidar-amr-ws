@@ -215,6 +215,15 @@ AMCL_INITIAL_YAW=0.0 \
 
 一键脚本通过 detached Docker exec 在后台启动 Isaac Sim、nvblox、Navigation 和 RViz，不会再为四个进程分别打开日志终端。它调用项目内 `isaac_sim/auto_play_warehouse.py`，以 `headless=True` 打开 warehouse USD 并自动 Play。桌面上只显示 RViz2；执行 `start_nav_all.sh` 的原终端继续显示就绪进度与最终健康检查。不要在脚本已经启动 Navigation 后，再手工启动第二套 `nav_stack.launch.py`。如果启动中途超时，先阅读文件日志，再执行 `./stop_nav_all.sh`，不要直接重跑启动脚本。
 
+需要同时显示 Isaac Sim WebRTC UI 和 RViz 时，使用统一 streaming 模式；它仍只启动一个 Isaac Sim，并自动打开同一 warehouse USD 和 Play：
+
+```bash
+ISAAC_WEBRTC=1 ./start_nav_all.sh
+/home/shenfq/桌面/myApps/isaacsim-webrtc-client.AppImage
+```
+
+等待启动器输出 `Isaac WebRTC : ready-at-127.0.0.1` 后，再让客户端连接 `127.0.0.1`。默认不设置 `ISAAC_WEBRTC` 时保持原来的无 WebRTC 后台模式。两种完整导航模式以及单独 `runheadless.sh` 模式互斥，切换前都先执行 `./stop_nav_all.sh`。
+
 脚本启动 RViz 时会显式设置 `use_sim_time:=true`，并使用 `Fixed Frame: map`。两项都不可缺少：如果 RViz 使用系统墙钟，Goal 会因时间位于 TF 未来而失败；如果使用 `odom` 发送 Goal，周期重规划在 TF 缓存淘汰原始时间后会报告 `Lookup would require extrapolation into the past`。健康检查会验证 RViz 时间源和配置文件的 Fixed Frame，避免地图显示正常但 Goal 中途失败的假健康状态。
 
 后台模式不再依赖宿主 `gnome-terminal`，因此也不会受到 Snap 版本 VS Code 注入 GTK/GIO 路径的影响。
@@ -917,7 +926,7 @@ amcl_initial_pose_mode:=odom_identity
 - AMCL 自动 Initial Pose 冷启动通过。
 - 冷启动后的短距离导航通过，零恢复。
 - 一键启动 RViz 的时间源和导航 Fixed Frame 已修正并加入健康检查。
-- 一键启动已改为后台文件日志模式，Isaac Sim 使用 headless 后端，桌面只显示 RViz2，不再弹出四个日志终端。
+- 一键启动默认使用无 WebRTC 的 headless 后端；设置 `ISAAC_WEBRTC=1` 后，同一个自动场景实例可同时供 WebRTC Client 和 RViz 使用。
 - 严格安全区域的 AMCL 五目标回归通过 5/5，终点 TF 平移误差为 `0.085..0.098 m`。
 - 当前仿真地图与导航可视为完成。
 - 后续工作是实车外参、里程计、地图和 AMCL 的重新标定与安全验收。

@@ -12,10 +12,20 @@ From the repository root:
 
 This starts the three containers, Isaac Sim headlessly, warehouse_v3 nvblox, Navigation, and RViz through detached processes. Require `[ OK ] All startup health checks passed.` Logs are under `logs/start_nav_all/` and the previous run is retained as `.previous`.
 
+Add `ISAAC_WEBRTC=1` when the native Isaac UI and RViz must run together:
+
+```bash
+ISAAC_WEBRTC=1 ./start_nav_all.sh
+/home/shenfq/桌面/myApps/isaacsim-webrtc-client.AppImage
+```
+
+Connect to `127.0.0.1` only after the launcher reports the WebRTC endpoint ready. For Isaac-only model editing without nvblox, Nav2, or RViz, use the standalone procedure in [container environments](container-environments.md#standalone-interactive-webrtc-ui-mode). All routes are mutually exclusive and use `./stop_nav_all.sh` before switching.
+
 Recheck a running stack without changing it:
 
 ```bash
 ./start_nav_all.sh --health-check
+ISAAC_WEBRTC=1 ./start_nav_all.sh --health-check
 ```
 
 Stop the dedicated project containers cleanly and idempotently:

@@ -147,6 +147,12 @@ From `<ros-humble-root>`:
 ./start_nav_all.sh
 ```
 
+When the local Isaac Sim WebRTC UI is required alongside RViz, use the unified mode and connect the client to `127.0.0.1` after the launcher reports it ready:
+
+```bash
+ISAAC_WEBRTC=1 ./start_nav_all.sh
+```
+
 Allow several minutes for first-run shader and asset caches. Success requires the exact final line:
 
 ```text
