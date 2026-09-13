@@ -111,7 +111,12 @@ def test_temporary_values_are_explicitly_unvalidated(parameters):
     assert parameters["domain_randomization"]["calibration_status"] == marker
     temporary_source = parameters["provenance"][marker]
     assert temporary_source["status"] == marker
-    assert set(temporary_source["scope"]) == {"dynamics", "domain_randomization"}
+    assert set(temporary_source["scope"]) == {
+        "sensors.mid360.visual_proxy",
+        "dynamics",
+        "sensor_frame_assumptions",
+        "domain_randomization",
+    }
 
 
 def test_critical_values_have_expected_provenance(parameters):

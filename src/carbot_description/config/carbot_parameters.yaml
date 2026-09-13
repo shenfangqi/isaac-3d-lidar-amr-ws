@@ -91,6 +91,9 @@ sensors:
     imu_rate_hz: 200
     observed_points_per_frame: [19584, 20448]
     z_origin_requires_final_assembly_verification: true
+    visual_proxy:
+      radius_m: 0.025
+      height_m: 0.040
 
 interfaces:
   wheel_ticks:
@@ -102,6 +105,8 @@ interfaces:
 
 dynamics:
   calibration_status: TEMP_ESTIMATE_NOT_CALIBRATED
+  base_body_mass_kg: 1.68
+  per_wheel_mass_kg: 0.01
   center_of_mass_m: [0.0125, 0.0, 0.035]
   inertia_kg_m2:
     ixx: 0.01855
@@ -115,6 +120,13 @@ dynamics:
   restitution: 0.0
   per_side_effort_limit_nm: 0.5
   joint_damping_nm_s_rad: 0.02
+
+sensor_frame_assumptions:
+  calibration_status: TEMP_ESTIMATE_NOT_CALIBRATED
+  imu_parent_frame: lidar_link
+  imu_translation_m: [0.0, 0.0, 0.0]
+  imu_rotation_rpy_rad: [0.0, 0.0, 0.0]
+  note: imu_link is temporarily colocated with the MID360 origin pending installation verification.
 
 domain_randomization:
   calibration_status: TEMP_ESTIMATE_NOT_CALIBRATED
@@ -161,5 +173,5 @@ provenance:
   TEMP_ESTIMATE_NOT_CALIBRATED:
     category: temporary_estimate
     status: TEMP_ESTIMATE_NOT_CALIBRATED
-    scope: [dynamics, domain_randomization]
+    scope: [sensors.mid360.visual_proxy, dynamics, sensor_frame_assumptions, domain_randomization]
     note: Startup simulation assumptions and training ranges, not calibration confidence intervals.

@@ -1,0 +1,173 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="carbot">
+  <xacro:arg name="parameters_file" default="$(find carbot_description)/config/carbot_parameters.yaml"/>
+  <xacro:property name="p" value="${xacro.load_yaml('$(arg parameters_file)')}"/>
+  <xacro:property name="body" value="${p['geometry']['body_collision']}"/>
+  <xacro:property name="wheels" value="${p['geometry']['wheel_groups']}"/>
+  <xacro:property name="track_y" value="${p['geometry']['physical_track_separation_m'] / 2.0}"/>
+  <xacro:property name="track_width" value="${p['geometry']['track_width_m']}"/>
+  <xacro:property name="track_thickness" value="${p['geometry']['track_thickness_m']}"/>
+  <xacro:property name="track_length" value="${p['geometry']['effective_track_contact_length_m']}"/>
+  <xacro:property name="track_visual_length" value="${wheels['front_idler']['x_m'] - wheels['rear_drive']['x_m']}"/>
+  <xacro:property name="track_bottom_z" value="${wheels['front_road_1']['z_m'] - wheels['front_road_1']['radius_m'] + track_thickness / 2.0}"/>
+  <xacro:property name="track_top_z" value="${wheels['front_idler']['z_m'] + wheels['front_idler']['radius_m']}"/>
+  <xacro:property name="wheel_mass" value="${p['dynamics']['per_wheel_mass_kg']}"/>
+
+  <material name="carbot_blue">
+    <color rgba="0.08 0.24 0.55 1.0"/>
+  </material>
+  <material name="track_black">
+    <color rgba="0.035 0.035 0.04 1.0"/>
+  </material>
+  <material name="wheel_gray">
+    <color rgba="0.24 0.26 0.28 1.0"/>
+  </material>
+  <material name="sensor_gray">
+    <color rgba="0.16 0.17 0.18 1.0"/>
+  </material>
+
+  <link name="base_footprint"/>
+
+  <link name="base_link">
+    <inertial>
+      <origin xyz="${p['dynamics']['center_of_mass_m'][0]} ${p['dynamics']['center_of_mass_m'][1]} ${p['dynamics']['center_of_mass_m'][2]}" rpy="0 0 0"/>
+      <mass value="${p['dynamics']['base_body_mass_kg']}"/>
+      <inertia
+        ixx="${p['dynamics']['inertia_kg_m2']['ixx']}"
+        ixy="${p['dynamics']['inertia_kg_m2']['ixy']}"
+        ixz="${p['dynamics']['inertia_kg_m2']['ixz']}"
+        iyy="${p['dynamics']['inertia_kg_m2']['iyy']}"
+        iyz="${p['dynamics']['inertia_kg_m2']['iyz']}"
+        izz="${p['dynamics']['inertia_kg_m2']['izz']}"/>
+    </inertial>
+    <visual name="body_visual">
+      <origin xyz="${body['position_from_base_link_m'][0]} ${body['position_from_base_link_m'][1]} ${body['position_from_base_link_m'][2]}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${body['size_m'][0]} ${body['size_m'][1]} ${body['size_m'][2]}"/>
+      </geometry>
+      <material name="carbot_blue"/>
+    </visual>
+    <collision name="body_collision">
+      <origin xyz="${body['position_from_base_link_m'][0]} ${body['position_from_base_link_m'][1]} ${body['position_from_base_link_m'][2]}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${body['size_m'][0]} ${body['size_m'][1]} ${body['size_m'][2]}"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="base_footprint_to_base_link" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${p['geometry']['base_link_height_m']}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- The belt is visual-only. Wheel cylinders provide the first-stage contact model. -->
+  <xacro:macro name="track_visual" params="side y">
+    <link name="${side}_track_visual_link">
+      <visual name="lower_belt">
+        <origin xyz="0 0 ${track_bottom_z}" rpy="0 0 0"/>
+        <geometry><box size="${track_length} ${track_width} ${track_thickness}"/></geometry>
+        <material name="track_black"/>
+      </visual>
+      <visual name="upper_belt">
+        <origin xyz="0 0 ${track_top_z}" rpy="0 0 0"/>
+        <geometry><box size="${track_visual_length} ${track_width} ${track_thickness}"/></geometry>
+        <material name="track_black"/>
+      </visual>
+    </link>
+    <joint name="${side}_track_visual_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="${side}_track_visual_link"/>
+      <origin xyz="0 ${y} 0" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:macro name="wheel" params="side group y">
+    <xacro:property name="wheel" value="${wheels[group]}"/>
+    <xacro:property name="radius" value="${wheel['radius_m']}"/>
+    <link name="${side}_${group}_wheel_link">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="${wheel_mass}"/>
+        <inertia
+          ixx="${wheel_mass * (3.0 * radius * radius + track_width * track_width) / 12.0}"
+          ixy="0" ixz="0"
+          iyy="${wheel_mass * radius * radius / 2.0}"
+          iyz="0"
+          izz="${wheel_mass * (3.0 * radius * radius + track_width * track_width) / 12.0}"/>
+      </inertial>
+      <visual name="wheel_visual">
+        <origin xyz="0 0 0" rpy="${pi / 2.0} 0 0"/>
+        <geometry><cylinder radius="${radius}" length="${track_width}"/></geometry>
+        <material name="wheel_gray"/>
+      </visual>
+      <collision name="wheel_collision">
+        <origin xyz="0 0 0" rpy="${pi / 2.0} 0 0"/>
+        <geometry><cylinder radius="${radius}" length="${track_width}"/></geometry>
+      </collision>
+    </link>
+    <joint name="${side}_${group}_wheel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${side}_${group}_wheel_link"/>
+      <origin xyz="${wheel['x_m']} ${y} ${wheel['z_m']}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <dynamics damping="${p['dynamics']['joint_damping_nm_s_rad']}" friction="0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:track_visual side="left" y="${track_y}"/>
+  <xacro:track_visual side="right" y="${-track_y}"/>
+
+  <xacro:wheel side="left" group="front_idler" y="${track_y}"/>
+  <xacro:wheel side="left" group="front_road_1" y="${track_y}"/>
+  <xacro:wheel side="left" group="front_road_2" y="${track_y}"/>
+  <xacro:wheel side="left" group="rear_road_1" y="${track_y}"/>
+  <xacro:wheel side="left" group="rear_road_2" y="${track_y}"/>
+  <xacro:wheel side="left" group="rear_drive" y="${track_y}"/>
+  <xacro:wheel side="right" group="front_idler" y="${-track_y}"/>
+  <xacro:wheel side="right" group="front_road_1" y="${-track_y}"/>
+  <xacro:wheel side="right" group="front_road_2" y="${-track_y}"/>
+  <xacro:wheel side="right" group="rear_road_1" y="${-track_y}"/>
+  <xacro:wheel side="right" group="rear_road_2" y="${-track_y}"/>
+  <xacro:wheel side="right" group="rear_drive" y="${-track_y}"/>
+
+  <link name="lidar_link">
+    <visual name="mid360_proxy_visual">
+      <origin xyz="0 0 0.02" rpy="0 0 0"/>
+      <geometry>
+        <cylinder
+          radius="${p['sensors']['mid360']['visual_proxy']['radius_m']}"
+          length="${p['sensors']['mid360']['visual_proxy']['height_m']}"/>
+      </geometry>
+      <material name="sensor_gray"/>
+    </visual>
+  </link>
+  <joint name="base_link_to_lidar_link" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_link"/>
+    <origin
+      xyz="${p['sensors']['mid360']['translation_from_base_link_m'][0]} ${p['sensors']['mid360']['translation_from_base_link_m'][1]} ${p['sensors']['mid360']['translation_from_base_link_m'][2]}"
+      rpy="${p['sensors']['mid360']['rotation_rpy_rad'][0]} ${p['sensors']['mid360']['rotation_rpy_rad'][1]} ${p['sensors']['mid360']['rotation_rpy_rad'][2]}"/>
+  </joint>
+
+  <link name="livox_frame"/>
+  <joint name="lidar_link_to_livox_frame" type="fixed">
+    <parent link="lidar_link"/><child link="livox_frame"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="front_3d_lidar"/>
+  <joint name="lidar_link_to_front_3d_lidar" type="fixed">
+    <parent link="lidar_link"/><child link="front_3d_lidar"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="imu_link"/>
+  <joint name="lidar_link_to_imu_link" type="fixed">
+    <parent link="${p['sensor_frame_assumptions']['imu_parent_frame']}"/>
+    <child link="imu_link"/>
+    <origin
+      xyz="${p['sensor_frame_assumptions']['imu_translation_m'][0]} ${p['sensor_frame_assumptions']['imu_translation_m'][1]} ${p['sensor_frame_assumptions']['imu_translation_m'][2]}"
+      rpy="${p['sensor_frame_assumptions']['imu_rotation_rpy_rad'][0]} ${p['sensor_frame_assumptions']['imu_rotation_rpy_rad'][1]} ${p['sensor_frame_assumptions']['imu_rotation_rpy_rad'][2]}"/>
+  </joint>
+</robot>
