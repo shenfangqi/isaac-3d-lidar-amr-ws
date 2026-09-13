@@ -103,6 +103,11 @@ interfaces:
     qos_reliability: best_effort
     forward_tick_sign: positive_both_sides
 
+simulation:
+  control_mode: ideal_kinematic_tracked_differential
+  articulation_root_prim: /Carbot/base_footprint
+  wheel_joint_coordinate_sign: -1.0
+
 dynamics:
   calibration_status: TEMP_ESTIMATE_NOT_CALIBRATED
   base_body_mass_kg: 1.68
@@ -170,6 +175,11 @@ provenance:
     status: confirmed_baseline
     scope: [sensors.mid360.pointcloud_topic, sensors.mid360.pointcloud_rate_hz, sensors.mid360.imu_topic, sensors.mid360.imu_rate_hz, sensors.mid360.observed_points_per_frame]
     note: Topics, rates, and observed real-sensor points-per-frame range.
+  DESIGN_VALUE_CARBOT_SIMULATION_2026_09_13:
+    category: design_value
+    status: implemented_design
+    scope: [simulation]
+    note: Isaac articulation paths and coordinate conventions, not hardware calibration values.
   TEMP_ESTIMATE_NOT_CALIBRATED:
     category: temporary_estimate
     status: TEMP_ESTIMATE_NOT_CALIBRATED

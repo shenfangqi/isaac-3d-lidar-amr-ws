@@ -138,6 +138,7 @@ def test_critical_values_have_expected_provenance(parameters):
             "ground_calibrated_value",
             "source_code_value",
             "observed_value",
+            "design_value",
             "temporary_estimate",
         }
         for source in provenance.values()

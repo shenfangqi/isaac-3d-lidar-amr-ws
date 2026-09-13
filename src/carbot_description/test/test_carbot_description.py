@@ -53,6 +53,21 @@ def test_twelve_wheel_joints_are_continuous_and_never_steering(description):
     assert all(joint.attrib["type"] == "continuous" for joint in wheel_joints)
     assert not any("steer" in joint.attrib["name"].lower() for joint in joints)
     assert not any("ackermann" in joint.attrib["name"].lower() for joint in joints)
+    assert all(joint.find("axis").attrib["xyz"] == "0 -1 0" for joint in wheel_joints)
+
+
+def test_wheel_joint_limits_match_common_parameters(description, parameters):
+    wheel_joints = [
+        joint
+        for joint in description.findall("joint")
+        if joint.attrib["name"].endswith("_wheel_joint")
+    ]
+    expected_effort = parameters["dynamics"]["per_side_effort_limit_nm"] / 6.0
+    expected_velocity = parameters["control"]["max_wheel_velocity_rad_s"]
+    for joint in wheel_joints:
+        limit = joint.find("limit")
+        assert float(limit.attrib["effort"]) == pytest.approx(expected_effort)
+        assert float(limit.attrib["velocity"]) == pytest.approx(expected_velocity)
 
 
 def test_wheel_centers_use_physical_geometry(description, parameters):

@@ -110,7 +110,11 @@
       <parent link="base_link"/>
       <child link="${side}_${group}_wheel_link"/>
       <origin xyz="${wheel['x_m']} ${y} ${wheel['z_m']}" rpy="0 0 0"/>
-      <axis xyz="0 1 0"/>
+      <!-- -Y makes positive joint velocity move either track toward +X. -->
+      <axis xyz="0 -1 0"/>
+      <limit
+        effort="${p['dynamics']['per_side_effort_limit_nm'] / 6.0}"
+        velocity="${p['control']['max_wheel_velocity_rad_s']}"/>
       <dynamics damping="${p['dynamics']['joint_damping_nm_s_rad']}" friction="0"/>
     </joint>
   </xacro:macro>

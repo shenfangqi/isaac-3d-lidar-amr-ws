@@ -27,3 +27,21 @@ The importer creates `isaac_sim/usd/carbot.usd`, its generated
 `isaac_sim/usd/warehouse_3d_nav_origin_carbot.usd`. The latter sublayers the
 existing robot-free warehouse and places `/Carbot` at the former Carter origin.
 Control and RTX LiDAR ROS graphs are added in later implementation stages.
+
+## Differential-control runtime
+
+Run the stage-C controller inside the Isaac Sim container:
+
+```bash
+/workspace/ros-humble/isaac_3d_lidar_amr_ws/isaac_sim/run_carbot.sh
+```
+
+It subscribes to `/cmd_vel`, applies the common body limits, acceleration
+limits, 500 ms watchdog, and curvature-preserving coupled wheel saturation,
+then commands all 12 wheel joints. The current `ideal_kinematic` mode enforces
+the bounded planar articulation velocity while retaining wheel/contact physics;
+torque/PID actuator response is intentionally deferred to a separately
+calibrated high-fidelity mode. It publishes `/odom`,
+`odom -> base_footprint`, `/joint_states`, and `/clock`. Start the description
+launch separately when the fixed robot TFs are needed. The RTX Mid-360 graph
+is intentionally deferred to stage D.

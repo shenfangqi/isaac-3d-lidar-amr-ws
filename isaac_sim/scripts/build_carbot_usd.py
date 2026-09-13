@@ -102,8 +102,17 @@ def import_robot():
         robot = stage.GetDefaultPrim()
         if not robot.IsValid():
             raise RuntimeError("Generated Carbot USD has no default robot prim")
-        if not robot.HasAPI(UsdPhysics.ArticulationRootAPI):
+        articulation_roots = [
+            prim
+            for prim in stage.Traverse()
+            if prim.HasAPI(UsdPhysics.ArticulationRootAPI)
+        ]
+        if not articulation_roots:
             UsdPhysics.ArticulationRootAPI.Apply(robot)
+            articulation_roots = [robot]
+        if len(articulation_roots) != 1:
+            paths = [str(prim.GetPath()) for prim in articulation_roots]
+            raise RuntimeError(f"Expected one articulation root, found {paths}")
 
         prims = list(stage.Traverse())
         revolute_joints = [
@@ -159,6 +168,7 @@ def import_robot():
         os.replace(temporary_output, args.output)
     print(
         f"Generated Carbot articulation: {args.output} ({imported_path}); "
+        f"root={articulation_roots[0].GetPath()}, "
         "12 wheel joints, 13 collision bodies",
         flush=True,
     )
