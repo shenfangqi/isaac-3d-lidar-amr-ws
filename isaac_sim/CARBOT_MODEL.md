@@ -45,3 +45,17 @@ calibrated high-fidelity mode. It publishes `/odom`,
 `odom -> base_footprint`, `/joint_states`, and `/clock`. Start the description
 launch separately when the fixed robot TFs are needed. The RTX Mid-360 graph
 is intentionally deferred to stage D.
+
+## WebRTC and RViz demo
+
+Run the WebRTC variant inside the Isaac Sim container:
+
+```bash
+/workspace/ros-humble/isaac_3d_lidar_amr_ws/isaac_sim/run_carbot_webrtc.sh
+```
+
+Connect `isaacsim-webrtc-client.AppImage` to `127.0.0.1`. This entry point
+loads and controls Carbot inside the same streaming Kit process and disables
+the warehouse's legacy Carter ROS graph, preserving single publishers for
+odometry and dynamic TF. For RViz, launch `description.launch.py` with
+`use_sim_time:=true`, then open `configs/rviz/carbot_phase_c.rviz`.

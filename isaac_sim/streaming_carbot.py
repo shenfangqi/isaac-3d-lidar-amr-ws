@@ -1,0 +1,192 @@
+"""Run Carbot control inside the existing Isaac Sim WebRTC Kit process."""
+
+import asyncio
+import sys
+from pathlib import Path
+
+import omni.kit.app
+import omni.usd
+import yaml
+from isaacsim.core.utils.extensions import enable_extension
+
+
+WORKSPACE = Path("/workspace/ros-humble/isaac_3d_lidar_amr_ws")
+SCENE_PATH = WORKSPACE / "isaac_sim/usd/warehouse_3d_nav_origin_carbot.usd"
+PARAMETER_PATH = (
+    WORKSPACE / "src/carbot_description/config/carbot_parameters.yaml"
+)
+sys.path.insert(0, str(WORKSPACE))
+
+
+async def update_app(app, count):
+    for _ in range(count):
+        await app.next_update_async()
+
+
+async def load_and_control():
+    app = omni.kit.app.get_app()
+    enable_extension("isaacsim.ros2.bridge")
+    await update_app(app, 100)
+
+    import numpy as np
+    import rclpy
+    from isaac_sim.auto_play_carbot import (
+        CarbotCommandLimiter,
+        CarbotRosNode,
+        ControlLimits,
+        publish_state,
+        quaternion_from_yaw,
+        quaternion_yaw_angle,
+        rotate_vector,
+    )
+    from isaacsim.core.api import World
+    from isaacsim.core.prims import SingleArticulation
+    from isaacsim.core.utils.viewports import set_camera_view
+
+    parameters = yaml.safe_load(PARAMETER_PATH.read_text(encoding="utf-8"))
+    limits = ControlLimits.from_parameters(parameters)
+    control_period_s = parameters["control"]["differential_period_s"]
+    robot_prim_path = parameters["simulation"]["articulation_root_prim"]
+    wheel_joint_sign = parameters["simulation"][
+        "wheel_joint_coordinate_sign"
+    ]
+
+    print(f"Opening streaming Carbot warehouse: {SCENE_PATH}", flush=True)
+    omni.usd.get_context().open_stage(str(SCENE_PATH))
+    stage = omni.usd.get_context().get_stage()
+    if stage is None:
+        await app.next_update_async()
+        stage = omni.usd.get_context().get_stage()
+    if stage is not None:
+        legacy_carter_graph = stage.GetPrimAtPath("/World/ROS2_Carter_Graph")
+        if legacy_carter_graph.IsValid():
+            legacy_carter_graph.SetActive(False)
+            print("Disabled legacy /World/ROS2_Carter_Graph", flush=True)
+    await update_app(app, 300)
+    if stage is None or not stage.GetPrimAtPath(robot_prim_path).IsValid():
+        raise RuntimeError(f"Carbot prim is missing: {robot_prim_path}")
+
+    world = World(
+        physics_dt=control_period_s,
+        rendering_dt=control_period_s,
+        stage_units_in_meters=1.0,
+    )
+    await world.initialize_simulation_context_async()
+    robot = world.scene.add(
+        SingleArticulation(prim_path=robot_prim_path, name="carbot")
+    )
+    await app.next_update_async()
+    await world.reset_async()
+    zero_joint_velocities = np.zeros(12, dtype=float)
+    for _ in range(50):
+        robot.set_joint_velocities(zero_joint_velocities)
+        await app.next_update_async()
+
+    dof_names = list(robot.dof_names)
+    if len(dof_names) != 12 or not all(
+        name.endswith("_wheel_joint") for name in dof_names
+    ):
+        raise RuntimeError(f"Unexpected Carbot DOFs: {dof_names}")
+
+    initial_position, initial_orientation = robot.get_world_pose()
+    planar_position = initial_position.copy()
+    planar_yaw = quaternion_yaw_angle(initial_orientation)
+    initial_orientation = quaternion_from_yaw(planar_yaw)
+    robot.set_world_pose(initial_position, initial_orientation)
+    set_camera_view(
+        eye=[1.7, 2.6, 1.25],
+        target=[0.0, 0.984415, 0.08],
+        camera_prim_path="/OmniverseKit_Persp",
+    )
+
+    if not rclpy.ok():
+        rclpy.init(args=None)
+    node = CarbotRosNode(limits)
+    limiter = CarbotCommandLimiter(limits)
+    last_publish_time = float("-inf")
+    previous_simulation_time = world.current_time
+    print(
+        "Streaming Carbot ready: connect WebRTC client to 127.0.0.1; "
+        "/cmd_vel active; publishing /odom /tf /joint_states /clock",
+        flush=True,
+    )
+
+    try:
+        while app.is_running():
+            await app.next_update_async()
+            simulation_time = world.current_time
+            dt_s = simulation_time - previous_simulation_time
+            if dt_s <= 0.0:
+                continue
+            previous_simulation_time = simulation_time
+            rclpy.spin_once(node, timeout_sec=0.0)
+            command = limiter.update(
+                node.requested_linear_mps,
+                node.requested_angular_rad_s,
+                command_age_s=node.command_age(),
+                dt_s=dt_s,
+            )
+            node.report_watchdog(command.watchdog_active)
+
+            joint_velocities = np.zeros(len(dof_names), dtype=float)
+            for index, name in enumerate(dof_names):
+                logical_velocity = (
+                    command.left_wheel_rad_s
+                    if name.startswith("left_")
+                    else command.right_wheel_rad_s
+                )
+                joint_velocities[index] = wheel_joint_sign * logical_velocity
+
+            midpoint_yaw = planar_yaw + command.applied_angular_rad_s * dt_s / 2.0
+            planar_position[0] += (
+                command.applied_linear_mps * np.cos(midpoint_yaw) * dt_s
+            )
+            planar_position[1] += (
+                command.applied_linear_mps * np.sin(midpoint_yaw) * dt_s
+            )
+            planar_yaw += command.applied_angular_rad_s * dt_s
+            physics_position, _ = robot.get_world_pose()
+            planar_position[2] = physics_position[2]
+            planar_orientation = quaternion_from_yaw(planar_yaw)
+            robot.set_world_pose(planar_position, planar_orientation)
+            robot.set_linear_velocity(
+                rotate_vector(
+                    [command.applied_linear_mps, 0.0, 0.0],
+                    planar_orientation,
+                )
+            )
+            robot.set_angular_velocity(
+                np.array([0.0, 0.0, command.applied_angular_rad_s])
+            )
+            robot.set_joint_velocities(joint_velocities)
+
+            if simulation_time - last_publish_time >= control_period_s - 1e-9:
+                publish_state(
+                    node,
+                    robot,
+                    simulation_time,
+                    initial_position,
+                    initial_orientation,
+                )
+                last_publish_time = simulation_time
+    finally:
+        robot.set_joint_velocities(zero_joint_velocities)
+        robot.set_linear_velocity(np.zeros(3, dtype=float))
+        robot.set_angular_velocity(np.zeros(3, dtype=float))
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+def report_task_result(task):
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        pass
+    except BaseException as error:
+        print(f"Streaming Carbot failed: {error!r}", flush=True)
+        raise
+
+
+task = asyncio.ensure_future(load_and_control())
+task.add_done_callback(report_task_result)

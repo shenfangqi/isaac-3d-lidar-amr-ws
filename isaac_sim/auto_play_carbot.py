@@ -23,10 +23,11 @@ PARAMETER_PATH = (
 )
 sys.path.insert(0, str(WORKSPACE))
 
-from isaacsim import SimulationApp  # noqa: E402
+simulation_app = None
+if __name__ == "__main__":
+    from isaacsim import SimulationApp  # noqa: E402
 
-
-simulation_app = SimulationApp({"headless": True})
+    simulation_app = SimulationApp({"headless": True})
 
 import numpy as np  # noqa: E402
 import omni.usd  # noqa: E402
@@ -34,9 +35,10 @@ import yaml  # noqa: E402
 from isaacsim.core.utils.extensions import enable_extension  # noqa: E402
 
 
-enable_extension("isaacsim.ros2.bridge")
-for _ in range(100):
-    simulation_app.update()
+if simulation_app is not None:
+    enable_extension("isaacsim.ros2.bridge")
+    for _ in range(100):
+        simulation_app.update()
 
 import rclpy  # noqa: E402
 from builtin_interfaces.msg import Time as TimeMessage  # noqa: E402
@@ -137,12 +139,18 @@ class CarbotRosNode(Node):
             reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.VOLATILE,
         )
+        tf_qos = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=100,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
+        )
         self.create_subscription(Twist, "/cmd_vel", self.command_callback, 10)
         self.odom_publisher = self.create_publisher(Odometry, "/odom", 10)
         self.joint_publisher = self.create_publisher(
             JointState, "/joint_states", sensor_qos
         )
-        self.tf_publisher = self.create_publisher(TFMessage, "/tf", sensor_qos)
+        self.tf_publisher = self.create_publisher(TFMessage, "/tf", tf_qos)
         self.clock_publisher = self.create_publisher(Clock, "/clock", clock_qos)
 
     def command_callback(self, message):
@@ -334,7 +342,8 @@ def main():
         rclpy.shutdown()
 
 
-try:
-    main()
-finally:
-    simulation_app.close()
+if __name__ == "__main__":
+    try:
+        main()
+    finally:
+        simulation_app.close()
