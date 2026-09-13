@@ -127,9 +127,6 @@ def test_critical_values_have_expected_provenance(parameters):
     assert "geometry.body_visual" in provenance[
         "DESIGN_VALUE_CARBOT_SIMULATION_2026_09_13"
     ]["scope"]
-    assert "sensors.mid360.mount_proxy" in provenance[
-        "DESIGN_VALUE_CARBOT_SIMULATION_2026_09_13"
-    ]["scope"]
     assert set(
         provenance["GROUND_CALIBRATED_VALUE_CARBOT_2026_09_13"]["scope"]
     ) == {

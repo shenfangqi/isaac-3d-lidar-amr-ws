@@ -86,7 +86,9 @@ sensors:
     parent_frame: lidar_link
     real_frame: livox_frame
     simulation_compatibility_frame: front_3d_lidar
-    translation_from_base_link_m: [-0.003, 0.0, 0.132]
+    mount_translation_xy_from_base_link_m: [-0.003, 0.0]
+    housing_top_height_from_ground_m: 0.222
+    housing_height_m: 0.065
     rotation_rpy_rad: [0.0, 0.0, 0.0]
     pointcloud_topic: /livox/lidar
     pointcloud_rate_hz: 10
@@ -96,9 +98,6 @@ sensors:
     z_origin_requires_final_assembly_verification: true
     visual_proxy:
       radius_m: 0.025
-      height_m: 0.040
-    mount_proxy:
-      radius_m: 0.012
 
 interfaces:
   wheel_ticks:
@@ -183,8 +182,8 @@ provenance:
   MEASURED_VALUE_MID360_MOUNT_2026_09_13:
     category: measured_value
     status: z_origin_pending_final_assembly_verification
-    scope: [sensors.mid360.parent_frame, sensors.mid360.real_frame, sensors.mid360.simulation_compatibility_frame, sensors.mid360.translation_from_base_link_m, sensors.mid360.rotation_rpy_rad, sensors.mid360.z_origin_requires_final_assembly_verification]
-    note: Mount pose is measured; translation Z must be rechecked from the MID360 origin O.
+    scope: [sensors.mid360.parent_frame, sensors.mid360.real_frame, sensors.mid360.simulation_compatibility_frame, sensors.mid360.mount_translation_xy_from_base_link_m, sensors.mid360.housing_top_height_from_ground_m, sensors.mid360.housing_height_m, sensors.mid360.rotation_rpy_rad, sensors.mid360.z_origin_requires_final_assembly_verification]
+    note: Housing top is 0.222 m above ground and housing height is 0.065 m; the Livox coordinate origin O inside the housing still requires verification.
   OBSERVED_VALUE_MID360_2026_09_13:
     category: observed_value
     status: confirmed_baseline
@@ -193,8 +192,8 @@ provenance:
   DESIGN_VALUE_CARBOT_SIMULATION_2026_09_13:
     category: design_value
     status: implemented_design
-    scope: [geometry.body_visual, sensors.mid360.mount_proxy, simulation]
-    note: Reviewable body and sensor-mount proxies, Isaac articulation paths, and coordinate conventions; not hardware calibration values.
+    scope: [geometry.body_visual, simulation]
+    note: Reviewable body proxy, Isaac articulation paths, and coordinate conventions; not hardware calibration values.
   TEMP_ESTIMATE_NOT_CALIBRATED:
     category: temporary_estimate
     status: TEMP_ESTIMATE_NOT_CALIBRATED

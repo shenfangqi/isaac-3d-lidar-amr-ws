@@ -86,39 +86,49 @@ def test_body_visual_does_not_cover_tracks(description, parameters):
     assert visual_size[1] / 2.0 < inner_track_edge
 
 
-def test_lidar_mount_proxy_fills_gap_without_changing_sensor_origin(
-    description, parameters
-):
+def test_lidar_housing_top_matches_measured_height(description, parameters):
     geometry = parameters["geometry"]
     lidar = parameters["sensors"]["mid360"]
-    body_visual = geometry["body_visual"]
-    expected_height = lidar["translation_from_base_link_m"][2] - (
-        body_visual["position_from_base_link_m"][2]
-        + body_visual["size_m"][2] / 2.0
+    expected_mount_z = (
+        lidar["housing_top_height_from_ground_m"]
+        - lidar["housing_height_m"]
+        - geometry["base_link_height_m"]
     )
-    assert expected_height > 0.0
+    assert expected_mount_z == pytest.approx(0.067)
 
     lidar_joint = next(
         joint for joint in description.findall("joint")
         if joint.attrib["name"] == "base_link_to_lidar_link"
     )
-    joint_z = float(lidar_joint.find("origin").attrib["xyz"].split()[2])
-    assert joint_z == pytest.approx(lidar["translation_from_base_link_m"][2])
+    joint_xyz = [
+        float(value) for value in lidar_joint.find("origin").attrib["xyz"].split()
+    ]
+    assert joint_xyz[:2] == pytest.approx(
+        lidar["mount_translation_xy_from_base_link_m"]
+    )
+    assert joint_xyz[2] == pytest.approx(expected_mount_z)
 
     lidar_link = next(
         link for link in description.findall("link")
         if link.attrib["name"] == "lidar_link"
     )
-    mount = next(
+    housing = next(
         visual for visual in lidar_link.findall("visual")
-        if visual.attrib["name"] == "mid360_mount_proxy_visual"
+        if visual.attrib["name"] == "mid360_proxy_visual"
     )
-    assert float(mount.find("geometry/cylinder").attrib["length"]) == (
-        pytest.approx(expected_height)
+    housing_height = float(
+        housing.find("geometry/cylinder").attrib["length"]
     )
-    assert float(mount.find("origin").attrib["xyz"].split()[2]) == (
-        pytest.approx(-expected_height / 2.0)
+    housing_center_z = float(housing.find("origin").attrib["xyz"].split()[2])
+    assert housing_height == pytest.approx(0.065)
+    assert housing_center_z == pytest.approx(housing_height / 2.0)
+    modeled_top_height = (
+        geometry["base_link_height_m"]
+        + joint_xyz[2]
+        + housing_center_z
+        + housing_height / 2.0
     )
+    assert modeled_top_height == pytest.approx(0.222)
 
 
 def test_wheel_centers_use_physical_geometry(description, parameters):

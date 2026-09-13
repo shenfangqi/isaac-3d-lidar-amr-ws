@@ -101,7 +101,9 @@ differential_period_s: 0.02
 ### 2.3 MID360
 
 ```yaml
-translation_m: [-0.003, 0.0, 0.132]
+mount_translation_xy_from_base_link_m: [-0.003, 0.0]
+housing_top_height_from_ground_m: 0.222
+housing_height_m: 0.065
 rotation_rpy_rad: [0.0, 0.0, 0.0]
 pointcloud_topic: /livox/lidar
 real_frame: livox_frame
@@ -111,7 +113,7 @@ imu_rate_hz: 200
 real_points_per_frame_observed: 19584..20448
 ```
 
-`z=0.132 m` 仍需最终装配后从 MID360 厂家坐标原点 O 复核。Isaac RTX 配置只是覆盖范围近似，不复制 Livox 非重复扫描、逐点时间、运动畸变和真实漏点。
+MID360 外壳底面离地为 `0.157 m`，相对 `base_link` 为 `0.067 m`。`0.222 m` 是外壳顶面离地高度，不是厂家坐标原点 O；O 在外壳内的精确位置仍需复核。Isaac RTX 配置只是覆盖范围近似，不复制 Livox 非重复扫描、逐点时间、运动畸变和真实漏点。
 
 ### 2.4 真机编码器接口
 
@@ -205,7 +207,7 @@ isaac_sim/scripts/build_carbot_usd.py
 
 ### 阶段 D：MID360 重新挂载与 nvblox 回归
 
-1. 将 RTX MID360 proxy 移到实测外参 `[-0.003, 0, 0.132]`、RPY 0。
+1. 将 MID360 外壳放到实测底面高度 `0.157 m`、顶面高度 `0.222 m`，XY 为 `[-0.003, 0]`、RPY 0；RTX 传感器原点待厂家坐标 O 复核后设置。
 2. 保留 `/livox/lidar`；仿真发布 PointCloud2。
 3. 同时提供 `livox_frame`、`lidar_link` 和旧 `front_3d_lidar` 的兼容 TF。
 4. 保留 `/pointcloud_padder` 和 `/livox/lidar_nvblox` 的 `1000 x 40` 约束。
