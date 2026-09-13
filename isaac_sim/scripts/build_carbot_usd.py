@@ -25,6 +25,24 @@ DEFAULT_SCENE_OUTPUT = (
 CARTER_ORIGIN_Y_M = 0.9844150670532934
 
 
+def is_legacy_carter_path(path):
+    lowered = str(path).lower()
+    return "carter" in lowered or "nova_" in lowered
+
+
+def deactivate_legacy_carter_roots(stage):
+    paths = [prim.GetPath() for prim in stage.TraverseAll()]
+    root_paths = [
+        path
+        for path in paths
+        if is_legacy_carter_path(path)
+        and not is_legacy_carter_path(path.GetParentPath())
+    ]
+    for path in root_paths:
+        stage.GetPrimAtPath(path).SetActive(False)
+    return [str(path) for path in root_paths]
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--urdf", type=Path, default=DEFAULT_URDF)
@@ -190,6 +208,7 @@ def compose_warehouse():
     carbot.GetPrim().GetAttribute("xformOp:translate").Set(
         Gf.Vec3d(0.0, CARTER_ORIGIN_Y_M, 0.0)
     )
+    deactivated_legacy_roots = deactivate_legacy_carter_roots(stage)
 
     world = stage.GetPrimAtPath("/World")
     if world.IsValid():
@@ -201,6 +220,9 @@ def compose_warehouse():
             "carbot:baseWarehouse": str(args.warehouse),
             "carbot:localRobotAsset": str(args.output),
             "carbot:replaces": "Nova Carter",
+            "carbot:deactivatedLegacyPrims": ",".join(
+                deactivated_legacy_roots
+            ),
         }
     )
     layer.customLayerData = metadata
@@ -210,9 +232,20 @@ def compose_warehouse():
     composed = Usd.Stage.Open(str(args.scene_output))
     if composed is None or not composed.GetPrimAtPath("/Carbot").IsValid():
         raise RuntimeError("Generated warehouse does not contain /Carbot")
-    if composed.GetPrimAtPath("/nova_carter_ROS111").IsValid():
-        raise RuntimeError("Generated warehouse still contains Nova Carter")
-    print(f"Generated Carter-free warehouse: {args.scene_output}", flush=True)
+    active_legacy_prims = [
+        str(prim.GetPath())
+        for prim in composed.Traverse()
+        if is_legacy_carter_path(prim.GetPath())
+    ]
+    if active_legacy_prims:
+        raise RuntimeError(
+            f"Generated warehouse still contains active Carter prims: {active_legacy_prims}"
+        )
+    print(
+        f"Generated Carter-free warehouse: {args.scene_output}; "
+        f"disabled={deactivated_legacy_roots}",
+        flush=True,
+    )
 
 
 try:

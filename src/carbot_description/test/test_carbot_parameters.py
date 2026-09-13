@@ -121,7 +121,12 @@ def test_temporary_values_are_explicitly_unvalidated(parameters):
 
 def test_critical_values_have_expected_provenance(parameters):
     provenance = parameters["provenance"]
-    assert "geometry" in provenance["MEASURED_VALUE_CARBOT_2026_09_13"]["scope"]
+    assert "geometry.body_collision" in provenance[
+        "MEASURED_VALUE_CARBOT_2026_09_13"
+    ]["scope"]
+    assert "geometry.body_visual" in provenance[
+        "DESIGN_VALUE_CARBOT_SIMULATION_2026_09_13"
+    ]["scope"]
     assert set(
         provenance["GROUND_CALIBRATED_VALUE_CARBOT_2026_09_13"]["scope"]
     ) == {

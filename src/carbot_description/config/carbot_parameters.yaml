@@ -21,6 +21,9 @@ geometry:
   body_collision:
     size_m: [0.285, 0.266, 0.230]
     position_from_base_link_m: [0.0125, 0.0, 0.035]
+  body_visual:
+    size_m: [0.220, 0.170, 0.100]
+    position_from_base_link_m: [0.0, 0.0, 0.020]
   wheel_groups:
     front_idler:
       x_m: 0.111250
@@ -153,7 +156,17 @@ provenance:
   MEASURED_VALUE_CARBOT_2026_09_13:
     category: measured_value
     status: confirmed_baseline_with_approximate_wheel_radii
-    scope: [robot.total_working_mass_kg, geometry]
+    scope:
+      - robot.total_working_mass_kg
+      - geometry.overall_size_m
+      - geometry.base_link_height_m
+      - geometry.physical_track_separation_m
+      - geometry.track_width_m
+      - geometry.track_thickness_m
+      - geometry.effective_track_contact_length_m
+      - geometry.footprint_m
+      - geometry.body_collision
+      - geometry.wheel_groups
     note: Physical dimensions and installed geometry supplied for this adaptation; listed wheel radii are approximate.
   GROUND_CALIBRATED_VALUE_CARBOT_2026_09_13:
     category: ground_calibrated_value
@@ -178,8 +191,8 @@ provenance:
   DESIGN_VALUE_CARBOT_SIMULATION_2026_09_13:
     category: design_value
     status: implemented_design
-    scope: [simulation]
-    note: Isaac articulation paths and coordinate conventions, not hardware calibration values.
+    scope: [geometry.body_visual, simulation]
+    note: Reviewable body proxy, Isaac articulation paths, and coordinate conventions; not hardware calibration values.
   TEMP_ESTIMATE_NOT_CALIBRATED:
     category: temporary_estimate
     status: TEMP_ESTIMATE_NOT_CALIBRATED

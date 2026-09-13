@@ -3,6 +3,7 @@
   <xacro:arg name="parameters_file" default="$(find carbot_description)/config/carbot_parameters.yaml"/>
   <xacro:property name="p" value="${xacro.load_yaml('$(arg parameters_file)')}"/>
   <xacro:property name="body" value="${p['geometry']['body_collision']}"/>
+  <xacro:property name="body_visual" value="${p['geometry']['body_visual']}"/>
   <xacro:property name="wheels" value="${p['geometry']['wheel_groups']}"/>
   <xacro:property name="track_y" value="${p['geometry']['physical_track_separation_m'] / 2.0}"/>
   <xacro:property name="track_width" value="${p['geometry']['track_width_m']}"/>
@@ -41,9 +42,9 @@
         izz="${p['dynamics']['inertia_kg_m2']['izz']}"/>
     </inertial>
     <visual name="body_visual">
-      <origin xyz="${body['position_from_base_link_m'][0]} ${body['position_from_base_link_m'][1]} ${body['position_from_base_link_m'][2]}" rpy="0 0 0"/>
+      <origin xyz="${body_visual['position_from_base_link_m'][0]} ${body_visual['position_from_base_link_m'][1]} ${body_visual['position_from_base_link_m'][2]}" rpy="0 0 0"/>
       <geometry>
-        <box size="${body['size_m'][0]} ${body['size_m'][1]} ${body['size_m'][2]}"/>
+        <box size="${body_visual['size_m'][0]} ${body_visual['size_m'][1]} ${body_visual['size_m'][2]}"/>
       </geometry>
       <material name="carbot_blue"/>
     </visual>

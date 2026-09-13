@@ -18,6 +18,24 @@ PARAMETER_PATH = (
 sys.path.insert(0, str(WORKSPACE))
 
 
+def is_legacy_carter_path(path):
+    lowered = str(path).lower()
+    return "carter" in lowered or "nova_" in lowered
+
+
+def deactivate_legacy_carter_roots(stage):
+    paths = [prim.GetPath() for prim in stage.TraverseAll()]
+    root_paths = [
+        path
+        for path in paths
+        if is_legacy_carter_path(path)
+        and not is_legacy_carter_path(path.GetParentPath())
+    ]
+    for path in root_paths:
+        stage.GetPrimAtPath(path).SetActive(False)
+    return [str(path) for path in root_paths]
+
+
 async def update_app(app, count):
     for _ in range(count):
         await app.next_update_async()
@@ -58,10 +76,8 @@ async def load_and_control():
         await app.next_update_async()
         stage = omni.usd.get_context().get_stage()
     if stage is not None:
-        legacy_carter_graph = stage.GetPrimAtPath("/World/ROS2_Carter_Graph")
-        if legacy_carter_graph.IsValid():
-            legacy_carter_graph.SetActive(False)
-            print("Disabled legacy /World/ROS2_Carter_Graph", flush=True)
+        disabled_legacy_roots = deactivate_legacy_carter_roots(stage)
+        print(f"Disabled legacy Carter prims: {disabled_legacy_roots}", flush=True)
     await update_app(app, 300)
     if stage is None or not stage.GetPrimAtPath(robot_prim_path).IsValid():
         raise RuntimeError(f"Carbot prim is missing: {robot_prim_path}")

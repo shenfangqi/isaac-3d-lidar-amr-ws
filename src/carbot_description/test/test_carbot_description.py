@@ -70,6 +70,22 @@ def test_wheel_joint_limits_match_common_parameters(description, parameters):
         assert float(limit.attrib["velocity"]) == pytest.approx(expected_velocity)
 
 
+def test_body_visual_does_not_cover_tracks(description, parameters):
+    base_link = next(
+        link for link in description.findall("link")
+        if link.attrib["name"] == "base_link"
+    )
+    visual_size = [
+        float(value)
+        for value in base_link.find("visual/geometry/box").attrib["size"].split()
+    ]
+    geometry = parameters["geometry"]
+    inner_track_edge = (
+        geometry["physical_track_separation_m"] - geometry["track_width_m"]
+    ) / 2.0
+    assert visual_size[1] / 2.0 < inner_track_edge
+
+
 def test_wheel_centers_use_physical_geometry(description, parameters):
     expected_y = parameters["geometry"]["physical_track_separation_m"] / 2.0
     joints = {
