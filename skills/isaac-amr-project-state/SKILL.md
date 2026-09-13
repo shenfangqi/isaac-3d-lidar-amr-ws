@@ -10,6 +10,7 @@ Work from `/home/shenfq/projects/ros-humble`.
 ## Authority and routing
 
 - For any resume, startup, shutdown, navigation change, or current-state question, read [references/current-state.md](references/current-state.md). Its newest checkpoint is authoritative; use the cold-start baseline only when no live process survives.
+- For any connection, inspection, deployment, configuration, build, launch, or diagnosis on the physical Jetson, read [references/jetson-target.md](references/jetson-target.md) first. Use its SSH alias and re-verify live state before mutation.
 - For regression comparison, prior failures, or explaining why a parameter exists, read [references/validation-history.md](references/validation-history.md).
 - For building, resuming, closing gaps in, saving, exporting, or validating an nvblox map, read `../../docs/map_gen/README.md` completely before acting.
 - For Docker commands, DDS setup, live ROS diagnosis, and component launch details, use the sibling `ros-docker-debug` skill and read the reference it routes to.
@@ -21,7 +22,7 @@ Do not treat statements such as “remains running” in historical evidence as 
 
 - The project map chain is `3D LiDAR -> padded spherical cloud -> nvblox TSDF/ESDF -> static_occupancy_grid -> Nav2`. Do not substitute SLAM Toolbox for this map.
 - `warehouse_v3` is the saved and visually validated map. Preserve v1/v2 and never load them while rebuilding v3.
-- The current Isaac RTX cloud must pass through `/pointcloud_padder` as `1800 x 31`; nvblox must not consume the raw variable-length cloud directly.
+- The Mid-360 Isaac RTX cloud must pass through `/pointcloud_padder` as `1000 x 40`; nvblox must not consume the raw variable-length `/livox/lidar` cloud directly.
 - Mapping requires exactly one `/pointcloud_padder`, `/nvblox_node`, and `/nvblox_container`, `use_sim_time=true` from process startup, and a live `lidar_min_valid_range_m=0.5` check.
 - Saved-map navigation uses RViz simulation time and Fixed Frame `map`. Use RViz `2D Goal Pose` for Nav2; `Publish Point` only publishes `/clicked_point` unless a separate bridge subscribes to it.
 - Permanent Nav2 geometry is `robot_radius=0.35 m` and `inflation_radius=0.45 m`. The `0.80 m` obstacle and `0.60 m` unknown clearances were regression target-selection filters, not persisted navigation limits.

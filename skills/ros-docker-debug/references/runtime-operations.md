@@ -41,10 +41,10 @@ RViz navigation requires `use_sim_time=true` and Fixed Frame `map`. Use `2D Goal
 Pure blank nvblox mapping, without loading an old map:
 
 ```bash
-ros2 launch isaac_3d_lidar_bringup xt32_nvblox.launch.py
+ros2 launch isaac_3d_lidar_bringup mid360_nvblox.launch.py
 ```
 
-This starts `/pointcloud_padder`, publishes `/front_3d_lidar/lidar_points_nvblox` as `1800 x 31`, and starts nvblox with simulation time. Do not bypass the padder for the current Isaac RTX cloud.
+This starts `/pointcloud_padder`, publishes `/livox/lidar_nvblox` as `1000 x 40`, and starts nvblox with simulation time. Do not bypass the padder for the current Isaac RTX cloud.
 
 Load the project map selected by the wrapper:
 

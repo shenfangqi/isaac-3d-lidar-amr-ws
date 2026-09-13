@@ -12,12 +12,10 @@ class PointCloudPadder(Node):
     def __init__(self):
         super().__init__('pointcloud_padder')
 
-        self.declare_parameter('input_topic', '/front_3d_lidar/lidar_points')
-        self.declare_parameter(
-            'output_topic', '/front_3d_lidar/lidar_points_nvblox'
-        )
-        self.declare_parameter('target_width', 1800)
-        self.declare_parameter('target_height', 31)
+        self.declare_parameter('input_topic', '/livox/lidar')
+        self.declare_parameter('output_topic', '/livox/lidar_nvblox')
+        self.declare_parameter('target_width', 1000)
+        self.declare_parameter('target_height', 40)
 
         self._target_width = self.get_parameter('target_width').value
         self._target_height = self.get_parameter('target_height').value

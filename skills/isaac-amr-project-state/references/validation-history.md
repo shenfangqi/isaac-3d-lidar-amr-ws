@@ -40,7 +40,7 @@ Use this file for regression comparison or parameter provenance. It is historica
 
 ## Mapping and exploration evidence
 
-- Isaac Sim produced sparse variable-length clouds of about 22k–25k returns. Padding them with NaN rays to `1800 x 31` fixed nvblox spherical range-image integration.
+- The Mid-360 Isaac proxy produced variable-length partial clouds at about 30 Hz, typically around 2.1k–2.3k finite returns. Padding them with NaN rays to `1000 x 40` produced a non-empty nvblox occupancy grid and ESDF.
 - Before padding, the grid stayed near `64 x 24` with zero occupied cells. After padding, a stationary scan produced about `256 x 249`, 30,189 free cells, and 2,237 occupied cells.
 - Frontier Explorer used `0.55/0.40/0.60 m` obstacle/unknown/boundary clearances and never published `/cmd_vel` directly.
 - Two targeted gap viewpoints, `(-3.725, 0.425)` and `(-3.775, -6.225)`, were preplanned and reached successfully. The raw user clicks were rejected because one was too close to an obstacle and the other too close to unknown space.

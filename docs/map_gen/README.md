@@ -19,7 +19,7 @@
 
 ```text
 3D LiDAR
-  -> 固定尺寸点云 /front_3d_lidar/lidar_points_nvblox
+  -> 固定尺寸点云 /livox/lidar_nvblox
   -> nvblox TSDF/ESDF
   -> /nvblox_node/static_occupancy_grid
   -> Nav2 2D 地图
@@ -95,7 +95,7 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file:///workspace/ros-humble/cyclonedds_ros_local.xml
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$isaac_sim_package_path/exts/isaacsim.ros2.bridge/humble/lib
 export ROS_DOMAIN_ID=0
-./python.sh auto_play_warehouse.py
+./python.sh auto_play_mid360.py
 ```
 
 仓库根目录的 `start_nav_all.sh` 当前默认加载保存好的 `warehouse_v3` 并启动 AMCL 导航，适合“使用现有地图导航”，不适合创建空白新地图。重新建图时必须按本教程单独启动纯 nvblox，不能让 `nvblox_with_map.launch.py` 同时运行。
@@ -104,7 +104,7 @@ export ROS_DOMAIN_ID=0
 
 ```text
 /clock
-/front_3d_lidar/lidar_points
+/livox/lidar
 /chassis/odom
 /tf
 /tf_static
@@ -114,22 +114,23 @@ export ROS_DOMAIN_ID=0
 
 ## 2. 固定稀疏 3D LiDAR 点云尺寸
 
-不要把 Isaac Sim 原始 RTX 点云直接送给当前 nvblox 配置。原始话题每帧只有约 `22k-25k` 个有效回波且长度变化，nvblox 的球面 LiDAR 模型要求固定 range image。
+不要把 Isaac Sim 原始 RTX 点云直接送给当前 nvblox 配置。Mid360 代理按约 30 Hz 发布可变长度的局部扫描，实测通常约 `2.1k-2.3k` 个有效点；nvblox 的球面 LiDAR 模型要求固定 range image。
 
 使用：
 
 ```text
-raw:    /front_3d_lidar/lidar_points
-padded: /front_3d_lidar/lidar_points_nvblox
-shape:  1800 x 31 = 55,800 rays
+raw:    /livox/lidar
+padded: /livox/lidar_nvblox
+shape:  1000 x 40 = 40,000 rays
 ```
 
 让 `pointcloud_padder` 用 NaN 补齐缺失射线。检查实现与配置：
 
 ```text
 src/isaac_3d_lidar_bringup/isaac_3d_lidar_bringup/pointcloud_padder.py
-src/isaac_3d_lidar_bringup/launch/xt32_nvblox.launch.py
-src/isaac_3d_lidar_bringup/config/nvblox/xt32_nvblox_base.yaml
+src/isaac_3d_lidar_bringup/launch/mid360_nvblox.launch.py
+src/isaac_3d_lidar_bringup/config/nvblox/mid360_nvblox_base.yaml
+src/isaac_3d_lidar_bringup/config/nvblox/mid360_nvblox_sim.yaml
 ```
 
 修改后在 nvblox 容器中重建：
@@ -144,8 +145,8 @@ colcon build --packages-select isaac_3d_lidar_bringup --symlink-install
 
 ```text
 use_sim_time = true
-lidar_width = 1800
-lidar_height = 31
+lidar_width = 1000
+lidar_height = 40
 lidar_min_valid_range_m = 0.5
 ```
 
@@ -163,7 +164,7 @@ ps -eo pid,ppid,lstart,args | \
 不要调用 `/nvblox_node/load_map`。启动纯建图：
 
 ```bash
-ros2 launch isaac_3d_lidar_bringup xt32_nvblox.launch.py
+ros2 launch isaac_3d_lidar_bringup mid360_nvblox.launch.py
 ```
 
 要求同时只存在：
@@ -179,7 +180,7 @@ ros2 launch isaac_3d_lidar_bringup xt32_nvblox.launch.py
 ```bash
 ros2 node list --no-daemon | grep -E 'nvblox|pointcloud_padder'
 ros2 topic info --verbose \
-  /front_3d_lidar/lidar_points_nvblox --no-daemon
+  /livox/lidar_nvblox --no-daemon
 ros2 param get /nvblox_node lidar_min_valid_range_m --no-daemon
 ```
 
@@ -211,7 +212,7 @@ free 有增长但 occupied = 0
 只有 ESDF 点云看起来很密，2D 图却没有墙
 ```
 
-遇到失败时依次检查 padded 点云是否为 `1800 x 31`、nvblox 是否订阅 padded 话题、`use_sim_time` 是否从进程启动时就是 `true`。
+遇到失败时依次检查 padded 点云是否为 `1000 x 40`、nvblox 是否订阅 padded 话题、`use_sim_time` 是否从进程启动时就是 `true`。
 
 ## 5. 配置 RViz 检查视图
 
@@ -226,7 +227,7 @@ Fixed Frame: odom
 ```text
 /nvblox_node/static_occupancy_grid
 /nvblox_node/static_esdf_pointcloud
-/front_3d_lidar/lidar_points
+/livox/lidar
 /scan（启用 Nav2 时）
 TF
 RobotModel 或机器人 TF
@@ -488,7 +489,7 @@ robot_base_frame = base_link
 
 | 现象 | 优先检查 |
 |---|---|
-| 地图约 `64 x 24` 且 occupied 为 0 | 点云是否补齐为 `1800 x 31`、nvblox 是否订阅 padded topic、启动时 `use_sim_time` |
+| 地图约 `64 x 24` 且 occupied 为 0 | 点云是否补齐为 `1000 x 40`、nvblox 是否订阅 padded topic、启动时 `use_sim_time` |
 | 地面出现机器人轨迹散点 | `lidar_min_valid_range_m` 是否错误回到 `0.1`、是否扫到车体 |
 | LaserScan 与墙不对齐 | TF、定位、时间戳和 Fixed Frame；不要盲目移动 Initial Pose |
 | Global Costmap 中心为 99 | 静态墙/散点或实时 obstacle layer 进入内切膨胀区；分别隔离图层 |

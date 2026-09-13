@@ -115,7 +115,7 @@ def generate_launch_description():
         DeclareLaunchArgument('robot_base_frame', default_value='base_link'),
         DeclareLaunchArgument(
             'pointcloud_topic',
-            default_value='/front_3d_lidar/lidar_points',
+            default_value='/livox/lidar',
         ),
         DeclareLaunchArgument('scan_topic', default_value='/scan'),
         DeclareLaunchArgument(

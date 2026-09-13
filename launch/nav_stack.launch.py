@@ -16,6 +16,7 @@ def generate_launch_description():
     amcl_initial_x = LaunchConfiguration("amcl_initial_x")
     amcl_initial_y = LaunchConfiguration("amcl_initial_y")
     amcl_initial_yaw = LaunchConfiguration("amcl_initial_yaw")
+    pointcloud_topic = LaunchConfiguration("pointcloud_topic")
     use_ground_truth = IfCondition(PythonExpression([
         "'", localization_mode, "' == 'ground_truth'"
     ]))
@@ -32,7 +33,7 @@ def generate_launch_description():
         executable="pointcloud_to_laserscan_node",
         name="pointcloud_to_laserscan",
         remappings=[
-            ("/cloud_in", "/front_3d_lidar/lidar_points"),
+            ("/cloud_in", pointcloud_topic),
             ("/scan", "/scan"),
         ],
         parameters=[{
@@ -139,6 +140,11 @@ def generate_launch_description():
             "localization_mode",
             default_value="ground_truth",
             description="ground_truth for Isaac Sim, amcl for real robots",
+        ),
+        DeclareLaunchArgument(
+            "pointcloud_topic",
+            default_value="/livox/lidar",
+            description="Mid-360 PointCloud2 topic",
         ),
         DeclareLaunchArgument(
             "amcl_initial_pose_mode",

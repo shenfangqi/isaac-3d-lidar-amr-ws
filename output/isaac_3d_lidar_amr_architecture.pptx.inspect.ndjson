@@ -1,0 +1,201 @@
+{"kind":"deck","id":"pr/uffzsg","name":"Deck"}
+{"kind":"layout","layoutId":"8f8a16ee-1047-4854-a1a5-17e96c62fb68","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"22d4e31b-b058-480e-b823-8f47ac6d0f68","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/bp8utg","slide":1,"title":"ROS 2 / ISAAC SIM / NVBLOX","textShapes":4}
+{"kind":"shape","id":"sh/yps3a18j","slide":1,"bbox":[44,648,1192,0]}
+{"kind":"textbox","id":"sh/ls3mlgra","slide":1,"text":"ROS 2 / ISAAC SIM / NVBLOX","textPreview":"ROS 2 / ISAAC SIM / NVBLOX","textChars":26,"textLines":1,"bbox":[44,42,600,34]}
+{"kind":"textbox","id":"sh/kralcbqp","slide":1,"text":"Isaac 3D LiDAR AMR\n项目架构与 Topic 关系","textPreview":"Isaac 3D LiDAR AMR | 项目架构与 Topic 关系","textChars":33,"textLines":2,"bbox":[44,178,980,220]}
+{"kind":"textbox","id":"sh/7ul4nq9g","slide":1,"text":"面向维护、联调与真机迁移的系统视图","textPreview":"面向维护、联调与真机迁移的系统视图","textChars":17,"textLines":1,"bbox":[44,466,720,52]}
+{"kind":"textbox","id":"sh/6tc3el8v","slide":1,"text":"warehouse_v3 · ROS 2 Humble · 2026-08-29","textPreview":"warehouse_v3 · ROS 2 Humble · 2026-08-29","textChars":40,"textLines":1,"bbox":[44,598,620,34]}
+{"kind":"notes","id":"nt/bp8utg","slide":1,"text":"本页标题与范围来自当前仓库。\n[Sources]\n- Repository workspace and current-state.md\n[/Sources]"}
+{"kind":"slide","id":"sl/e5qgm1","slide":2,"title":"01 · 总体架构","textShapes":13}
+{"kind":"textbox","id":"sh/ud4ze9sn","slide":2,"text":"01 · 总体架构","textPreview":"01 · 总体架构","textChars":9,"textLines":1,"bbox":[44,32,360,30]}
+{"kind":"textbox","id":"sh/hgvypoby","slide":2,"text":"三套容器按职责分层，共享同一个 ROS 2 图","textPreview":"三套容器按职责分层，共享同一个 ROS 2 图","textChars":23,"textLines":1,"bbox":[44,68,1130,70]}
+{"kind":"textbox","id":"sh/gfmhgjad","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[1184,664,52,24]}
+{"kind":"shape","id":"sh/3ixgret4","slide":2,"bbox":[396,332,56,32]}
+{"kind":"shape","id":"sh/2hozitsj","slide":2,"bbox":[828,332,56,32]}
+{"kind":"textbox","id":"sh/pkfytoba","slide":2,"text":"isaac-sim","textPreview":"isaac-sim","textChars":9,"textLines":1,"bbox":[56,190,320,92]}
+{"kind":"textbox","id":"sh/4j6hkjap","slide":2,"text":"isaac-ros-nvblox","textPreview":"isaac-ros-nvblox","textChars":16,"textLines":1,"bbox":[468,190,344,92]}
+{"kind":"textbox","id":"sh/r6x0vyt0","slide":2,"text":"ros2-dev-humble","textPreview":"ros2-dev-humble","textChars":15,"textLines":1,"bbox":[900,190,320,92]}
+{"kind":"textbox","id":"sh/qlozmtsf","slide":2,"text":"物理与传感器","textPreview":"物理与传感器","textChars":6,"textLines":1,"bbox":[72,312,270,30]}
+{"kind":"textbox","id":"sh/w3ydgzul","slide":2,"text":"/clock\n/front_3d_lidar/lidar_points\n/chassis/odom\n/tf · tf_static\n订阅 /cmd_vel","textPreview":"/clock | /front_3d_lidar/lidar_points | /chassis/odom | /tf · tf_static | 订阅 /cmd_vel","textChars":77,"textLines":5,"bbox":[72,354,300,188]}
+{"kind":"textbox","id":"sh/x47up4b6","slide":2,"text":"GPU 建图与地图加载","textPreview":"GPU 建图与地图加载","textChars":11,"textLines":1,"bbox":[488,312,290,30]}
+{"kind":"textbox","id":"sh/a1wvepcf","slide":2,"text":"pointcloud_padder\nnvblox_container + nvblox_node\n/load_map 服务\nstatic_occupancy_grid","textPreview":"pointcloud_padder | nvblox_container + nvblox_node | /load_map 服务 | static_occupancy_grid","textChars":83,"textLines":4,"bbox":[488,354,300,188]}
+{"kind":"textbox","id":"sh/v2pcnut0","slide":2,"text":"定位、规划、控制与 RViz","textPreview":"定位、规划、控制与 RViz","textChars":14,"textLines":1,"bbox":[920,312,286,30]}
+{"kind":"textbox","id":"sh/4rydkjux","slide":2,"text":"AMCL 或 ground-truth\npointcloud_to_laserscan\nNav2 lifecycle 节点\nRViz2","textPreview":"AMCL 或 ground-truth | pointcloud_to_laserscan | Nav2 lifecycle 节点 | RViz2","textChars":67,"textLines":4,"bbox":[920,354,282,188]}
+{"kind":"textbox","id":"sh/5s7etobi","slide":2,"text":"CycloneDDS + ROS_DOMAIN_ID=0 让跨容器 topic、TF、service 与 action 互通","textPreview":"CycloneDDS + ROS_DOMAIN_ID=0 让跨容器 topic、TF、service 与 action 互通","textChars":62,"textLines":1,"bbox":[56,602,1164,44]}
+{"kind":"notes","id":"nt/e5qgm1","slide":2,"text":"[Sources]\n- ../start_nav_all.sh\n- skills/ros-docker-debug/references/container-environments.md\n[/Sources]"}
+{"kind":"slide","id":"sl/9ykly7","slide":3,"title":"02 · Topic 总览","textShapes":21}
+{"kind":"textbox","id":"sh/pg7udgrq","slide":3,"text":"02 · Topic 总览","textPreview":"02 · Topic 总览","textChars":13,"textLines":1,"bbox":[44,32,360,30]}
+{"kind":"textbox","id":"sh/2dwb21sz","slide":3,"text":"核心数据流由三条链组成：点云、里程计、控制","textPreview":"核心数据流由三条链组成：点云、里程计、控制","textChars":21,"textLines":1,"bbox":[44,68,1130,70]}
+{"kind":"textbox","id":"sh/3e5cb69k","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[1184,664,52,24]}
+{"kind":"shape","id":"sh/cjyt8ba1","slide":3,"bbox":[44,158,1192,140]}
+{"kind":"textbox","id":"sh/dk7uhgrm","slide":3,"text":"感知 / 建图链","textPreview":"感知 / 建图链","textChars":8,"textLines":1,"bbox":[60,172,240,30]}
+{"kind":"shape","id":"sh/qhgb6lsv","slide":3,"bbox":[44,314,1192,126]}
+{"kind":"textbox","id":"sh/ripcfq9g","slide":3,"text":"定位 / TF 链","textPreview":"定位 / TF 链","textChars":9,"textLines":1,"bbox":[60,328,240,30]}
+{"kind":"shape","id":"sh/snutwrax","slide":3,"bbox":[44,456,1192,150]}
+{"kind":"textbox","id":"sh/to3a5wri","slide":3,"text":"导航 / 控制链","textPreview":"导航 / 控制链","textChars":8,"textLines":1,"bbox":[60,470,240,30]}
+{"kind":"shape","id":"sh/psryxkrq","slide":3,"bbox":[230,218,48,26]}
+{"kind":"shape","id":"sh/orixofal","slide":3,"bbox":[448,218,48,26]}
+{"kind":"shape","id":"sh/3q9gva90","slide":3,"bbox":[680,218,48,26]}
+{"kind":"shape","id":"sh/2p0fm5sf","slide":3,"bbox":[910,218,48,26]}
+{"kind":"shape","id":"sh/dgby1kr2","slide":3,"bbox":[286,362,46,24]}
+{"kind":"shape","id":"sh/cf2hszah","slide":3,"bbox":[538,362,46,24]}
+{"kind":"shape","id":"sh/be9gzu9w","slide":3,"bbox":[794,362,46,24]}
+{"kind":"shape","id":"sh/qd0zqpsb","slide":3,"bbox":[1032,362,46,24]}
+{"kind":"shape","id":"sh/lkby54ry","slide":3,"bbox":[246,520,48,26]}
+{"kind":"shape","id":"sh/kj2hwzat","slide":3,"bbox":[468,520,48,26]}
+{"kind":"shape","id":"sh/4zu9o721","slide":3,"bbox":[700,520,48,26]}
+{"kind":"shape","id":"sh/503ahc3m","slide":3,"bbox":[930,520,48,26]}
+{"kind":"textbox","id":"sh/ixcrmxkv","slide":3,"text":"Isaac LiDAR\n/lidar_points","textPreview":"Isaac LiDAR | /lidar_points","textChars":25,"textLines":2,"bbox":[66,198,164,70]}
+{"kind":"textbox","id":"sh/jylsf2lg","slide":3,"text":"padder\n→ nvblox cloud","textPreview":"padder | → nvblox cloud","textChars":21,"textLines":2,"bbox":[278,198,170,70]}
+{"kind":"textbox","id":"sh/s3e9s72x","slide":3,"text":"nvblox_node\nTSDF / ESDF","textPreview":"nvblox_node | TSDF / ESDF","textChars":23,"textLines":2,"bbox":[496,198,184,70]}
+{"kind":"textbox","id":"sh/t4nalc3i","slide":3,"text":"/static_occupancy_grid","textPreview":"/static_occupancy_grid","textChars":22,"textLines":1,"bbox":[718,198,212,70]}
+{"kind":"textbox","id":"sh/61crqhk7","slide":3,"text":"Nav2 / RViz\n代价地图与可视化","textPreview":"Nav2 / RViz | 代价地图与可视化","textChars":20,"textLines":2,"bbox":[970,198,224,70]}
+{"kind":"textbox","id":"sh/r2lsj2ls","slide":3,"text":"/chassis/odom","textPreview":"/chassis/odom","textChars":13,"textLines":1,"bbox":[82,340,204,66]}
+{"kind":"textbox","id":"sh/87a9gnmt","slide":3,"text":"relay\n/odom","textPreview":"relay | /odom","textChars":11,"textLines":2,"bbox":[332,340,206,66]}
+{"kind":"textbox","id":"sh/98jq9s3e","slide":3,"text":"AMCL 或静态 TF","textPreview":"AMCL 或静态 TF","textChars":11,"textLines":1,"bbox":[584,340,210,66]}
+{"kind":"textbox","id":"sh/bmpcfq5w","slide":3,"text":"map → odom","textPreview":"map → odom","textChars":10,"textLines":1,"bbox":[840,340,192,66]}
+{"kind":"textbox","id":"sh/qlgvml4b","slide":3,"text":"map → base_link","textPreview":"map → base_link","textChars":15,"textLines":1,"bbox":[1078,340,138,66]}
+{"kind":"textbox","id":"sh/doruh0n2","slide":3,"text":"RViz / Explorer\n/navigate_to_pose","textPreview":"RViz / Explorer | /navigate_to_pose","textChars":33,"textLines":2,"bbox":[64,494,182,82]}
+{"kind":"textbox","id":"sh/cnidovmh","slide":3,"text":"bt_navigator","textPreview":"bt_navigator","textChars":12,"textLines":1,"bbox":[294,494,174,82]}
+{"kind":"textbox","id":"sh/3ypcb650","slide":3,"text":"planner + controller","textPreview":"planner + controller","textChars":20,"textLines":1,"bbox":[516,494,184,82]}
+{"kind":"textbox","id":"sh/2xgbil4f","slide":3,"text":"velocity_smoother","textPreview":"velocity_smoother","textChars":17,"textLines":1,"bbox":[748,494,182,82]}
+{"kind":"textbox","id":"sh/pk7udgnq","slide":3,"text":"/cmd_vel\n→ Isaac 底盘","textPreview":"/cmd_vel | → Isaac 底盘","textChars":19,"textLines":2,"bbox":[978,494,216,82]}
+{"kind":"notes","id":"nt/9ykly7","slide":3,"text":"[Sources]\n- launch/nav_stack.launch.py\n- src/isaac_3d_lidar_bringup/launch/xt32_nvblox.launch.py\n- configs/nav2_params.yaml\n- docs/map_nav/README.md\n[/Sources]"}
+{"kind":"slide","id":"sl/gtz81l","slide":4,"title":"03 · 感知链","textShapes":10}
+{"kind":"textbox","id":"sh/ilcne90n","slide":4,"text":"03 · 感知链","textPreview":"03 · 感知链","textChars":8,"textLines":1,"bbox":[44,32,360,30]}
+{"kind":"textbox","id":"sh/5o3mpojy","slide":4,"text":"同一份 3D 点云分成两路，分别服务建图与避障","textPreview":"同一份 3D 点云分成两路，分别服务建图与避障","textChars":23,"textLines":1,"bbox":[44,68,1130,70]}
+{"kind":"textbox","id":"sh/knu5gjid","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[1184,664,52,24]}
+{"kind":"shape","id":"sh/vi14je1w","slide":4,"bbox":[310,332,84,34]}
+{"kind":"shape","id":"sh/ahsna90b","slide":4,"bbox":[628,244,82,34]}
+{"kind":"shape","id":"sh/xk3ml4j2","slide":4,"bbox":[628,440,82,34]}
+{"kind":"textbox","id":"sh/wja5cjih","slide":4,"text":"Isaac RTX LiDAR\n/front_3d_lidar/lidar_points","textPreview":"Isaac RTX LiDAR | /front_3d_lidar/lidar_points","textChars":44,"textLines":2,"bbox":[60,288,250,126]}
+{"kind":"textbox","id":"sh/fe54vy1g","slide":4,"text":"输入分流","textPreview":"输入分流","textChars":4,"textLines":1,"bbox":[394,286,234,128]}
+{"kind":"textbox","id":"sh/udwnmt0v","slide":4,"text":"pointcloud_padder\n固定为 1800 × 31\n缺失光束填 NaN","textPreview":"pointcloud_padder | 固定为 1800 × 31 | 缺失光束填 NaN","textChars":41,"textLines":3,"bbox":[710,182,250,146]}
+{"kind":"textbox","id":"sh/0zep0fyx","slide":4,"text":"nvblox_node\nTSDF → ESDF → 2D occupancy\n订阅 /lidar_points_nvblox","textPreview":"nvblox_node | TSDF → ESDF → 2D occupancy | 订阅 /lidar_points_nvblox","textChars":62,"textLines":3,"bbox":[988,182,234,146]}
+{"kind":"textbox","id":"sh/10nq9kzi","slide":4,"text":"pointcloud_to_laserscan\nbase_link 高度 0.10–0.65 m\n量程 0.5–20 m · 361 rays","textPreview":"pointcloud_to_laserscan | base_link 高度 0.10–0.65 m | 量程 0.5–20 m · 361 rays","textChars":71,"textLines":3,"bbox":[710,388,250,164]}
+{"kind":"textbox","id":"sh/exc7ypg7","slide":4,"text":"/scan\nAMCL + 两层 costmap","textPreview":"/scan | AMCL + 两层 costmap","textChars":23,"textLines":2,"bbox":[988,408,234,124]}
+{"kind":"textbox","id":"sh/zy587uhs","slide":4,"text":"关键约束：nvblox 不能直接消费 Isaac 的可变长度点云；导航投影又必须排除地面与货架上方结构。","textPreview":"关键约束：nvblox 不能直接消费 Isaac 的可变长度点云；导航投影又必须排除地面与货架上方结构。","textChars":52,"textLines":1,"bbox":[60,606,1160,44]}
+{"kind":"notes","id":"nt/gtz81l","slide":4,"text":"[Sources]\n- src/isaac_3d_lidar_bringup/isaac_3d_lidar_bringup/pointcloud_padder.py\n- src/isaac_3d_lidar_bringup/launch/xt32_nvblox.launch.py\n- launch/nav_stack.launch.py\n[/Sources]"}
+{"kind":"slide","id":"sl/dy9w6u","slide":5,"title":"04 · 地图链","textShapes":12}
+{"kind":"textbox","id":"sh/8r250jih","slide":5,"text":"04 · 地图链","textPreview":"04 · 地图链","textChars":8,"textLines":1,"bbox":[44,32,360,30]}
+{"kind":"textbox","id":"sh/7qtorehw","slide":5,"text":"3D 地图、实时 OccupancyGrid 与导航静态地图各司其职","textPreview":"3D 地图、实时 OccupancyGrid 与导航静态地图各司其职","textChars":34,"textLines":1,"bbox":[44,68,1130,70]}
+{"kind":"textbox","id":"sh/65knyt0b","slide":5,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1184,664,52,24]}
+{"kind":"shape","id":"sh/l4b6pozq","slide":5,"bbox":[330,290,66,30]}
+{"kind":"shape","id":"sh/k325wji5","slide":5,"bbox":[650,290,66,30]}
+{"kind":"shape","id":"sh/j2toneh0","slide":5,"bbox":[968,290,66,30]}
+{"kind":"textbox","id":"sh/y1knu90f","slide":5,"text":"warehouse_v3.nvblx\n已保存 3D 地图","textPreview":"warehouse_v3.nvblx | 已保存 3D 地图","textChars":28,"textLines":2,"bbox":[58,214,272,170]}
+{"kind":"textbox","id":"sh/p0f618za","slide":5,"text":"/nvblox_node/\nload_map\nFilePath service","textPreview":"/nvblox_node/ | load_map | FilePath service","textChars":39,"textLines":3,"bbox":[396,232,254,132]}
+{"kind":"textbox","id":"sh/4zmp83ip","slide":5,"text":"nvblox_node\n重建 ESDF / Mesh / 2D slice","textPreview":"nvblox_node | 重建 ESDF / Mesh / 2D slice","textChars":37,"textLines":2,"bbox":[716,214,252,170]}
+{"kind":"textbox","id":"sh/m5gv2h0r","slide":5,"text":"/nvblox_node/\nstatic_occupancy_\ngrid","textPreview":"/nvblox_node/ | static_occupancy_ | grid","textChars":36,"textLines":3,"bbox":[1034,232,190,132]}
+{"kind":"textbox","id":"sh/769cv2hc","slide":5,"text":"实时建图 / 探索","textPreview":"实时建图 / 探索","textChars":9,"textLines":1,"bbox":[1020,410,214,34]}
+{"kind":"textbox","id":"sh/87id47ih","slide":5,"text":"warehouse_v3.yaml + .pgm\n417 × 424 · 0.05 m/cell","textPreview":"warehouse_v3.yaml + .pgm | 417 × 424 · 0.05 m/cell","textChars":48,"textLines":2,"bbox":[116,482,362,116]}
+{"kind":"shape","id":"sh/98ruxcz2","slide":5,"bbox":[508,522,92,32]}
+{"kind":"textbox","id":"sh/y1gvyx0f","slide":5,"text":"map_server","textPreview":"map_server","textChars":10,"textLines":1,"bbox":[630,492,206,96]}
+{"kind":"shape","id":"sh/z2pcr2h0","slide":5,"bbox":[866,522,92,32]}
+{"kind":"textbox","id":"sh/k3yd07il","slide":5,"text":"/map\nReliable + Transient Local","textPreview":"/map | Reliable + Transient Local","textChars":31,"textLines":2,"bbox":[988,482,236,116]}
+{"kind":"textbox","id":"sh/l47utcz6","slide":5,"text":"保存地图导航","textPreview":"保存地图导航","textChars":6,"textLines":1,"bbox":[558,620,250,30]}
+{"kind":"notes","id":"nt/dy9w6u","slide":5,"text":"[Sources]\n- launch/nvblox_with_map.launch.py\n- configs/amcl_params.yaml\n- skills/isaac-amr-project-state/references/current-state.md\n[/Sources]"}
+{"kind":"slide","id":"sl/jeg703","slide":6,"title":"05 · 定位与 TF","textShapes":9}
+{"kind":"textbox","id":"sh/o3q58ne5","slide":6,"text":"05 · 定位与 TF","textPreview":"05 · 定位与 TF","textChars":11,"textLines":1,"bbox":[44,32,360,30]}
+{"kind":"textbox","id":"sh/n2hozidk","slide":6,"text":"定位模式只改变 map→odom 的来源，Nav2 下游保持不变","textPreview":"定位模式只改变 map→odom 的来源，Nav2 下游保持不变","textChars":32,"textLines":1,"bbox":[44,68,1130,70]}
+{"kind":"textbox","id":"sh/m18n6dwz","slide":6,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1184,664,52,24]}
+{"kind":"shape","id":"sh/10z6x8ve","slide":6,"bbox":[428,288,82,34]}
+{"kind":"shape","id":"sh/0zq543et","slide":6,"bbox":[428,480,82,34]}
+{"kind":"shape","id":"sh/zehovid8","slide":6,"bbox":[920,378,80,34]}
+{"kind":"textbox","id":"sh/edon2dw3","slide":6,"text":"ground_truth","textPreview":"ground_truth","textChars":12,"textLines":1,"bbox":[72,230,300,112]}
+{"kind":"textbox","id":"sh/dcf6t8vi","slide":6,"text":"static_transform_publisher\n发布 identity map → odom\n用于仿真地图/规划/控制验证","textPreview":"static_transform_publisher | 发布 identity map → odom | 用于仿真地图/规划/控制验证","textChars":64,"textLines":3,"bbox":[522,222,384,126]}
+{"kind":"textbox","id":"sh/cb6503ex","slide":6,"text":"AMCL","textPreview":"AMCL","textChars":4,"textLines":1,"bbox":[72,424,300,112]}
+{"kind":"textbox","id":"sh/epkfylw3","slide":6,"text":"订阅 /map + /scan + /odom\n接收 /initialpose，发布 /amcl_pose\n并广播 map → odom","textPreview":"订阅 /map + /scan + /odom | 接收 /initialpose，发布 /amcl_pose | 并广播 map → odom","textChars":68,"textLines":3,"bbox":[522,412,384,138]}
+{"kind":"textbox","id":"sh/fqtgrqdo","slide":6,"text":"统一 TF 结果\nmap → odom → base_link","textPreview":"统一 TF 结果 | map → odom → base_link","textChars":31,"textLines":2,"bbox":[1000,322,224,142]}
+{"kind":"textbox","id":"sh/0r2x0ve9","slide":6,"text":"AMCL 自动初始化器只在 fixed / odom_identity 模式短暂存在：等待静止 → 发 3 次 /initialpose → 验证 /amcl_pose → 退出。","textPreview":"AMCL 自动初始化器只在 fixed / odom_identity 模式短暂存在：等待静止 → 发 3 次 /initialpose → 验证 /amcl_pose → 退出。","textChars":90,"textLines":1,"bbox":[72,600,1152,46]}
+{"kind":"notes","id":"nt/jeg703","slide":6,"text":"[Sources]\n- launch/nav_stack.launch.py\n- configs/amcl_params.yaml\n- src/isaac_3d_lidar_bringup/isaac_3d_lidar_bringup/amcl_pose_initializer.py\n[/Sources]"}
+{"kind":"slide","id":"sl/yn0xtb","slide":7,"title":"06 · 导航闭环","textShapes":13}
+{"kind":"textbox","id":"sh/xobmdob6","slide":7,"text":"06 · 导航闭环","textPreview":"06 · 导航闭环","textChars":9,"textLines":1,"bbox":[44,32,360,30]}
+{"kind":"textbox","id":"sh/alknitsv","slide":7,"text":"Nav2 用 Action 接收目标，用 Topic 闭环控制底盘","textPreview":"Nav2 用 Action 接收目标，用 Topic 闭环控制底盘","textChars":33,"textLines":1,"bbox":[44,68,1130,70]}
+{"kind":"textbox","id":"sh/bmt4bytg","slide":7,"text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[1184,664,52,24]}
+{"kind":"shape","id":"sh/oz2lgjap","slide":7,"bbox":[234,304,40,28]}
+{"kind":"shape","id":"sh/pkbm9oba","slide":7,"bbox":[454,304,40,28]}
+{"kind":"shape","id":"sh/2x03e9sj","slide":7,"bbox":[674,304,40,28]}
+{"kind":"shape","id":"sh/nyt47et4","slide":7,"bbox":[894,304,40,28]}
+{"kind":"textbox","id":"sh/0vilczad","slide":7,"text":"RViz / Explorer\n目标客户端","textPreview":"RViz / Explorer | 目标客户端","textChars":21,"textLines":2,"bbox":[54,254,180,126]}
+{"kind":"textbox","id":"sh/1wrm54by","slide":7,"text":"bt_navigator\nNavigateToPose","textPreview":"bt_navigator | NavigateToPose","textChars":27,"textLines":2,"bbox":[274,254,180,126]}
+{"kind":"textbox","id":"sh/lgr21wba","slide":7,"text":"planner_server\n全局路径","textPreview":"planner_server | 全局路径","textChars":19,"textLines":2,"bbox":[494,254,180,126]}
+{"kind":"textbox","id":"sh/0fi18bup","slide":7,"text":"controller_server\n局部跟踪与避障","textPreview":"controller_server | 局部跟踪与避障","textChars":25,"textLines":2,"bbox":[714,254,180,126]}
+{"kind":"textbox","id":"sh/ze90z6t4","slide":7,"text":"velocity smoother\n限速 / 加速度","textPreview":"velocity smoother | 限速 / 加速度","textChars":26,"textLines":2,"bbox":[934,254,180,126]}
+{"kind":"shape","id":"sh/yd0j61cj","slide":7,"bbox":[1114,304,48,28]}
+{"kind":"textbox","id":"sh/dcrixwby","slide":7,"text":"/cmd_vel","textPreview":"/cmd_vel","textChars":8,"textLines":1,"bbox":[1160,296,78,40]}
+{"kind":"textbox","id":"sh/cbi14rud","slide":7,"text":"/map\n静态层","textPreview":"/map | 静态层","textChars":8,"textLines":2,"bbox":[300,480,180,88]}
+{"kind":"textbox","id":"sh/ba90vmts","slide":7,"text":"/scan\n障碍层","textPreview":"/scan | 障碍层","textChars":9,"textLines":2,"bbox":[550,480,180,88]}
+{"kind":"textbox","id":"sh/q9gj2hcn","slide":7,"text":"/odom + TF\n状态与坐标","textPreview":"/odom + TF | 状态与坐标","textChars":16,"textLines":2,"bbox":[800,480,180,88]}
+{"kind":"textbox","id":"sh/p87itcb2","slide":7,"text":"行为服务器提供 /spin、/backup、/wait；探索节点不直接发布 /cmd_vel，因此复用同一套避障、恢复和速度限制。","textPreview":"行为服务器提供 /spin、/backup、/wait；探索节点不直接发布 /cmd_vel，因此复用同一套避障、恢复和速度限制。","textChars":65,"textLines":1,"bbox":[72,612,1136,42]}
+{"kind":"notes","id":"nt/yn0xtb","slide":7,"text":"[Sources]\n- configs/nav2_params.yaml\n- src/isaac_3d_lidar_exploration/README.md\n- src/isaac_3d_lidar_exploration/isaac_3d_lidar_exploration/frontier_explorer_node.py\n[/Sources]"}
+{"kind":"slide","id":"sl/rdujg2","slide":8,"title":"07 · 坐标系","textShapes":13}
+{"kind":"textbox","id":"sh/e50zuhkb","slide":8,"text":"07 · 坐标系","textPreview":"07 · 坐标系","textChars":8,"textLines":1,"bbox":[44,32,360,30]}
+{"kind":"textbox","id":"sh/1sripwj2","slide":8,"text":"TF 树是点云、地图、定位与控制共享的坐标契约","textPreview":"TF 树是点云、地图、定位与控制共享的坐标契约","textChars":23,"textLines":1,"bbox":[44,68,1130,70]}
+{"kind":"textbox","id":"sh/0rihwr2h","slide":8,"text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[1184,664,52,24]}
+{"kind":"shape","id":"sh/nut0r61s","slide":8,"bbox":[290,294,74,32]}
+{"kind":"shape","id":"sh/mtkjy1kn","slide":8,"bbox":[594,294,74,32]}
+{"kind":"shape","id":"sh/9wbitwjy","slide":8,"bbox":[898,294,74,32]}
+{"kind":"textbox","id":"sh/ov210b2d","slide":8,"text":"map","textPreview":"map","textChars":3,"textLines":1,"bbox":[86,244,204,126]}
+{"kind":"textbox","id":"sh/3yp0f2lo","slide":8,"text":"odom","textPreview":"odom","textChars":4,"textLines":1,"bbox":[364,244,230,126]}
+{"kind":"textbox","id":"sh/2xgzmxk3","slide":8,"text":"base_link","textPreview":"base_link","textChars":9,"textLines":1,"bbox":[668,244,230,126]}
+{"kind":"textbox","id":"sh/gnut4rix","slide":8,"text":"front_3d_lidar","textPreview":"front_3d_lidar","textChars":14,"textLines":1,"bbox":[972,244,232,126]}
+{"kind":"textbox","id":"sh/1o3uxczi","slide":8,"text":"AMCL 或 ground_truth","textPreview":"AMCL 或 ground_truth","textChars":19,"textLines":1,"bbox":[270,402,326,36]}
+{"kind":"textbox","id":"sh/elcb2h0r","slide":8,"text":"Isaac / 底盘里程计","textPreview":"Isaac / 底盘里程计","textChars":13,"textLines":1,"bbox":[594,402,324,36]}
+{"kind":"textbox","id":"sh/fmlcvmhc","slide":8,"text":"静态外参","textPreview":"静态外参","textChars":4,"textLines":1,"bbox":[902,402,294,36]}
+{"kind":"textbox","id":"sh/oret8rit","slide":8,"text":"nvblox: global_frame=odom\npose_frame=front_3d_lidar","textPreview":"nvblox: global_frame=odom | pose_frame=front_3d_lidar","textChars":51,"textLines":2,"bbox":[92,508,328,96]}
+{"kind":"textbox","id":"sh/pcnu1wze","slide":8,"text":"local costmap: odom\nglobal costmap: map","textPreview":"local costmap: odom | global costmap: map","textChars":39,"textLines":2,"bbox":[476,508,328,96]}
+{"kind":"textbox","id":"sh/2pcb6h03","slide":8,"text":"健康检查最终验证\nmap → base_link","textPreview":"健康检查最终验证 | map → base_link","textChars":24,"textLines":2,"bbox":[860,508,328,96]}
+{"kind":"notes","id":"nt/rdujg2","slide":8,"text":"[Sources]\n- src/isaac_3d_lidar_bringup/launch/xt32_nvblox.launch.py\n- launch/nav_stack.launch.py\n- configs/nav2_params.yaml\n- ../start_nav_all.sh\n[/Sources]"}
+{"kind":"slide","id":"sl/r058ab","slide":9,"title":"08 · Interface Contract","textShapes":4}
+{"kind":"textbox","id":"sh/q1wzi9gf","slide":9,"text":"08 · Interface Contract","textPreview":"08 · Interface Contract","textChars":23,"textLines":1,"bbox":[44,32,360,30]}
+{"kind":"textbox","id":"sh/d47id4f6","slide":9,"text":"感知与地图 Topic 的发布者、订阅者和 QoS 都是运行合同","textPreview":"感知与地图 Topic 的发布者、订阅者和 QoS 都是运行合同","textChars":32,"textLines":1,"bbox":[44,68,1130,70]}
+{"kind":"textbox","id":"sh/s3ehkzyl","slide":9,"text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[1184,664,52,24]}
+{"kind":"textbox","id":"sh/e5gzm9gr","slide":9,"text":"保存地图导航消费 /map；实时探索消费 /nvblox_node/static_occupancy_grid。两者不要混为同一个生命周期。","textPreview":"保存地图导航消费 /map；实时探索消费 /nvblox_node/static_occupancy_grid。两者不要混为同一个生命周期。","textChars":70,"textLines":1,"bbox":[62,624,1156,36]}
+{"kind":"table","id":"tb/2943el0v","slide":9,"name":"","rows":7,"cols":5,"preview":"接口 | 类型 | 主要发布者 | 主要订阅者 | QoS / 备注","bbox":[44,168,1192,432]}
+{"kind":"notes","id":"nt/r058ab","slide":9,"text":"[Sources]\n- skills/ros-docker-debug/references/diagnostics.md\n- launch/nav_stack.launch.py\n- src/isaac_3d_lidar_exploration/launch/explore_nvblox.launch.py\n[/Sources]"}
+{"kind":"slide","id":"sl/jbaok0","slide":10,"title":"09 · Interface Contract","textShapes":4}
+{"kind":"textbox","id":"sh/jux0bm5o","slide":10,"text":"09 · Interface Contract","textPreview":"09 · Interface Contract","textChars":23,"textLines":1,"bbox":[44,32,360,30]}
+{"kind":"textbox","id":"sh/kv6hkrmt","slide":10,"text":"定位、控制和探索接口共同完成目标闭环","textPreview":"定位、控制和探索接口共同完成目标闭环","textChars":18,"textLines":1,"bbox":[44,68,1130,70]}
+{"kind":"textbox","id":"sh/lwfidcne","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[1184,664,52,24]}
+{"kind":"textbox","id":"sh/bqd0725c","slide":10,"text":"/clicked_point 默认没有移动桥接；在 RViz 中应使用 2D Goal Pose 触发 NavigateToPose。","textPreview":"/clicked_point 默认没有移动桥接；在 RViz 中应使用 2D Goal Pose 触发 NavigateToPose。","textChars":67,"textLines":1,"bbox":[72,634,1136,30]}
+{"kind":"table","id":"tb/zmlk3u1o","slide":10,"name":"","rows":8,"cols":5,"preview":"接口 | 种类 | 生产端 / Server | 消费端 / Client | 关键语义","bbox":[44,162,1192,454]}
+{"kind":"notes","id":"nt/jbaok0","slide":10,"text":"[Sources]\n- src/isaac_3d_lidar_bringup/isaac_3d_lidar_bringup/amcl_pose_initializer.py\n- src/isaac_3d_lidar_exploration/isaac_3d_lidar_exploration/frontier_explorer_node.py\n- skills/ros-docker-debug/references/diagnostics.md\n[/Sources]"}
+{"kind":"slide","id":"sl/5rootu","slide":11,"title":"10 · 启动与生命周期","textShapes":16}
+{"kind":"textbox","id":"sh/wb2l43ix","slide":11,"text":"10 · 启动与生命周期","textPreview":"10 · 启动与生命周期","textChars":12,"textLines":1,"bbox":[44,32,360,30]}
+{"kind":"textbox","id":"sh/vat4vy1c","slide":11,"text":"启动顺序刻意错峰：先保证数据，再加载地图，最后激活 Nav2","textPreview":"启动顺序刻意错峰：先保证数据，再加载地图，最后激活 Nav2","textChars":30,"textLines":1,"bbox":[44,68,1130,70]}
+{"kind":"textbox","id":"sh/a9k32t07","slide":11,"text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[1184,664,52,24]}
+{"kind":"shape","id":"sh/98rmt8jm","slide":11,"bbox":[44,350,1192,0]}
+{"kind":"shape","id":"sh/87il03i1","slide":11,"bbox":[72,340,20,20]}
+{"kind":"textbox","id":"sh/n694ry1g","slide":11,"text":"T+0","textPreview":"T+0","textChars":3,"textLines":1,"bbox":[68,292,100,30]}
+{"kind":"textbox","id":"sh/ml03yt0v","slide":11,"text":"Isaac Sim","textPreview":"Isaac Sim","textChars":9,"textLines":1,"bbox":[72,396,240,34]}
+{"kind":"textbox","id":"sh/t4vm5sjq","slide":11,"text":"/clock、点云、odom、TF 到位","textPreview":"/clock、点云、odom、TF 到位","textChars":20,"textLines":1,"bbox":[72,444,246,100]}
+{"kind":"shape","id":"sh/s3m5cni5","slide":11,"bbox":[356,340,20,20]}
+{"kind":"textbox","id":"sh/21grilk7","slide":11,"text":"T+5s","textPreview":"T+5s","textChars":4,"textLines":1,"bbox":[352,292,100,30]}
+{"kind":"textbox","id":"sh/329sbq1c","slide":11,"text":"nvblox + load_map","textPreview":"nvblox + load_map","textChars":17,"textLines":1,"bbox":[356,396,240,34]}
+{"kind":"textbox","id":"sh/o3i9kbix","slide":11,"text":"padder → nvblox；调用 /load_map","textPreview":"padder → nvblox；调用 /load_map","textChars":28,"textLines":1,"bbox":[356,444,246,100]}
+{"kind":"shape","id":"sh/p4radgji","slide":11,"bbox":[640,340,20,20]}
+{"kind":"textbox","id":"sh/exgre1kv","slide":11,"text":"T+15s","textPreview":"T+15s","textChars":5,"textLines":1,"bbox":[636,292,100,30]}
+{"kind":"textbox","id":"sh/fyps761g","slide":11,"text":"定位","textPreview":"定位","textChars":2,"textLines":1,"bbox":[640,396,240,34]}
+{"kind":"textbox","id":"sh/gzy9gb21","slide":11,"text":"AMCL 或 map server + 静态 TF","textPreview":"AMCL 或 map server + 静态 TF","textChars":25,"textLines":1,"bbox":[640,444,246,100]}
+{"kind":"shape","id":"sh/107a9gjm","slide":11,"bbox":[924,340,20,20]}
+{"kind":"textbox","id":"sh/yt0bq50z","slide":11,"text":"T+40s","textPreview":"T+40s","textChars":5,"textLines":1,"bbox":[920,292,100,30]}
+{"kind":"textbox","id":"sh/zutsja1k","slide":11,"text":"Nav2 导航","textPreview":"Nav2 导航","textChars":7,"textLines":1,"bbox":[924,396,240,34]}
+{"kind":"textbox","id":"sh/b21gvyd0","slide":11,"text":"planner / controller / BT / behaviors active","textPreview":"planner / controller / BT / behaviors active","textChars":44,"textLines":1,"bbox":[924,444,246,100]}
+{"kind":"textbox","id":"sh/a1sfmtwf","slide":11,"text":"一键脚本在每一段之间等待“真实消息 / lifecycle / action / TF”门禁，而不是只检查进程是否存在。","textPreview":"一键脚本在每一段之间等待“真实消息 / lifecycle / action / TF”门禁，而不是只检查进程是否存在。","textChars":60,"textLines":1,"bbox":[72,602,1136,46]}
+{"kind":"notes","id":"nt/5rootu","slide":11,"text":"[Sources]\n- ../start_nav_all.sh\n- launch/nvblox_with_map.launch.py\n- launch/nav_stack.launch.py\n[/Sources]"}
+{"kind":"slide","id":"sl/9iwelm","slide":12,"title":"11 · 扩展与维护边界","textShapes":9}
+{"kind":"textbox","id":"sh/ls7m1ora","slide":12,"text":"11 · 扩展与维护边界","textPreview":"11 · 扩展与维护边界","textChars":12,"textLines":1,"bbox":[44,32,360,30]}
+{"kind":"textbox","id":"sh/ypw369sj","slide":12,"text":"Frontier Explorer 是可选上层策略，不绕过 Nav2 安全闭环","textPreview":"Frontier Explorer 是可选上层策略，不绕过 Nav2 安全闭环","textChars":39,"textLines":1,"bbox":[44,68,1130,70]}
+{"kind":"textbox","id":"sh/zqp4ze94","slide":12,"text":"12","textPreview":"12","textChars":2,"textLines":1,"bbox":[1184,664,52,24]}
+{"kind":"shape","id":"sh/8fylc3a1","slide":12,"bbox":[372,290,74,32]}
+{"kind":"shape","id":"sh/9g7m58r6","slide":12,"bbox":[806,290,74,32]}
+{"kind":"textbox","id":"sh/mtg3atsv","slide":12,"text":"/static_occupancy_grid\n+ map→base_link TF","textPreview":"/static_occupancy_grid | + map→base_link TF","textChars":41,"textLines":2,"bbox":[68,226,304,150]}
+{"kind":"textbox","id":"sh/7up43y9g","slide":12,"text":"Frontier Explorer\n选安全候选点\n发布 markers / status","textPreview":"Frontier Explorer | 选安全候选点 | 发布 markers / status","textChars":44,"textLines":3,"bbox":[446,208,360,186]}
+{"kind":"textbox","id":"sh/wjilg3ax","slide":12,"text":"/navigate_to_pose\n交给 Nav2 执行","textPreview":"/navigate_to_pose | 交给 Nav2 执行","textChars":28,"textLines":2,"bbox":[880,226,304,150]}
+{"kind":"textbox","id":"sh/hkrm98ri","slide":12,"text":"默认 disabled；通过 /frontier_explorer/set_enabled 显式启用","textPreview":"默认 disabled；通过 /frontier_explorer/set_enabled 显式启用","textChars":50,"textLines":1,"bbox":[72,436,540,38]}
+{"kind":"textbox","id":"sh/lgv2pcfy","slide":12,"text":"检测 /cmd_vel 上的意外发布者；地图陈旧、TF 丢失、Nav2 未就绪时不发目标","textPreview":"检测 /cmd_vel 上的意外发布者；地图陈旧、TF 丢失、Nav2 未就绪时不发目标","textChars":44,"textLines":1,"bbox":[72,490,1110,38]}
+{"kind":"textbox","id":"sh/0fmlg7yt","slide":12,"text":"真机迁移时保留接口边界，替换传感器、里程计与外参，并重新验收 footprint、速度、制动距离和急停。","textPreview":"真机迁移时保留接口边界，替换传感器、里程计与外参，并重新验收 footprint、速度、制动距离和急停。","textChars":52,"textLines":1,"bbox":[72,576,1110,58]}
+{"kind":"notes","id":"nt/9iwelm","slide":12,"text":"[Sources]\n- src/isaac_3d_lidar_exploration/README.md\n- src/isaac_3d_lidar_exploration/isaac_3d_lidar_exploration/frontier_explorer_node.py\n- skills/isaac-amr-project-state/references/current-state.md\n[/Sources]"}

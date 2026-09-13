@@ -30,7 +30,7 @@ warehouse_v3.pgm + warehouse_v3.yaml
   -> Global Costmap static_layer
   -> Navfn 全局规划器
 
-/front_3d_lidar/lidar_points
+/livox/lidar
   -> pointcloud_to_laserscan
   -> /scan
   -> AMCL + Global/Local Costmap obstacle_layer
@@ -213,7 +213,7 @@ AMCL_INITIAL_YAW=0.0 \
 ./stop_nav_all.sh
 ```
 
-一键脚本通过 detached Docker exec 在后台启动 Isaac Sim、nvblox、Navigation 和 RViz，不会再为四个进程分别打开日志终端。它调用项目内 `isaac_sim/auto_play_warehouse.py`，以 `headless=True` 打开 warehouse USD 并自动 Play。桌面上只显示 RViz2；执行 `start_nav_all.sh` 的原终端继续显示就绪进度与最终健康检查。不要在脚本已经启动 Navigation 后，再手工启动第二套 `nav_stack.launch.py`。如果启动中途超时，先阅读文件日志，再执行 `./stop_nav_all.sh`，不要直接重跑启动脚本。
+一键脚本通过 detached Docker exec 在后台启动 Isaac Sim、nvblox、Navigation 和 RViz，不会再为四个进程分别打开日志终端。它调用项目内 `isaac_sim/auto_play_mid360.py`，以 `headless=True` 打开 warehouse USD、将上游 Carter 资产内的传感器改写为 Mid360 代理并自动 Play。桌面上只显示 RViz2；执行 `start_nav_all.sh` 的原终端继续显示就绪进度与最终健康检查。不要在脚本已经启动 Navigation 后，再手工启动第二套 `nav_stack.launch.py`。如果启动中途超时，先阅读文件日志，再执行 `./stop_nav_all.sh`，不要直接重跑启动脚本。
 
 需要同时显示 Isaac Sim WebRTC UI 和 RViz 时，使用统一 streaming 模式；它仍只启动一个 Isaac Sim，并自动打开同一 warehouse USD 和 Play：
 
@@ -243,14 +243,14 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file:///workspace/ros-humble/cyclonedds_ros_local.xml
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$isaac_sim_package_path/exts/isaacsim.ros2.bridge/humble/lib
 export ROS_DOMAIN_ID=0
-./python.sh auto_play_warehouse.py
+./python.sh auto_play_mid360.py
 ```
 
 要求至少发布：
 
 ```text
 /clock
-/front_3d_lidar/lidar_points
+/livox/lidar
 /chassis/odom
 /tf
 /tf_static
@@ -281,7 +281,7 @@ maps/nvblox/warehouse_v3.nvblx
 1 x /pointcloud_padder
 ```
 
-不要同时运行纯空白建图 `xt32_nvblox.launch.py` 和保存地图 wrapper。
+不要同时运行纯空白建图 `mid360_nvblox.launch.py` 和保存地图 wrapper。
 
 ### 5.3 启动 ground-truth 导航
 

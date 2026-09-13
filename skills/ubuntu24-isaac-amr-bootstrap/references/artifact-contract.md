@@ -24,7 +24,8 @@ ros-humble/
 └── isaac_3d_lidar_amr_ws/
     ├── configs/
     ├── isaac_sim/
-    │   ├── auto_play_warehouse.py
+    │   ├── auto_play_mid360.py
+    │   ├── lidar_configs/Livox_Mid360_Approx.json
     │   ├── streaming_auto_play.py
     │   └── usd/warehouse_3d_nav_origin_carter.usd
     ├── launch/
@@ -47,14 +48,15 @@ cae7664f29c8ced82c92efb17086cf3223646c102b7507866cb0f1e36eef47ca  maps/nvblox/wa
 a9e1e47bfad1292c0a1536425d89057c0604611aad9c05e31663dd3bd22bbe47  maps/2d/warehouse_v3.pgm
 5196d371292dd62781ef8c7433fcb4dc934a6b4d3b33e92d9198e942cbf524dd  maps/2d/warehouse_v3.yaml
 4c7fed45c773862e75b347b0a2b6a33a695427c79482d3feba38ce13e81700aa  isaac_sim/usd/warehouse_3d_nav_origin_carter.usd
-a1c0afd820a94bfa665d7cc2e62efc8e7a7224a9a62bbdbb63aa013d0c06a781  isaac_sim/auto_play_warehouse.py
-e2bce168de4dc4956c3b4698e62697c2f5045516df3cb6f878c0dd9fc6100666  isaac_sim/streaming_auto_play.py
+a8db2832271f2ffc79ff090457220cfb7699a30375179328ff28c92459e5edf6  isaac_sim/auto_play_mid360.py
+a3c094c89ad7fdf6aec8c98b6ee03b374ca3f006d9f1f8f05b675ce2bf801636  isaac_sim/streaming_auto_play.py
+bb084c5ce44a4d2508867aabaa0f6eaca9e2be60cbb1efb6f11d1aec3ce8f485  isaac_sim/lidar_configs/Livox_Mid360_Approx.json
 63253a3662ccbbbeeac15c34f1f707378da1a5acb48b0538eff202c0dbeabe45  configs/nav2_params.yaml
 1b3c8193ca5a41bf24cd2a9f151bfdfd81eca5da184fc1b5684094bdedf294f5  configs/amcl_params.yaml
-6b3514ba7e24469ba4b676a72faa3b0c0e3a0f873eeb2d72f5c73cfc907a6e30  launch/nvblox_with_map.launch.py
-b9765f9d3da5447d3e1c3037b74f964e449500996f5d50763befe74b20893e71  launch/nav_stack.launch.py
-5889c4f07657c18ec7ae521aad31550931006a60a6bb93f2846f157b64195e31  ../start_nav_all.sh
-ff0191a323838f44f305ee9614b1c5b19e3902fa3bd47934692a9c1a231834f4  ../stop_nav_all.sh
+da22ae5f81db23aeefc0d4113a759152551c4085c4fceb5ca1ed25062e7ce5fb  launch/nvblox_with_map.launch.py
+1a830cdd8d98f4cfd62e13bbe70cbbf8a230a9e562db6a0480ff774a1f3c5cc3  launch/nav_stack.launch.py
+7beb163786f3c5b2a2192625529d315579fc83fe5e6caeaf809e3899452c5d85  ../start_nav_all.sh
+3b2615a78959f3751efd409f7bc35522fcdea484086ace438b597ddf23f24005  ../stop_nav_all.sh
 6c21c9fb4942ff9e1c4b6930caf824c72eceef73bfce0ed2eadbff6cc5103b38  ../cyclonedds_ros_local.xml
 ```
 

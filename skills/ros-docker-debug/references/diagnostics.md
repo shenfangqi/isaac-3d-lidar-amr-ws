@@ -6,7 +6,7 @@ Before mapping or loading a map:
 
 ```bash
 ros2 node list --no-daemon | grep nvblox
-ros2 topic info /front_3d_lidar/lidar_points -v --no-daemon
+ros2 topic info /livox/lidar -v --no-daemon
 ps -eo pid,ppid,lstart,args | grep -E 'nvblox|component_container|ros2 launch' | grep -v grep
 ```
 
@@ -28,7 +28,7 @@ ros2 run tf2_ros tf2_echo map base_link
 ros2 topic info /scan -v --no-daemon
 ros2 topic info /map -v --no-daemon
 ros2 topic info /global_costmap/costmap -v --no-daemon
-ros2 topic info /front_3d_lidar/lidar_points_nvblox -v --no-daemon
+ros2 topic info /livox/lidar_nvblox -v --no-daemon
 ros2 param get /nvblox_node use_sim_time --no-daemon
 ros2 param get /nvblox_node lidar_width --no-daemon
 ros2 param get /nvblox_node lidar_height --no-daemon
@@ -70,5 +70,5 @@ Use `/home/admin/.ros/log` for processes launched as `admin` in the nvblox conta
 - Goal click with inactive `bt_navigator`: inspect lifecycle and confirm Spin/BackUp/Wait behavior servers exist.
 - Ground-truth failure followed by movement can be Nav2 Spin/BackUp recovery; inspect Action feedback and recovery count.
 - AMCL turn corrections can come from non-deskewed 3D-cloud projection and rotational noise; measure `map -> odom` and actual angular velocity before blaming the map.
-- A grid near `64 x 24` with zero occupied cells indicates bad spherical cloud input or time configuration; verify `1800 x 31`, padded-topic subscription, and startup simulation time.
+- A grid near `64 x 24` with zero occupied cells indicates bad spherical cloud input or time configuration; verify `1000 x 40`, padded-topic subscription, and startup simulation time.
 - Growing ESDF does not prove a usable 2D map. Inspect OccupancyGrid dimensions and unknown/free/occupied counts.

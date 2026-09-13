@@ -1,8 +1,26 @@
 # Current authoritative project state
 
+## Physical Jetson target: recorded 2026-09-06
+
+The project's real-hardware target is reachable through the local SSH alias `isaac-jetson` as user `shenfq`. Connection details, verified platform inventory, authentication rules, and safe remote-operation conventions are maintained in [jetson-target.md](jetson-target.md). Read that reference before every Jetson operation; do not copy passwords into project files or commands.
+
+- The Jetson `carbot-ros2` workspace retains the micro-ROS Agent and now runs it as the enabled user service `micro-ros-agent.service`, listening on UDP 8888 in `ROS_DOMAIN_ID=0` to match the completed ESP32 firmware. The service does not publish `/cmd_vel`.
+- Isaac simulation also uses Domain 0 but remains isolated with loopback-only `cyclonedds_ros_local.xml`. The opt-in workstation LAN configuration is `configs/cyclonedds_ros_jetson.xml`, loaded by `scripts/real_robot_ros_env.sh` inside a host-networked project container.
+- A non-motion `std_msgs/msg/String` probe passed bidirectionally between workstation CycloneDDS and Jetson Fast DDS on Domain 0. The ESP32 was intentionally off during this check, so repeat the `/cmd_vel` endpoint check after it is started.
+- The ESP32 static-resource issue reported as `publisher init failed` was fixed in its firmware. After clearing stale Agent sessions, `carbot_base` maintained one `/cmd_vel` subscription and four publishers: `/wheel_ticks`, `/imu/data_raw`, `/battery_state`, and `/carbot/status`. With the chassis lifted, 2026-09-06 ROS 2 smoke tests verified all differential-drive directions through standard `/cmd_vel`: forward at `linear.x=0.08 m/s`, reverse at `linear.x=-0.08 m/s`, in-place left at `angular.z=+0.25 rad/s`, and in-place right at `angular.z=-0.25 rad/s`. The user visually confirmed the track directions were correct. Every motion was followed by repeated zero Twist messages, and the final `/cmd_vel` subscription count remained one. The Jetson currently lacks matching Python type support for the ESP32's `carbot_msgs`, so the custom wheel/status payloads were not decoded during those tests.
+- Do not let the existing Isaac navigation launcher load the physical LAN DDS profile. Real hardware still requires verified `/odom`, `odom -> base_link`, Mid-360 data/extrinsics, `use_sim_time=false`, AMCL initialization, command timeout, and physical emergency stop before any nonzero command is allowed.
+
 ## Live checkpoint: 2026-08-29
 
-This is the newest authoritative state after validating and stopping all three launch modes.
+This is the newest authoritative state after converting and validating the project as a Mid-360-only runtime. `ISAAC_WEBRTC=1 ./start_nav_all.sh` is currently running with RViz, and the Isaac WebRTC AppImage is connected/available at `127.0.0.1` for user inspection.
+
+- The current live start completed with `[ OK ] All startup health checks passed.` Keep `isaac-sim`, `isaac-ros-nvblox`, and `ros2-dev-humble` running until the user finishes visual confirmation; stop them with `./stop_nav_all.sh` afterward.
+
+- The normal and WebRTC Isaac launchers now install `Livox_Mid360_Approx`, publish `/livox/lidar`, and retain the Carter asset's legacy sensor prim path only as an internal mounting/graph connection.
+- nvblox uses `mid360_nvblox.launch.py`, `/livox/lidar_nvblox`, and a `1000 x 40` padded spherical cloud. The independent XT32 launch and configuration files were removed.
+- Nav2, Frontier Exploration, RViz, startup health checks, shutdown patterns, and user documentation now default to Mid-360.
+- The post-conversion `./start_nav_all.sh` regression completed with `[ OK ] All startup health checks passed.` It verified `/livox/lidar`, `/livox/lidar_nvblox`, nvblox `1000 x 40`, live occupancy and Scan, AMCL/Nav2 lifecycle, map dimensions, RViz, and `map -> base_link`.
+- The post-conversion `ISAAC_WEBRTC=1 START_RVIZ=0 ./start_nav_all.sh` regression also completed with all health checks passed, including the streamed Mid-360 stage and WebRTC endpoint. Both launch modes were stopped cleanly afterward.
 
 - `ISAAC_WEBRTC=1 ./start_nav_all.sh` completed with `[ OK ] All startup health checks passed.` The same Isaac instance provided WebRTC, loaded and played the warehouse automatically, and supplied the full nvblox/Nav2/RViz stack.
 - The AppImage connected to `127.0.0.1`; the native Isaac UI showed `/nova_carter_ROS111` and the Pause control while RViz remained open behind it.
@@ -34,6 +52,7 @@ The current engineering objective after validated simulation navigation is real-
 - `launch/nvblox_with_map.launch.py` and `launch/nav_stack.launch.py` default to warehouse_v3.
 - `configs/nav2_params.yaml` uses `GridBased.allow_unknown=false`, `global_costmap.track_unknown_space=true`, `robot_radius=0.35`, `inflation_radius=0.45`, and `xy_goal_tolerance=0.10`.
 - The simulated projected `/scan` uses `base_link`, height `0.10..0.65 m`, range minimum `0.5 m`, 361 rays, and Best Effort/Volatile QoS.
+- The only simulated raw 3D LiDAR topic is `/livox/lidar`; nvblox consumes `/livox/lidar_nvblox` padded to `1000 x 40`.
 - Rotation is limited to about `0.35 rad/s`; relevant behavior plugin limits require a Navigation restart after configuration changes.
 
 ## Saved-map runtime design

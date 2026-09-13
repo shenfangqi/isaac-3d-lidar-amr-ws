@@ -52,7 +52,7 @@ There are three supported routes. Inspect the container and Isaac processes befo
 
 ### Automated navigation modes
 
-The default launcher uses `auto_play_warehouse.py`, opens the warehouse, starts the timeline, and runs the full saved-map navigation stack without a WebRTC stream:
+The default launcher uses `auto_play_mid360.py`, opens the warehouse, installs the Mid-360 RTX proxy, starts the timeline, and runs the full saved-map navigation stack without a WebRTC stream:
 
 ```bash
 cd /home/shenfq/projects/ros-humble
@@ -84,7 +84,7 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file:///workspace/ros-humble/cyclonedds_ros_local.xml
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$isaac_sim_package_path/exts/isaacsim.ros2.bridge/humble/lib
 export ROS_DOMAIN_ID=0
-./python.sh /workspace/ros-humble/isaac_3d_lidar_amr_ws/isaac_sim/auto_play_warehouse.py
+./python.sh /workspace/ros-humble/isaac_3d_lidar_amr_ws/isaac_sim/auto_play_mid360.py
 ```
 
 ### Standalone interactive WebRTC UI mode
@@ -136,4 +136,4 @@ In the streamed Isaac UI, open:
 
 Wait for `/nova_carter_ROS111` to appear in the Stage tree, then press Play. The toolbar control changing from Play to Pause is the visual confirmation that the timeline is running.
 
-`runheadless.sh` already runs an Isaac Sim Kit application. Never execute `python.sh auto_play_warehouse.py` while it is active: that starts a second Isaac Sim instance rather than controlling the streamed one. Closing the AppImage also does not stop the server; interrupt the `runheadless.sh` shell and stop the `isaac-sim` container when finished.
+`runheadless.sh` already runs an Isaac Sim Kit application. Never execute `python.sh auto_play_mid360.py` while it is active: that starts a second Isaac Sim instance rather than controlling the streamed one. Closing the AppImage also does not stop the server; interrupt the `runheadless.sh` shell and stop the `isaac-sim` container when finished.

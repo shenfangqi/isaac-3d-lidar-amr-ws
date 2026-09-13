@@ -31,7 +31,7 @@ setup(
     zip_safe=True,
     maintainer='shenfq',
     maintainer_email='shenfq@todo.todo',
-    description='Isaac Sim XT32 Nvblox Bringup',
+    description='Isaac Sim 3D lidar and nvblox bringup',
     license='Apache-2.0',
     extras_require={
         'test': ['pytest'],
