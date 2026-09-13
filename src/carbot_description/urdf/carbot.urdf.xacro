@@ -13,6 +13,9 @@
   <xacro:property name="track_bottom_z" value="${wheels['front_road_1']['z_m'] - wheels['front_road_1']['radius_m'] + track_thickness / 2.0}"/>
   <xacro:property name="track_top_z" value="${wheels['front_idler']['z_m'] + wheels['front_idler']['radius_m']}"/>
   <xacro:property name="wheel_mass" value="${p['dynamics']['per_wheel_mass_kg']}"/>
+  <xacro:property name="body_visual_top_z" value="${body_visual['position_from_base_link_m'][2] + body_visual['size_m'][2] / 2.0}"/>
+  <xacro:property name="lidar_origin_z" value="${p['sensors']['mid360']['translation_from_base_link_m'][2]}"/>
+  <xacro:property name="lidar_mount_height" value="${lidar_origin_z - body_visual_top_z}"/>
 
   <material name="carbot_blue">
     <color rgba="0.08 0.24 0.55 1.0"/>
@@ -137,6 +140,16 @@
   <xacro:wheel side="right" group="rear_drive" y="${-track_y}"/>
 
   <link name="lidar_link">
+    <!-- Design proxy only: fills the visible mounting space without changing the measured lidar origin. -->
+    <visual name="mid360_mount_proxy_visual">
+      <origin xyz="0 0 ${-lidar_mount_height / 2.0}" rpy="0 0 0"/>
+      <geometry>
+        <cylinder
+          radius="${p['sensors']['mid360']['mount_proxy']['radius_m']}"
+          length="${lidar_mount_height}"/>
+      </geometry>
+      <material name="sensor_gray"/>
+    </visual>
     <visual name="mid360_proxy_visual">
       <origin xyz="0 0 0.02" rpy="0 0 0"/>
       <geometry>

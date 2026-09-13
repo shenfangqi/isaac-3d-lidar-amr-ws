@@ -97,6 +97,8 @@ sensors:
     visual_proxy:
       radius_m: 0.025
       height_m: 0.040
+    mount_proxy:
+      radius_m: 0.012
 
 interfaces:
   wheel_ticks:
@@ -191,8 +193,8 @@ provenance:
   DESIGN_VALUE_CARBOT_SIMULATION_2026_09_13:
     category: design_value
     status: implemented_design
-    scope: [geometry.body_visual, simulation]
-    note: Reviewable body proxy, Isaac articulation paths, and coordinate conventions; not hardware calibration values.
+    scope: [geometry.body_visual, sensors.mid360.mount_proxy, simulation]
+    note: Reviewable body and sensor-mount proxies, Isaac articulation paths, and coordinate conventions; not hardware calibration values.
   TEMP_ESTIMATE_NOT_CALIBRATED:
     category: temporary_estimate
     status: TEMP_ESTIMATE_NOT_CALIBRATED

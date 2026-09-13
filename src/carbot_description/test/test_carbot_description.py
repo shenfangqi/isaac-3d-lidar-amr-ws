@@ -86,6 +86,41 @@ def test_body_visual_does_not_cover_tracks(description, parameters):
     assert visual_size[1] / 2.0 < inner_track_edge
 
 
+def test_lidar_mount_proxy_fills_gap_without_changing_sensor_origin(
+    description, parameters
+):
+    geometry = parameters["geometry"]
+    lidar = parameters["sensors"]["mid360"]
+    body_visual = geometry["body_visual"]
+    expected_height = lidar["translation_from_base_link_m"][2] - (
+        body_visual["position_from_base_link_m"][2]
+        + body_visual["size_m"][2] / 2.0
+    )
+    assert expected_height > 0.0
+
+    lidar_joint = next(
+        joint for joint in description.findall("joint")
+        if joint.attrib["name"] == "base_link_to_lidar_link"
+    )
+    joint_z = float(lidar_joint.find("origin").attrib["xyz"].split()[2])
+    assert joint_z == pytest.approx(lidar["translation_from_base_link_m"][2])
+
+    lidar_link = next(
+        link for link in description.findall("link")
+        if link.attrib["name"] == "lidar_link"
+    )
+    mount = next(
+        visual for visual in lidar_link.findall("visual")
+        if visual.attrib["name"] == "mid360_mount_proxy_visual"
+    )
+    assert float(mount.find("geometry/cylinder").attrib["length"]) == (
+        pytest.approx(expected_height)
+    )
+    assert float(mount.find("origin").attrib["xyz"].split()[2]) == (
+        pytest.approx(-expected_height / 2.0)
+    )
+
+
 def test_wheel_centers_use_physical_geometry(description, parameters):
     expected_y = parameters["geometry"]["physical_track_separation_m"] / 2.0
     joints = {
