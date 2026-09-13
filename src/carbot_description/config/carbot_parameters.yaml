@@ -1,0 +1,165 @@
+schema_version: 1
+
+# This is the canonical parameter source for the Carbot model. Consumers should
+# reference these values instead of copying them into URDF, USD, or controllers.
+robot:
+  drive_type: tracked_differential_skid_steer
+  total_working_mass_kg: 1.8
+
+geometry:
+  overall_size_m: [0.285, 0.266, 0.240]
+  base_link_height_m: 0.090
+  physical_track_separation_m: 0.225
+  track_width_m: 0.041
+  track_thickness_m: 0.004
+  effective_track_contact_length_m: 0.145
+  footprint_m:
+    - [0.155, 0.133]
+    - [0.155, -0.133]
+    - [-0.130, -0.133]
+    - [-0.130, 0.133]
+  body_collision:
+    size_m: [0.285, 0.266, 0.230]
+    position_from_base_link_m: [0.0125, 0.0, 0.035]
+  wheel_groups:
+    front_idler:
+      x_m: 0.111250
+      abs_y_m: 0.112500
+      z_m: -0.0419
+      radius_m: 0.0210
+    front_road_1:
+      x_m: 0.067929
+      abs_y_m: 0.112500
+      z_m: -0.0687
+      radius_m: 0.0195
+    front_road_2:
+      x_m: 0.022929
+      abs_y_m: 0.112500
+      z_m: -0.0687
+      radius_m: 0.0195
+    rear_road_1:
+      x_m: -0.022071
+      abs_y_m: 0.112500
+      z_m: -0.0687
+      radius_m: 0.0195
+    rear_road_2:
+      x_m: -0.067071
+      abs_y_m: 0.112500
+      z_m: -0.0687
+      radius_m: 0.0195
+    rear_drive:
+      x_m: -0.111250
+      abs_y_m: 0.112500
+      z_m: -0.0419
+      radius_m: 0.0210
+
+kinematics:
+  effective_track_separation_m: 0.254
+  effective_sprocket_radius_m: 0.02175
+  encoder_counts_per_revolution: 1560
+
+control:
+  max_wheel_rpm: 250.0
+  max_wheel_velocity_rad_s: 26.18
+  max_linear_velocity_mps: 0.50
+  max_angular_velocity_rad_s: 3.50
+  max_linear_acceleration_mps2: 0.50
+  max_angular_acceleration_rad_s2: 2.50
+  cmd_vel_timeout_s: 0.50
+  ideal_sim_right_straight_trim: 1.0
+  high_fidelity_right_straight_trim: 1.0005
+  wheel_pid:
+    kp: 0.8
+    ki: 0.15
+    kd: 0.0
+    period_s: 0.01
+  differential_period_s: 0.02
+  coupled_wheel_limit:
+    policy: scale_both_sides_equally
+    expression: abs(v) + abs(omega) * effective_track_separation_m / 2 <= effective_sprocket_radius_m * max_wheel_velocity_rad_s
+
+sensors:
+  mid360:
+    parent_frame: lidar_link
+    real_frame: livox_frame
+    simulation_compatibility_frame: front_3d_lidar
+    translation_from_base_link_m: [-0.003, 0.0, 0.132]
+    rotation_rpy_rad: [0.0, 0.0, 0.0]
+    pointcloud_topic: /livox/lidar
+    pointcloud_rate_hz: 10
+    imu_topic: /livox/imu
+    imu_rate_hz: 200
+    observed_points_per_frame: [19584, 20448]
+    z_origin_requires_final_assembly_verification: true
+
+interfaces:
+  wheel_ticks:
+    topic: /wheel_ticks
+    type: carbot_msgs/msg/WheelTicks
+    rate_hz: 50
+    qos_reliability: best_effort
+    forward_tick_sign: positive_both_sides
+
+dynamics:
+  calibration_status: TEMP_ESTIMATE_NOT_CALIBRATED
+  center_of_mass_m: [0.0125, 0.0, 0.035]
+  inertia_kg_m2:
+    ixx: 0.01855
+    iyy: 0.02012
+    izz: 0.02280
+    ixy: 0.0
+    ixz: 0.0
+    iyz: 0.0
+  static_friction: 0.8
+  dynamic_friction: 0.6
+  restitution: 0.0
+  per_side_effort_limit_nm: 0.5
+  joint_damping_nm_s_rad: 0.02
+
+domain_randomization:
+  calibration_status: TEMP_ESTIMATE_NOT_CALIBRATED
+  mass_kg: [1.6, 2.0]
+  com_offset_m:
+    x: [-0.02, 0.02]
+    y: [-0.02, 0.02]
+    z: [-0.02, 0.02]
+  effective_track_separation_m: [0.24, 0.28]
+  effective_radius_m: [0.0205, 0.0230]
+  friction_scale: [0.6, 1.4]
+  actuator_strength_scale: [0.75, 1.25]
+  command_latency_s: [0.02, 0.15]
+  point_dropout_fraction: [0.0, 0.05]
+
+# Provenance IDs make measured, source-derived, ground-calibrated, observed,
+# design, and temporary values machine-checkable without duplicating values.
+provenance:
+  MEASURED_VALUE_CARBOT_2026_09_13:
+    category: measured_value
+    status: confirmed_baseline_with_approximate_wheel_radii
+    scope: [robot.total_working_mass_kg, geometry]
+    note: Physical dimensions and installed geometry supplied for this adaptation; listed wheel radii are approximate.
+  GROUND_CALIBRATED_VALUE_CARBOT_2026_09_13:
+    category: ground_calibrated_value
+    status: confirmed_baseline
+    scope: [kinematics.effective_track_separation_m, kinematics.effective_sprocket_radius_m]
+    note: Effective skid-steer values; intentionally distinct from visual geometry.
+  SOURCE_CODE_VALUE_CARBOT_CONTROL_2026_09_13:
+    category: source_code_value
+    status: confirmed_baseline
+    scope: [robot.drive_type, kinematics.encoder_counts_per_revolution, control, interfaces.wheel_ticks]
+    note: Firmware and controller interface values supplied for this adaptation.
+  MEASURED_VALUE_MID360_MOUNT_2026_09_13:
+    category: measured_value
+    status: z_origin_pending_final_assembly_verification
+    scope: [sensors.mid360.parent_frame, sensors.mid360.real_frame, sensors.mid360.simulation_compatibility_frame, sensors.mid360.translation_from_base_link_m, sensors.mid360.rotation_rpy_rad, sensors.mid360.z_origin_requires_final_assembly_verification]
+    note: Mount pose is measured; translation Z must be rechecked from the MID360 origin O.
+  OBSERVED_VALUE_MID360_2026_09_13:
+    category: observed_value
+    status: confirmed_baseline
+    scope: [sensors.mid360.pointcloud_topic, sensors.mid360.pointcloud_rate_hz, sensors.mid360.imu_topic, sensors.mid360.imu_rate_hz, sensors.mid360.observed_points_per_frame]
+    note: Topics, rates, and observed real-sensor points-per-frame range.
+  TEMP_ESTIMATE_NOT_CALIBRATED:
+    category: temporary_estimate
+    status: TEMP_ESTIMATE_NOT_CALIBRATED
+    scope: [dynamics, domain_randomization]
+    note: Startup simulation assumptions and training ranges, not calibration confidence intervals.
