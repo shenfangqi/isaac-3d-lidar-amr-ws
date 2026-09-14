@@ -1,5 +1,30 @@
 # Current authoritative project state
 
+## Live checkpoint: 2026-09-14 — Carbot Phase D
+
+The Carbot Phase D blank-mapping stack is currently running for visual
+inspection. Isaac Sim is serving WebRTC on `127.0.0.1`, the WebRTC Client is
+open, and RViz uses `configs/rviz/carbot_phase_d.rviz`. Keep the live processes
+running until the user finishes inspection.
+
+- The generated Carbot composition disables `/World/Robot/Shen_Carter`,
+  `/World/ROS2_Carter_Graph`, and the legacy `/World/ROS2_LidarRTX`; only the
+  Carbot articulation and its independent ROS 2 RTX graph are active.
+- The Mid-360 housing bottom is at `z=0.157 m`, its top is at `z=0.222 m`, and
+  its height is `0.065 m`. Its XY offset is `[-0.003, 0]`. The temporary RTX
+  origin is colocated with the housing bottom until manufacturer origin O is
+  measured; this is explicitly not a calibrated physical origin.
+- The raw `/livox/lidar` cloud is published exactly once with frame
+  `front_3d_lidar`. The adapter pads it to `/livox/lidar_nvblox` at `1000 x 40`,
+  and exactly one nvblox node consumes that topic with simulation time enabled
+  and minimum valid range `0.5 m`.
+- Live TF reports `odom -> front_3d_lidar = [-0.003, 0, 0.157]`. A blank-map
+  run produced a live `0.05 m` OccupancyGrid, confirming the Carbot cloud-to-map
+  path. This is a new live map, not the saved `warehouse_v3` map.
+- The existing saved-map `start_nav_all.sh` remains on its validated legacy
+  Carter runtime pending Phase E integration. Do not run it concurrently with
+  this Phase D component stack.
+
 ## Physical Jetson target: recorded 2026-09-06
 
 The project's real-hardware target is reachable through the local SSH alias `isaac-jetson` as user `shenfq`. Connection details, verified platform inventory, authentication rules, and safe remote-operation conventions are maintained in [jetson-target.md](jetson-target.md). Read that reference before every Jetson operation; do not copy passwords into project files or commands.

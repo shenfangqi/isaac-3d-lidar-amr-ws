@@ -3,8 +3,8 @@
     # Isaac renders partial RTX scans at approximately 30 Hz even though the
     # proxy rotates at 10 Hz. Consume all three partial clouds per revolution.
     integrate_lidar_rate_hz: 30.0
-    # Reject Carter chassis returns while retaining the Mid-360 minimum range
-    # in the base profile for real-hardware configuration.
+    # Preserve the warehouse_v3 baseline and reject any near-field Carbot
+    # chassis/track returns without changing the measured sensor transform.
     lidar_min_valid_range_m: 0.5
     input_qos: "DEFAULT"
     map_clearing_radius_m: 15.0

@@ -113,6 +113,7 @@ def test_temporary_values_are_explicitly_unvalidated(parameters):
     assert temporary_source["status"] == marker
     assert set(temporary_source["scope"]) == {
         "sensors.mid360.visual_proxy",
+        "sensors.mid360.simulation_rtx_origin_from_housing_bottom_m",
         "dynamics",
         "sensor_frame_assumptions",
         "domain_randomization",
@@ -125,6 +126,9 @@ def test_critical_values_have_expected_provenance(parameters):
         "MEASURED_VALUE_CARBOT_2026_09_13"
     ]["scope"]
     assert "geometry.body_visual" in provenance[
+        "DESIGN_VALUE_CARBOT_SIMULATION_2026_09_13"
+    ]["scope"]
+    assert "sensors.mid360.simulation_profile_name" in provenance[
         "DESIGN_VALUE_CARBOT_SIMULATION_2026_09_13"
     ]["scope"]
     assert set(
@@ -150,6 +154,18 @@ def test_critical_values_have_expected_provenance(parameters):
     )
 
 
+def test_mid360_runtime_contract(parameters):
+    lidar = parameters["sensors"]["mid360"]
+    assert lidar["simulation_profile_name"] == "Livox_Mid360_Approx"
+    assert lidar["pointcloud_topic"] == "/livox/lidar"
+    assert lidar["simulation_compatibility_frame"] == "front_3d_lidar"
+    assert lidar["simulation_rtx_origin_from_housing_bottom_m"] == [
+        0.0,
+        0.0,
+        0.0,
+    ]
+
+
 def test_every_parameter_leaf_has_exactly_one_valid_source_scope(parameters):
     def leaf_paths(node, prefix=""):
         if isinstance(node, dict):
@@ -172,10 +188,14 @@ def test_every_parameter_leaf_has_exactly_one_valid_source_scope(parameters):
     ]
 
     for scope in scopes:
-        assert scope in leaves or any(path.startswith(f"{scope}.") for path in leaves)
+        assert scope in leaves or any(
+            path.startswith(f"{scope}.") for path in leaves
+        )
     for path in leaves:
         matches = [
-            scope for scope in scopes if path == scope or path.startswith(f"{scope}.")
+            scope
+            for scope in scopes
+            if path == scope or path.startswith(f"{scope}.")
         ]
         assert len(matches) == 1, (
             f"{path} must have exactly one provenance scope; found {matches}"

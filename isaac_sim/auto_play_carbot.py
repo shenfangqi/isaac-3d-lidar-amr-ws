@@ -32,11 +32,15 @@ if __name__ == "__main__":
 import numpy as np  # noqa: E402
 import omni.usd  # noqa: E402
 import yaml  # noqa: E402
-from isaacsim.core.utils.extensions import enable_extension  # noqa: E402
+from isaacsim.core.utils.extensions import (  # noqa: E402
+    enable_extension,
+    get_extension_path_from_name,
+)
 
 
 if simulation_app is not None:
     enable_extension("isaacsim.ros2.bridge")
+    enable_extension("isaacsim.sensors.rtx")
     for _ in range(100):
         simulation_app.update()
 
@@ -151,7 +155,9 @@ class CarbotRosNode(Node):
             JointState, "/joint_states", sensor_qos
         )
         self.tf_publisher = self.create_publisher(TFMessage, "/tf", tf_qos)
-        self.clock_publisher = self.create_publisher(Clock, "/clock", clock_qos)
+        self.clock_publisher = self.create_publisher(
+            Clock, "/clock", clock_qos
+        )
 
     def command_callback(self, message):
         self.requested_linear_mps = float(message.linear.x)
@@ -163,16 +169,24 @@ class CarbotRosNode(Node):
 
     def report_watchdog(self, active):
         if active != self.watchdog_was_active:
-            state = "active; ramping command to zero" if active else "receiving commands"
+            state = (
+                "active; ramping command to zero"
+                if active
+                else "receiving commands"
+            )
             self.get_logger().info(f"cmd_vel watchdog: {state}")
             self.watchdog_was_active = active
 
 
-def publish_state(node, robot, simulation_time, initial_position, initial_orientation):
+def publish_state(
+    node, robot, simulation_time, initial_position, initial_orientation
+):
     stamp = time_message(simulation_time)
     position, orientation = robot.get_world_pose()
     inverse_initial = quaternion_conjugate(initial_orientation)
-    relative_position = rotate_vector(position - initial_position, inverse_initial)
+    relative_position = rotate_vector(
+        position - initial_position, inverse_initial
+    )
     relative_orientation = quaternion_multiply(inverse_initial, orientation)
     planar_orientation = yaw_quaternion(relative_orientation)
 
@@ -216,14 +230,31 @@ def publish_state(node, robot, simulation_time, initial_position, initial_orient
     joint_state.header.stamp = stamp
     joint_state.header.frame_id = "base_link"
     joint_state.name = list(robot.dof_names)
-    joint_state.position = [float(value) for value in robot.get_joint_positions()]
-    joint_state.velocity = [float(value) for value in robot.get_joint_velocities()]
+    joint_state.position = [
+        float(value) for value in robot.get_joint_positions()
+    ]
+    joint_state.velocity = [
+        float(value) for value in robot.get_joint_velocities()
+    ]
     node.joint_publisher.publish(joint_state)
     node.clock_publisher.publish(Clock(clock=stamp))
 
 
 def main():
     parameters = yaml.safe_load(PARAMETER_PATH.read_text(encoding="utf-8"))
+    from isaac_sim.carbot_mid360 import (
+        create_mid360_pipeline,
+        install_profile,
+        mid360_runtime_config,
+    )
+
+    profile_path = (
+        WORKSPACE / "isaac_sim/lidar_configs/Livox_Mid360_Approx.json"
+    )
+    installed_profile = install_profile(
+        profile_path, get_extension_path_from_name
+    )
+    print(f"Installed Mid-360 proxy profile: {installed_profile}", flush=True)
     limits = ControlLimits.from_parameters(parameters)
     control_period_s = parameters["control"]["differential_period_s"]
     robot_prim_path = parameters["simulation"]["articulation_root_prim"]
@@ -236,6 +267,16 @@ def main():
     if stage is None or not stage.GetPrimAtPath(robot_prim_path).IsValid():
         raise RuntimeError("Carbot warehouse failed to load /Carbot")
 
+    mid360_handles = create_mid360_pipeline(stage, parameters)
+    mid360_config = mid360_runtime_config(parameters)
+    print(
+        f"Carbot Mid-360 ready: {mid360_handles[0].GetPath()}; "
+        f"{mid360_config['pointcloud_topic']} "
+        f"[frame_id={mid360_config['frame_id']}]; "
+        "RTX origin is the temporary housing-bottom reference",
+        flush=True,
+    )
+
     world = World(
         physics_dt=control_period_s,
         rendering_dt=control_period_s,
@@ -246,12 +287,14 @@ def main():
     )
     world.reset()
     dof_names = list(robot.dof_names)
-    if len(dof_names) != 12 or not all(name.endswith("_wheel_joint") for name in dof_names):
+    if len(dof_names) != 12 or not all(
+        name.endswith("_wheel_joint") for name in dof_names
+    ):
         raise RuntimeError(f"Unexpected Carbot DOFs: {dof_names}")
     zero_joint_velocities = np.zeros(len(dof_names), dtype=float)
     for _ in range(50):
         robot.set_joint_velocities(zero_joint_velocities)
-        world.step(render=False)
+        world.step(render=True)
     initial_position, initial_orientation = robot.get_world_pose()
     planar_position = initial_position.copy()
     planar_yaw = quaternion_yaw_angle(initial_orientation)
@@ -264,7 +307,7 @@ def main():
     last_publish_time = float("-inf")
     print(
         "Carbot control ready: /cmd_vel -> 12 wheel joints; "
-        "publishing /odom /tf /joint_states /clock",
+        "publishing /odom /tf /joint_states /clock /livox/lidar",
         flush=True,
     )
 
@@ -288,12 +331,15 @@ def main():
                 )
                 # The imported joint axis is -Y, so raw joint coordinates have
                 # the opposite sign from forward-positive encoder semantics.
-                joint_velocities[index] = wheel_joint_sign * logical_wheel_velocity
+                joint_velocities[index] = (
+                    wheel_joint_sign * logical_wheel_velocity
+                )
             robot.set_joint_velocities(joint_velocities)
-            world.step(render=False)
+            world.step(render=True)
 
             midpoint_yaw = (
-                planar_yaw + command.applied_angular_rad_s * control_period_s / 2.0
+                planar_yaw
+                + command.applied_angular_rad_s * control_period_s / 2.0
             )
             planar_position[0] += (
                 command.applied_linear_mps
@@ -319,7 +365,10 @@ def main():
             )
             robot.set_joint_velocities(joint_velocities)
 
-            if world.current_time - last_publish_time >= control_period_s - 1e-9:
+            if (
+                world.current_time - last_publish_time
+                >= control_period_s - 1e-9
+            ):
                 publish_state(
                     node,
                     robot,

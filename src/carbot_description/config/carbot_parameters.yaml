@@ -86,6 +86,9 @@ sensors:
     parent_frame: lidar_link
     real_frame: livox_frame
     simulation_compatibility_frame: front_3d_lidar
+    simulation_profile_name: Livox_Mid360_Approx
+    # Temporary until the manufacturer coordinate origin O is measured.
+    simulation_rtx_origin_from_housing_bottom_m: [0.0, 0.0, 0.0]
     mount_translation_xy_from_base_link_m: [-0.003, 0.0]
     housing_top_height_from_ground_m: 0.222
     housing_height_m: 0.065
@@ -192,10 +195,10 @@ provenance:
   DESIGN_VALUE_CARBOT_SIMULATION_2026_09_13:
     category: design_value
     status: implemented_design
-    scope: [geometry.body_visual, simulation]
+    scope: [geometry.body_visual, sensors.mid360.simulation_profile_name, simulation]
     note: Reviewable body proxy, Isaac articulation paths, and coordinate conventions; not hardware calibration values.
   TEMP_ESTIMATE_NOT_CALIBRATED:
     category: temporary_estimate
     status: TEMP_ESTIMATE_NOT_CALIBRATED
-    scope: [sensors.mid360.visual_proxy, dynamics, sensor_frame_assumptions, domain_randomization]
+    scope: [sensors.mid360.visual_proxy, sensors.mid360.simulation_rtx_origin_from_housing_bottom_m, dynamics, sensor_frame_assumptions, domain_randomization]
     note: Startup simulation assumptions and training ranges, not calibration confidence intervals.

@@ -207,6 +207,10 @@ isaac_sim/scripts/build_carbot_usd.py
 
 ### 阶段 D：MID360 重新挂载与 nvblox 回归
 
+实现状态（2026-09-14）：已接入 Carbot 独立 RTX MID360 coverage proxy，
+禁用 Carter 雷达 ROS 图，发布 `/livox/lidar`，并通过 `1000 x 40`
+补齐点云完成空白 nvblox OccupancyGrid 运行验证。厂家坐标原点 O 仍为待测项。
+
 1. 将 MID360 外壳放到实测底面高度 `0.157 m`、顶面高度 `0.222 m`，XY 为 `[-0.003, 0]`、RPY 0；RTX 传感器原点待厂家坐标 O 复核后设置。
 2. 保留 `/livox/lidar`；仿真发布 PointCloud2。
 3. 同时提供 `livox_frame`、`lidar_link` 和旧 `front_3d_lidar` 的兼容 TF。

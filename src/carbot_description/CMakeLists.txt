@@ -39,6 +39,10 @@ if(BUILD_TESTING)
     test/test_carbot_control.py
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   )
+  ament_add_pytest_test(test_carbot_mid360
+    test/test_carbot_mid360.py
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  )
 endif()
 
 ament_package()

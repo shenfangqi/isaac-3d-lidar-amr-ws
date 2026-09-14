@@ -7,7 +7,10 @@ from pathlib import Path
 import omni.kit.app
 import omni.usd
 import yaml
-from isaacsim.core.utils.extensions import enable_extension
+from isaacsim.core.utils.extensions import (
+    enable_extension,
+    get_extension_path_from_name,
+)
 
 
 WORKSPACE = Path("/workspace/ros-humble/isaac_3d_lidar_amr_ws")
@@ -15,12 +18,18 @@ SCENE_PATH = WORKSPACE / "isaac_sim/usd/warehouse_3d_nav_origin_carbot.usd"
 PARAMETER_PATH = (
     WORKSPACE / "src/carbot_description/config/carbot_parameters.yaml"
 )
+PROFILE_PATH = WORKSPACE / "isaac_sim/lidar_configs/Livox_Mid360_Approx.json"
+LEGACY_LIDAR_GRAPH_PATH = "/World/ROS2_LidarRTX"
 sys.path.insert(0, str(WORKSPACE))
 
 
 def is_legacy_carter_path(path):
     lowered = str(path).lower()
-    return "carter" in lowered or "nova_" in lowered
+    return (
+        "carter" in lowered
+        or "nova_" in lowered
+        or str(path) == LEGACY_LIDAR_GRAPH_PATH
+    )
 
 
 def deactivate_legacy_carter_roots(stage):
@@ -44,6 +53,7 @@ async def update_app(app, count):
 async def load_and_control():
     app = omni.kit.app.get_app()
     enable_extension("isaacsim.ros2.bridge")
+    enable_extension("isaacsim.sensors.rtx")
     await update_app(app, 100)
 
     import numpy as np
@@ -57,11 +67,20 @@ async def load_and_control():
         quaternion_yaw_angle,
         rotate_vector,
     )
+    from isaac_sim.carbot_mid360 import (
+        create_mid360_pipeline,
+        install_profile,
+        mid360_runtime_config,
+    )
     from isaacsim.core.api import World
     from isaacsim.core.prims import SingleArticulation
     from isaacsim.core.utils.viewports import set_camera_view
 
     parameters = yaml.safe_load(PARAMETER_PATH.read_text(encoding="utf-8"))
+    installed_profile = install_profile(
+        PROFILE_PATH, get_extension_path_from_name
+    )
+    print(f"Installed Mid-360 proxy profile: {installed_profile}", flush=True)
     limits = ControlLimits.from_parameters(parameters)
     control_period_s = parameters["control"]["differential_period_s"]
     robot_prim_path = parameters["simulation"]["articulation_root_prim"]
@@ -77,10 +96,23 @@ async def load_and_control():
         stage = omni.usd.get_context().get_stage()
     if stage is not None:
         disabled_legacy_roots = deactivate_legacy_carter_roots(stage)
-        print(f"Disabled legacy Carter prims: {disabled_legacy_roots}", flush=True)
+        print(
+            f"Disabled legacy Carter prims: {disabled_legacy_roots}",
+            flush=True,
+        )
     await update_app(app, 300)
     if stage is None or not stage.GetPrimAtPath(robot_prim_path).IsValid():
         raise RuntimeError(f"Carbot prim is missing: {robot_prim_path}")
+
+    mid360_handles = create_mid360_pipeline(stage, parameters)
+    mid360_config = mid360_runtime_config(parameters)
+    print(
+        f"Carbot Mid-360 ready: {mid360_handles[0].GetPath()}; "
+        f"{mid360_config['pointcloud_topic']} "
+        f"[frame_id={mid360_config['frame_id']}]; "
+        "RTX origin is the temporary housing-bottom reference",
+        flush=True,
+    )
 
     world = World(
         physics_dt=control_period_s,
@@ -123,7 +155,8 @@ async def load_and_control():
     previous_simulation_time = world.current_time
     print(
         "Streaming Carbot ready: connect WebRTC client to 127.0.0.1; "
-        "/cmd_vel active; publishing /odom /tf /joint_states /clock",
+        "/cmd_vel active; publishing /odom /tf /joint_states /clock "
+        "/livox/lidar",
         flush=True,
     )
 
@@ -153,7 +186,9 @@ async def load_and_control():
                 )
                 joint_velocities[index] = wheel_joint_sign * logical_velocity
 
-            midpoint_yaw = planar_yaw + command.applied_angular_rad_s * dt_s / 2.0
+            midpoint_yaw = (
+                planar_yaw + command.applied_angular_rad_s * dt_s / 2.0
+            )
             planar_position[0] += (
                 command.applied_linear_mps * np.cos(midpoint_yaw) * dt_s
             )

@@ -23,11 +23,16 @@ DEFAULT_SCENE_OUTPUT = (
     WORKSPACE / "isaac_sim/usd/warehouse_3d_nav_origin_carbot.usd"
 )
 CARTER_ORIGIN_Y_M = 0.9844150670532934
+LEGACY_LIDAR_GRAPH_PATH = "/World/ROS2_LidarRTX"
 
 
 def is_legacy_carter_path(path):
     lowered = str(path).lower()
-    return "carter" in lowered or "nova_" in lowered
+    return (
+        "carter" in lowered
+        or "nova_" in lowered
+        or str(path) == LEGACY_LIDAR_GRAPH_PATH
+    )
 
 
 def deactivate_legacy_carter_roots(stage):

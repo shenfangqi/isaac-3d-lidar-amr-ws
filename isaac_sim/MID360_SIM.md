@@ -17,17 +17,19 @@ extrinsic calibration of the physical installation.
 
 ## Run
 
-The normal full-stack launcher now uses Mid-360 exclusively:
+The saved-map full-stack launcher still exercises the validated legacy Carter
+runtime and is intentionally left unchanged until Phase E:
 
 ```bash
 cd /home/shenfq/projects/ros-humble
 ./start_nav_all.sh
 ```
 
-For component debugging, start the containers first, then run each command in a separate terminal.
+For the Carbot Phase D mapping demo, start the containers first, then run each
+command in a separate terminal. Do not run it alongside `start_nav_all.sh`.
 
 ```bash
-./isaac_sim/run_mid360.sh
+./isaac_sim/run_carbot.sh
 ```
 
 ```bash
@@ -51,10 +53,18 @@ docker exec -it ros2-dev-humble bash -lc '
 '
 ```
 
-The simulated point cloud is `/livox/lidar`; its frame remains
-`front_3d_lidar` because the Carter USD already publishes the correct mounting
-transform for that prim. Real hardware should use the calibrated Mid-360 frame
-(commonly `livox_frame`) and must not reuse Carter's transform.
+The simulated point cloud is `/livox/lidar`; its frame is the Carbot
+compatibility frame `front_3d_lidar`, colocated with `lidar_link` and
+`livox_frame` until the manufacturer coordinate origin O is measured. The
+housing bottom is at `0.157 m`, its top is at `0.222 m`, and the current RTX
+origin offset from the housing bottom is explicitly temporary and uncalibrated.
+
+For RViz inspection, run the Carbot description and open the Phase D config:
+
+```bash
+ros2 launch carbot_description description.launch.py use_sim_time:=true
+rviz2 -d configs/rviz/carbot_phase_d.rviz --ros-args -p use_sim_time:=true
+```
 
 ## nvblox adapter
 
