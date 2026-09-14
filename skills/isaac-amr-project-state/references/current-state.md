@@ -1,11 +1,12 @@
 # Current authoritative project state
 
-## Live checkpoint: 2026-09-14 — Carbot Phase D
+## Shutdown checkpoint: 2026-09-14 — Carbot Phase D complete
 
-The Carbot Phase D blank-mapping stack is currently running for visual
-inspection. Isaac Sim is serving WebRTC on `127.0.0.1`, the WebRTC Client is
-open, and RViz uses `configs/rviz/carbot_phase_d.rviz`. Keep the live processes
-running until the user finishes inspection.
+The Carbot Phase D blank-mapping implementation and visual inspection are
+complete. `./stop_nav_all.sh` then stopped `ros2-dev-humble`,
+`isaac-ros-nvblox`, and `isaac-sim` cleanly. No RViz, WebRTC Client, Isaac Kit,
+nvblox, or pointcloud padder process remains, and port 49100 is no longer
+listening. The next run starts from a clean stopped state.
 
 - The generated Carbot composition disables `/World/Robot/Shen_Carter`,
   `/World/ROS2_Carter_Graph`, and the legacy `/World/ROS2_LidarRTX`; only the
