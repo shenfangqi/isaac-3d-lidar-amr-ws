@@ -26,6 +26,7 @@ Do not treat statements such as “remains running” in historical evidence as 
 - Mapping requires exactly one `/pointcloud_padder`, `/nvblox_node`, and `/nvblox_container`, `use_sim_time=true` from process startup, and a live `lidar_min_valid_range_m=0.5` check.
 - Saved-map navigation uses RViz simulation time and Fixed Frame `map`. Use RViz `2D Goal Pose` for Nav2; `Publish Point` only publishes `/clicked_point` unless a separate bridge subscribes to it.
 - Carbot Nav2 geometry is the measured polygon `[[0.155, 0.133], [0.155, -0.133], [-0.130, -0.133], [-0.130, 0.133]]`; `inflation_radius=0.45 m` remains the conservative baseline. The `0.80 m` obstacle and `0.60 m` unknown clearances were historical Carter regression target-selection filters, not persisted navigation limits.
+- Isaac Lab policies use only physical-unit `[linear.x, angular.z]` actions and deployable observations. `isaac_lab/carbot_env/hardware_calibration_backlog.yaml` remains a release gate until Jetson odometry, tracked kinematics/slip, actuator response, dynamics, extrinsics, watchdog/e-stop, and real navigation are supported by physical evidence; simulation never closes those items.
 - Frontier Explorer defaults are `0.55 m` obstacle, `0.40 m` unknown, and `0.60 m` boundary clearance. Its `min_goal_distance_m=0.80` measures robot-to-candidate distance.
 - Manipulation and docking need task-aware transit, pre-grasp, final-approach, and docking behavior. Do not impose the regression filters on close final approaches.
 

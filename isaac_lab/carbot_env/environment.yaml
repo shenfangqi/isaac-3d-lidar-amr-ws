@@ -1,0 +1,59 @@
+schema_version: 1
+environment: carbot_goal_navigation
+
+action:
+  interface: high_level_twist
+  units: physical
+  fields: [linear_x_mps, angular_z_rad_s]
+  normalized: false
+  safety_source: src/carbot_description/config/carbot_parameters.yaml#control
+  navigation_limit_source: configs/carbot/sim.yaml#velocity_limits
+  primary_execution_mode: tracked_joint_velocity
+  reserved_execution_modes:
+    left_right_track_velocity:
+      enabled: false
+      enable_after: effective radius and track separation validation
+  forbidden_policy_outputs: [pwm, motor_torque]
+
+observations:
+  policy_order:
+    - goal_pose_body
+    - planar_velocity
+    - projected_gravity
+    - lidar_ranges
+    - height_scan
+    - previous_action
+  goal_pose_body_fields: [x_m, y_m, z_m, heading_error_rad]
+  planar_velocity_fields: [linear_x_mps, angular_z_rad_s]
+  lidar:
+    ray_count: 72
+    maximum_range_m: 20.0
+    horizontal_fov_deg: [-180.0, 180.0]
+  height_scan:
+    grid_size: [5, 5]
+    resolution_m: 0.10
+  forbidden_policy_observations:
+    - isaac_ground_truth_pose
+    - privileged_contact_force
+    - simulator_only_object_pose
+
+simulation:
+  physics_dt_s: 0.01
+  control_decimation: 2
+  episode_length_s: 20.0
+  num_envs: 64
+  env_spacing_m: 4.0
+  robot_usd: isaac_sim/usd/carbot.usd
+  dynamics_status: TEMP_ESTIMATE_NOT_CALIBRATED
+
+task:
+  config: tasks/goal_navigation.yaml
+  coupled_to_robot_usd: false
+
+domain_randomization:
+  source: src/carbot_description/config/carbot_parameters.yaml#domain_randomization
+
+sim_to_real:
+  hardware_calibration_backlog: hardware_calibration_backlog.yaml
+  policy_freeze_allowed: false
+  reason: Jetson odometry, latency, slip, actuator and sensor extrinsics remain unvalidated

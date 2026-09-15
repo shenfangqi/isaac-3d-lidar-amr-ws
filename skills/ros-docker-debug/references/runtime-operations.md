@@ -85,6 +85,27 @@ It uses system time and never starts an Isaac odometry relay or ground-truth
 TF. It requires the Jetson odometry owner to provide `/odom` and
 `odom -> base_footprint` before navigation can operate.
 
+## Isaac Lab Phase F smoke validation
+
+The project-local environment uses the existing `/workspace/IsaacLab` runtime.
+It is mutually exclusive with the full saved-map/WebRTC Isaac route:
+
+```bash
+docker start isaac-sim
+docker exec -e TERM=xterm isaac-sim bash -lc '
+  cd /workspace/ros-humble/isaac_3d_lidar_amr_ws
+  /isaac-sim/python.sh -m pytest -q isaac_lab/carbot_env/tests
+  /workspace/IsaacLab/isaaclab.sh -p \
+    isaac_lab/carbot_env/scripts/smoke_env.py --headless --steps 20
+'
+docker stop isaac-sim
+```
+
+The smoke test proves environment/asset loading, action and observation shapes,
+reset, and stepping only. It does not close any item in
+`isaac_lab/carbot_env/hardware_calibration_backlog.yaml` and is not evidence of
+calibrated tracked dynamics or real-robot readiness.
+
 ## Rebuild bringup
 
 After changing the padder, launch file, or LiDAR model, run in the nvblox container:

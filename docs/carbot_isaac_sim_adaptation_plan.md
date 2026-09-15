@@ -262,6 +262,15 @@ Nav2：
 
 ### 阶段 F：Isaac Lab 基础环境
 
+实现状态（2026-09-15）：已建立 Manager-Based Carbot goal-navigation 基础环境，
+策略 action 固定为物理单位 `[linear.x, angular.z]`，经过仿真 Nav2 限速、公共
+加速度限制、耦合轮速饱和和 500 ms watchdog 后才映射到 12 个轮关节。第一版
+policy observation 包含相对目标、平面速度、重力投影、72 束 LiDAR、5 x 5
+高度采样和上一动作，不包含 Isaac ground-truth 位姿。任务、奖励和课程配置与
+USD 解耦；课程与左右履带直接 action 暂不启用。Jetson 里程计、有效轮径/轮距、
+侧滑、执行器、惯量、摩擦、传感器外参和实机安全验收仍由
+`isaac_lab/carbot_env/hardware_calibration_backlog.yaml` 持续阻塞策略发布。
+
 1. 先创建与 Nav2/真机控制边界一致的高层环境，action 使用 `[linear.x, angular.z]`。
 2. 观察量第一版使用基础状态、目标相对位姿、速度和降采样 LiDAR/高度信息。
 3. 将动作统一送入与 `/cmd_vel` 相同的限速、加速度和 watchdog 层，避免训练策略绕过安全模型。

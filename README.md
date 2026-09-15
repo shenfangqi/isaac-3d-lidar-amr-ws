@@ -15,6 +15,7 @@
 - `.nvblx`、`.ply`、`.pgm`、`.yaml` 地图产物
 - Nav2 全局规划、局部避障与速度平滑
 - `ground_truth` 与 AMCL 两种定位模式
+- Isaac Lab Carbot 高层 `[linear.x, angular.z]` goal-navigation 基础环境
 - 默认带运动互锁的 Frontier Exploration
 - RViz 配置和已验证的 `warehouse_v3` 地图
 
@@ -170,6 +171,15 @@ rviz2 -d \
 阶段 E 将仿真与实机配置明确分开：仿真使用 `configs/carbot/sim.yaml`、`configs/nav2_params_sim.yaml` 和 `configs/amcl_params_sim.yaml`；实机入口为 `launch/carbot_real.launch.py`，使用系统时间、保守限速及 manual AMCL 初始位姿。实机启动前仍须满足 [Jetson 履带底盘通信链路](docs/jetson_tracked_base.md)中的硬门槛。
 
 完整的启动、验收和故障排查步骤见[保存地图与 Nav2 导航教程](docs/map_nav/README.md)。
+
+## Isaac Lab 基础环境
+
+阶段 F 环境位于 [`isaac_lab/carbot_env`](isaac_lab/carbot_env)。它直接加载
+Carbot USD，但策略只接触与 Nav2/真机一致的高层 Twist 和可迁移观察量。当前
+动力学与随机化仍标记为 `TEMP_ESTIMATE_NOT_CALIBRATED`，且
+[`hardware_calibration_backlog.yaml`](isaac_lab/carbot_env/hardware_calibration_backlog.yaml)
+会在 Jetson 里程计、履带运动学、执行器、摩擦和传感器外参完成实测前阻止策略发布。
+运行方法和验证边界见该目录的 README。
 
 ## 新建地图与自动探索
 

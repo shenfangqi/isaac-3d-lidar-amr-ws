@@ -56,3 +56,7 @@ source /workspace/ros-humble/isaac_3d_lidar_amr_ws/scripts/real_robot_ros_env.sh
 - 物理 LAN Domain 0 中只有一个最终 `/cmd_vel` 发布链路。
 
 在这些门槛完成前，只允许检查 Agent、ROS 节点和 Topic endpoint，不发送任何非零速度命令。
+
+阶段 F 训练环境不会替代以上门槛。持续待办与每项所需证据记录在
+`isaac_lab/carbot_env/hardware_calibration_backlog.yaml`；仿真结果不能把其中
+任何项目标记为完成，真实测量值必须回填 Carbot 公共参数和域随机化范围。

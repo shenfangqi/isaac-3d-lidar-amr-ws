@@ -1,5 +1,35 @@
 # Current authoritative project state
 
+## Shutdown checkpoint: 2026-09-15 — Carbot Phase F foundation complete
+
+The project now contains a runnable Isaac Lab manager-based Carbot foundation
+environment under `isaac_lab/carbot_env`. CPU contract tests passed 8/8, and an
+Isaac Lab 4.5 headless smoke run loaded the local `carbot.usd`, resolved 20
+bodies and all 12 wheel joints, exposed a two-dimensional action and a
+108-dimensional policy observation, reset successfully, and stepped zero actions.
+
+- Policy actions are physical-unit `[linear.x, angular.z]`, not normalized PWM,
+  torque, or direct track commands. The action term applies the simulation Nav2
+  limits, canonical acceleration limits, coupled wheel saturation, imported
+  joint sign, and canonical 500 ms watchdog before commanding wheel joints.
+- The policy observation is a relative goal, planar odometry-compatible speed,
+  projected gravity, exactly 72 finite-clipped LiDAR rays, a 5 x 5 height scan,
+  and previous action. Isaac ground-truth pose and privileged simulator state are
+  explicitly forbidden policy observations.
+- Task goals, rewards, success criteria, and the disabled curriculum live outside
+  the robot/USD configuration. Direct left/right track velocity is reserved and
+  disabled; PWM and motor torque are prohibited as policy outputs.
+- Dynamics and domain-randomization ranges remain
+  `TEMP_ESTIMATE_NOT_CALIBRATED`. They are training assumptions, not physical
+  confidence intervals.
+- `isaac_lab/carbot_env/hardware_calibration_backlog.yaml` is the persistent
+  Sim-to-Real release gate. All Jetson odometry, radius/separation/slip, actuator,
+  inertial, friction, time/extrinsics, physical watchdog/e-stop, observation
+  parity, and real-navigation items remain pending. Simulation results must not
+  close them and policy release remains blocked.
+- After validation, the dedicated project containers were stopped. No Phase F
+  policy has been trained, frozen, exported, or deployed.
+
 ## Shutdown checkpoint: 2026-09-14 — Carbot Phase E complete
 
 Carbot Phase E separates the simulation and physical-robot ROS configurations.
@@ -58,7 +88,7 @@ The project's real-hardware target is reachable through the local SSH alias `isa
 - Isaac simulation also uses Domain 0 but remains isolated with loopback-only `cyclonedds_ros_local.xml`. The opt-in workstation LAN configuration is `configs/cyclonedds_ros_jetson.xml`, loaded by `scripts/real_robot_ros_env.sh` inside a host-networked project container.
 - A non-motion `std_msgs/msg/String` probe passed bidirectionally between workstation CycloneDDS and Jetson Fast DDS on Domain 0. The ESP32 was intentionally off during this check, so repeat the `/cmd_vel` endpoint check after it is started.
 - The ESP32 static-resource issue reported as `publisher init failed` was fixed in its firmware. After clearing stale Agent sessions, `carbot_base` maintained one `/cmd_vel` subscription and four publishers: `/wheel_ticks`, `/imu/data_raw`, `/battery_state`, and `/carbot/status`. With the chassis lifted, 2026-09-06 ROS 2 smoke tests verified all differential-drive directions through standard `/cmd_vel`: forward at `linear.x=0.08 m/s`, reverse at `linear.x=-0.08 m/s`, in-place left at `angular.z=+0.25 rad/s`, and in-place right at `angular.z=-0.25 rad/s`. The user visually confirmed the track directions were correct. Every motion was followed by repeated zero Twist messages, and the final `/cmd_vel` subscription count remained one. The Jetson currently lacks matching Python type support for the ESP32's `carbot_msgs`, so the custom wheel/status payloads were not decoded during those tests.
-- Do not let the existing Isaac navigation launcher load the physical LAN DDS profile. Real hardware still requires verified `/odom`, `odom -> base_link`, Mid-360 data/extrinsics, `use_sim_time=false`, AMCL initialization, command timeout, and physical emergency stop before any nonzero command is allowed.
+- Do not let the existing Isaac navigation launcher load the physical LAN DDS profile. Real hardware still requires verified `/odom`, `odom -> base_footprint`, Mid-360 data/extrinsics, `use_sim_time=false`, AMCL initialization, command timeout, and physical emergency stop before any nonzero command is allowed.
 
 ## Live checkpoint: 2026-08-29
 
