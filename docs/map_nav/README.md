@@ -12,7 +12,7 @@ docs/map_gen/README.md
 
 - 区分 nvblox 原生地图与 Nav2 二维静态地图。
 - 正确启动 Isaac Sim、保存地图模式的 nvblox、AMCL 和 Nav2。
-- 理解 `map -> odom -> base_link` TF 链。
+- 理解 `map -> odom -> base_footprint -> base_link` TF 链。
 - 根据场景选择 ground-truth、AMCL 自动、固定或手动 Initial Pose。
 - 在 RViz 中检查 Map、Costmap、LaserScan 和机器人位置。
 - 安全发送 `2D Goal Pose` 并判断导航是否真正成功。
@@ -35,9 +35,7 @@ warehouse_v3.pgm + warehouse_v3.yaml
   -> /scan
   -> AMCL + Global/Local Costmap obstacle_layer
 
-/chassis/odom
-  -> topic_tools relay
-  -> /odom
+/odom（Isaac 直接发布；实机由轮速/状态估计提供）
   -> Nav2 控制器与 TF
 
 定位模式
@@ -83,7 +81,7 @@ free_thresh: 0.196
 与地图安全有关的当前配置：
 
 ```text
-robot_radius:                   0.35 m
+footprint:                     x=[-0.130, 0.155], y=[-0.133, 0.133] m
 inflation_radius:               0.45 m
 GridBased.allow_unknown:        false
 global_costmap.track_unknown_space: true
@@ -145,11 +143,10 @@ source /workspace/ros-humble/isaac_3d_lidar_amr_ws/install/setup.bash
 
 ```text
 启动 Isaac Sim
-等待 /clock、/chassis/odom 和 3D LiDAR 真正收到消息
+等待 /clock、/odom 和 `/livox/lidar` 真正收到消息
 加载 warehouse_v3.nvblx
 等待 nvblox 服务、OccupancyGrid 和 0.5 m 最小量程
-启动 localization_mode:=amcl
-启动 amcl_initial_pose_mode:=odom_identity
+默认启动 localization_mode:=ground_truth
 启动 Nav2
 自动启动 RViz
 检查节点单实例、地图尺寸、lifecycle、Action、Scan、TF 和安全参数
@@ -180,17 +177,17 @@ cd /home/shenfq/projects/ros-humble
 
 该默认值只适用于当前 Isaac 仿真，因为 `warehouse_v3` 与 Isaac 的 odom 使用相同坐标系。它不适用于任意真机起点。
 
-临时切换 ground-truth 验证：
+默认 ground-truth 验证：
 
 ```bash
-LOCALIZATION_MODE=ground_truth ./start_nav_all.sh
+./start_nav_all.sh
 ```
 
-真机或任意地图位置需要手动 Initial Pose 时：
+仿真中验证 AMCL 时：
 
 ```bash
 LOCALIZATION_MODE=amcl \
-AMCL_INITIAL_POSE_MODE=manual \
+AMCL_INITIAL_POSE_MODE=odom_identity \
 ./start_nav_all.sh
 ```
 
@@ -213,7 +210,7 @@ AMCL_INITIAL_YAW=0.0 \
 ./stop_nav_all.sh
 ```
 
-一键脚本通过 detached Docker exec 在后台启动 Isaac Sim、nvblox、Navigation 和 RViz，不会再为四个进程分别打开日志终端。它调用项目内 `isaac_sim/auto_play_mid360.py`，以 `headless=True` 打开 warehouse USD、将上游 Carter 资产内的传感器改写为 Mid360 代理并自动 Play。桌面上只显示 RViz2；执行 `start_nav_all.sh` 的原终端继续显示就绪进度与最终健康检查。不要在脚本已经启动 Navigation 后，再手工启动第二套 `nav_stack.launch.py`。如果启动中途超时，先阅读文件日志，再执行 `./stop_nav_all.sh`，不要直接重跑启动脚本。
+一键脚本通过 detached Docker exec 在后台启动 Isaac Sim、nvblox、Navigation 和 RViz。它调用 `isaac_sim/auto_play_carbot.py`，以 `headless=True` 生成并打开 Carbot warehouse composition，禁用旧 Carter 图并自动 Play；导航入口是 `launch/carbot_sim.launch.py`。桌面上只显示 RViz2；执行 `start_nav_all.sh` 的原终端继续显示就绪进度与最终健康检查。不要在脚本已经启动 Navigation 后再手工启动第二套 launch。若启动中途超时，先读日志，再执行 `./stop_nav_all.sh`。
 
 需要同时显示 Isaac Sim WebRTC UI 和 RViz 时，使用统一 streaming 模式；它仍只启动一个 Isaac Sim，并自动打开同一 warehouse USD 和 Play：
 
@@ -243,7 +240,7 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file:///workspace/ros-humble/cyclonedds_ros_local.xml
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$isaac_sim_package_path/exts/isaacsim.ros2.bridge/humble/lib
 export ROS_DOMAIN_ID=0
-./python.sh auto_play_mid360.py
+./python.sh /workspace/ros-humble/isaac_3d_lidar_amr_ws/isaac_sim/auto_play_carbot.py
 ```
 
 要求至少发布：
@@ -251,7 +248,7 @@ export ROS_DOMAIN_ID=0
 ```text
 /clock
 /livox/lidar
-/chassis/odom
+/odom
 /tf
 /tf_static
 ```
@@ -289,7 +286,7 @@ maps/nvblox/warehouse_v3.nvblx
 
 ```bash
 ros2 launch \
-  /workspace/ros-humble/isaac_3d_lidar_amr_ws/launch/nav_stack.launch.py \
+  /workspace/ros-humble/isaac_3d_lidar_amr_ws/launch/carbot_sim.launch.py \
   localization_mode:=ground_truth
 ```
 
@@ -305,7 +302,7 @@ ros2 launch \
 
 ```bash
 ros2 launch \
-  /workspace/ros-humble/isaac_3d_lidar_amr_ws/launch/nav_stack.launch.py \
+  /workspace/ros-humble/isaac_3d_lidar_amr_ws/launch/carbot_sim.launch.py \
   localization_mode:=amcl \
   amcl_initial_pose_mode:=odom_identity
 ```
@@ -313,7 +310,7 @@ ros2 launch \
 `odom_identity` 会启动一次性 `amcl_pose_initializer`：
 
 1. 等待 AMCL lifecycle 进入 active。
-2. 等待 `/chassis/odom` 且机器人连续静止。
+2. 等待 `/odom` 且机器人连续静止。
 3. 把当前 odom 位姿作为 map 中的 Initial Pose。
 4. 发布三次 `/initialpose`。
 5. 等待连续 AMCL 响应。
@@ -337,7 +334,7 @@ process has finished cleanly
 
 ```bash
 ros2 launch \
-  /workspace/ros-humble/isaac_3d_lidar_amr_ws/launch/nav_stack.launch.py \
+  /workspace/ros-humble/isaac_3d_lidar_amr_ws/launch/carbot_sim.launch.py \
   localization_mode:=amcl \
   amcl_initial_pose_mode:=fixed \
   amcl_initial_x:=1.20 \
@@ -353,8 +350,7 @@ ros2 launch \
 
 ```bash
 ros2 launch \
-  /workspace/ros-humble/isaac_3d_lidar_amr_ws/launch/nav_stack.launch.py \
-  localization_mode:=amcl \
+  /workspace/ros-humble/isaac_3d_lidar_amr_ws/launch/carbot_real.launch.py \
   amcl_initial_pose_mode:=manual
 ```
 
@@ -384,12 +380,12 @@ ros2 launch \
 正常 TF 链为：
 
 ```text
-map -> odom -> base_link -> lidar frames
+map -> odom -> base_footprint -> base_link -> front_3d_lidar
 ```
 
-- `odom -> base_link` 来自底盘里程计或状态估计。
+- `odom -> base_footprint` 来自 Isaac 或实机底盘里程计/状态估计。
 - `map -> odom` 来自 ground-truth 静态变换或 AMCL，两者只能存在一个。
-- `base_link -> LiDAR` 必须来自正确的 URDF/static TF。
+- `base_link -> front_3d_lidar` 必须来自 Carbot URDF 中的正确外参。
 
 RViz 正常导航推荐：
 
@@ -403,13 +399,13 @@ Fixed Frame: map
 Fixed Frame: odom
 ```
 
-当前启动脚本使用的 `3d_lidar_amr_ws_1.rviz` 已包含 `/scan` 显示，并固定使用 `map` 作为导航 Fixed Frame。`_3.rviz` 仍可用于以 `odom` 为中心的建图诊断视图。
+当前启动脚本使用 `carbot_navigation.rviz`，包含 Carbot RobotModel、保存地图、实时 nvblox occupancy、点云、`/scan`、规划和 TF，并固定使用 `map` 作为导航 Fixed Frame。
 
 启动 RViz 示例：
 
 ```bash
 rviz2 -d \
-  /workspace/ros-humble/isaac_3d_lidar_amr_ws/configs/rviz/3d_lidar_amr_ws_1.rviz
+  /workspace/ros-humble/isaac_3d_lidar_amr_ws/configs/rviz/carbot_navigation.rviz
 ```
 
 至少显示：
@@ -481,7 +477,7 @@ ros2 action info /backup
 
 ```text
 1 x AMCL（AMCL 模式）
-1 x /chassis/odom -> /odom relay
+0 x `/chassis/odom -> /odom` relay（仿真与实机均直接提供 `/odom`）
 0 x ground_truth_map_to_odom（AMCL 模式）
 0 x amcl_pose_initializer（初始化成功之后）
 1 x /nvblox_node
@@ -533,14 +529,14 @@ GridBased.allow_unknown = false
 - Global Costmap `0`：机器人不在静态/实时障碍膨胀区。
 - Local Costmap `0`：机器人附近实时 Scan 没有把车体中心标成障碍。
 
-中心格为自由还不代表整个 footprint 安全。圆形机器人半径为 `0.35 m`，目标附近还要保留膨胀与制动余量。
+中心格为自由还不代表整个 footprint 安全。Carbot 使用实测矩形 footprint：`x=[-0.130, 0.155] m`、`y=[-0.133, 0.133] m`；目标附近还要保留 `0.45 m` inflation 与制动余量。
 
 ## 9. `/scan` 的项目参数
 
-`nav_stack.launch.py` 把 3D 点云投影成二维 LaserScan：
+`carbot_sim.launch.py`/`carbot_real.launch.py` 把 3D 点云投影成二维 LaserScan：
 
 ```text
-target_frame:    base_link
+target_frame:    base_footprint
 min_height:      0.10 m
 max_height:      0.65 m
 angle_min/max:   -3.14 / 3.14
@@ -554,7 +550,7 @@ range_max:       20.0 m
 ```text
 361 rays
 约 20.6 Hz
-frame_id = base_link
+frame_id = base_footprint
 无小于 0.5 m 的回波
 ```
 
@@ -573,7 +569,8 @@ frame_id = base_link
 AMCL 配置文件：
 
 ```text
-configs/amcl_params.yaml
+configs/amcl_params_sim.yaml
+configs/amcl_params_real.yaml
 ```
 
 关键参数：
@@ -611,7 +608,8 @@ desired_linear_vel:                     0.3 m/s
 这些值位于：
 
 ```text
-configs/nav2_params.yaml
+configs/nav2_params_sim.yaml
+configs/nav2_params_real.yaml
 ```
 
 修改 `behavior_server.max_rotational_vel` 后必须重启 Navigation。该 Spin 插件在 lifecycle configure 时缓存参数，仅在运行时 `ros2 param set` 可能显示成功，但实际动作仍使用旧速度。
@@ -726,7 +724,7 @@ AMCL 确认误差约 0.002 m / 0.004 rad
 - 把转向速度限制到 `0.35 rad/s`。
 - Initial Pose 后先短距离收敛，再测试复杂路线。
 
-几厘米的 AMCL 修正并不等于物理小车跳跃。应同时观察 Isaac Sim 物理位置、`/chassis/odom` 和 `map -> odom`。
+几厘米的 AMCL 修正并不等于物理小车跳跃。应同时观察 Isaac Sim 物理位置、`/odom` 和 `map -> odom`。
 
 ## 15. Costmap 常见值与隔离诊断
 
@@ -751,7 +749,7 @@ local_costmap = 0
 这表示机器人中心的静态格本身是自由的，但 Global Costmap 认为完整 footprint 已靠近静态或实时障碍。可能原因：
 
 - 静态地图中有散点/墙面。
-- 机器人实际距离墙不足 `robot_radius`。
+- Carbot 矩形 footprint 实际距离墙不足。
 - Global obstacle layer 的 `/scan` 标记了障碍。
 - Scan 与地图/定位未对齐。
 
@@ -777,7 +775,7 @@ ros2 service call /global_costmap/clear_entirely_global_costmap \
 
 如果关闭 obstacle layer 后仍为 99，优先检查静态地图和机器人到墙的实际距离；如果恢复为 0，检查 `/scan`、自身回波和 TF。
 
-不要直接缩小 `robot_radius` 来掩盖问题。`0.35 m` 是当前机器人安全模型，随意缩小可能让规划路径穿过物理上无法通过的间隙。
+不要直接缩小 footprint 来掩盖问题。当前值来自 Carbot 参数单一来源：`x=[-0.130, 0.155] m`、`y=[-0.133, 0.133] m`；随意缩小会让规划路径穿过物理上无法通过的间隙。
 
 ## 16. 故障排查表
 
@@ -791,7 +789,7 @@ ros2 service call /global_costmap/clear_entirely_global_costmap \
 | RViz 看不到 LaserScan | QoS 不兼容、点太小、输入点云缺失 | 设置 Best Effort + Volatile、Size `0.03 m`、检查 `/scan` |
 | Scan 与墙平行但整体错位 | Initial Pose 错误或 `map -> odom` 错误 | 重新设置真实位置/朝向，检查 TF 发布者 |
 | Scan 形状旋转时弯曲 | 3D 点云未 deskew、角速度过高 | 限速到 `0.35 rad/s`，真机增加点云 deskew |
-| AMCL 初始化节点一直运行 | AMCL 未 active、车未静止、无 odom 或确认超时 | 检查日志、`/chassis/odom`、`/amcl_pose`、Initial Pose subscriber |
+| AMCL 初始化节点一直运行 | AMCL 未 active、车未静止、无 odom 或确认超时 | 检查日志、`/odom`、`/amcl_pose`、Initial Pose subscriber |
 | AMCL 初始化节点退出 | 成功时这是正常行为 | 日志应包含 `AMCL Initial Pose confirmed` |
 | AMCL 模式存在 ground-truth TF | 两个节点争抢 `map -> odom` | 停止错误模式并干净重启唯一 nav launch |
 | Global Costmap 中心为 99 | footprint 靠近静态/实时障碍 | 隔离 obstacle layer，不要先缩机器人半径 |
@@ -857,16 +855,16 @@ process has finished cleanly
 
 ```text
 use_sim_time = false
-map -> odom -> base_link -> lidar
+map -> odom -> base_footprint -> base_link -> front_3d_lidar
 ```
 
-测量并验证 `base_link -> LiDAR` 的 x/y/z、roll/pitch/yaw。错误外参会直接造成 Scan 与墙不重合。
+测量并验证 `base_link -> front_3d_lidar` 的 x/y/z、roll/pitch/yaw。错误外参会直接造成 Scan 与墙不重合。
 
 保证 LiDAR、IMU、轮速和主机时间同步。旋转式 3D LiDAR 推荐根据每点时间戳进行 deskew。
 
 ### 18.3 里程计
 
-使用轮速+IMU 融合或 LiDAR/视觉惯性里程计提供连续 `odom -> base_link`。记录真实直行、转向和原地旋转误差，再调整 AMCL `alpha1..alpha4`。
+使用轮速+IMU 融合或 LiDAR/视觉惯性里程计提供连续 `odom -> base_footprint`。记录真实直行、转向和原地旋转误差，再调整 AMCL `alpha1..alpha4`。
 
 ### 18.4 Initial Pose
 
@@ -892,7 +890,7 @@ amcl_initial_pose_mode:=odom_identity
 
 重新实测：
 
-- footprint 或 `robot_radius`。
+- footprint。
 - 膨胀半径。
 - 最大线速度和角速度。
 - 制动距离。
@@ -933,7 +931,7 @@ amcl_initial_pose_mode:=odom_identity
 
 ### 20.1 五目标回归如何选择安全点
 
-不要只看目标中心格是不是白色。当前机器人半径为 `0.35 m`，还存在膨胀代价和终点原地转向所需空间。自动验收使用以下更严格条件：
+不要只看目标中心格是不是白色。当前 Carbot 使用实测矩形 footprint，且还存在膨胀代价和终点原地转向所需空间。自动验收使用以下更严格条件：
 
 ```text
 目标到致命障碍的净距:  >= 0.80 m
@@ -942,7 +940,7 @@ amcl_initial_pose_mode:=odom_identity
 Goal 时间源:            Isaac /clock
 ```
 
-这里的 `0.80/0.60 m` 只用于本次严格回归选点，不是 Nav2 的全局硬阈值，也没有写入 `nav2_params.yaml`。当前 Nav2 的永久几何配置是 `robot_radius=0.35 m`、`inflation_radius=0.45 m`；Frontier Explorer 默认采用障碍 `0.55 m`、unknown `0.40 m`、地图边界 `0.60 m`。其中 `min_goal_distance_m=0.80` 表示候选目标与机器人当前位置的最小间距，不是离障碍物的距离。机械臂预抓取、对接等近距离任务应使用任务专用预靠近点和低速最终接近策略，不能套用严格回归阈值。
+这里的 `0.80/0.60 m` 只用于历史 Carter 严格回归选点，不是 Nav2 的全局硬阈值。阶段 E 的 Carbot 永久几何配置为矩形 footprint `x=[-0.130, 0.155] m`、`y=[-0.133, 0.133] m`，`inflation_radius=0.45 m`；Frontier Explorer 的历史阈值保持不变。其中 `min_goal_distance_m=0.80` 表示候选目标与机器人当前位置的最小间距，不是离障碍物的距离。
 
 2026-07-19 的严格安全回归结果：
 
@@ -960,10 +958,13 @@ Goal 时间源:            Isaac /clock
 
 ```text
 launch/nvblox_with_map.launch.py
-launch/nav_stack.launch.py
-configs/nav2_params.yaml
-configs/amcl_params.yaml
-configs/rviz/3d_lidar_amr_ws_1.rviz
+launch/carbot_sim.launch.py
+launch/carbot_real.launch.py
+configs/nav2_params_sim.yaml
+configs/nav2_params_real.yaml
+configs/amcl_params_sim.yaml
+configs/amcl_params_real.yaml
+configs/rviz/carbot_navigation.rviz
 src/isaac_3d_lidar_bringup/isaac_3d_lidar_bringup/amcl_pose_initializer.py
 start_nav_all.sh
 docs/map_gen/README.md

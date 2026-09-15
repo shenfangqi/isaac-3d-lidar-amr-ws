@@ -10,7 +10,11 @@ From the repository root:
 ./start_nav_all.sh
 ```
 
-This starts the three containers, Isaac Sim headlessly, warehouse_v3 nvblox, Navigation, and RViz through detached processes. Require `[ OK ] All startup health checks passed.` Logs are under `logs/start_nav_all/` and the previous run is retained as `.previous`.
+This starts the three containers, Carbot in Isaac Sim, warehouse_v3 nvblox,
+Carbot Navigation, and RViz through detached processes. The default simulation
+localization is `ground_truth`; set `LOCALIZATION_MODE=amcl` to validate AMCL.
+Require `[ OK ] All startup health checks passed.` Logs are under
+`logs/start_nav_all/` and the previous run is retained as `.previous`.
 
 Add `ISAAC_WEBRTC=1` when the native Isaac UI and RViz must run together:
 
@@ -55,7 +59,7 @@ ros2 launch /workspace/ros-humble/isaac_3d_lidar_amr_ws/launch/nvblox_with_map.l
 Start simulation ground-truth Nav2:
 
 ```bash
-ros2 launch /workspace/ros-humble/isaac_3d_lidar_amr_ws/launch/nav_stack.launch.py \
+ros2 launch /workspace/ros-humble/isaac_3d_lidar_amr_ws/launch/carbot_sim.launch.py \
   localization_mode:=ground_truth
 ```
 
@@ -63,12 +67,23 @@ Start AMCL for the odom-aligned Isaac simulation:
 
 ```bash
 source /workspace/ros-humble/isaac_3d_lidar_amr_ws/install/local_setup.bash
-ros2 launch /workspace/ros-humble/isaac_3d_lidar_amr_ws/launch/nav_stack.launch.py \
+ros2 launch /workspace/ros-humble/isaac_3d_lidar_amr_ws/launch/carbot_sim.launch.py \
   localization_mode:=amcl \
   amcl_initial_pose_mode:=odom_identity
 ```
 
 For a real robot, use `manual` plus RViz `2D Pose Estimate`, or `fixed` with surveyed x/y/yaw. Never use `odom_identity` merely for convenience on hardware.
+
+The hardware-safe ROS entrypoint is:
+
+```bash
+ros2 launch /workspace/ros-humble/isaac_3d_lidar_amr_ws/launch/carbot_real.launch.py \
+  amcl_initial_pose_mode:=manual
+```
+
+It uses system time and never starts an Isaac odometry relay or ground-truth
+TF. It requires the Jetson odometry owner to provide `/odom` and
+`odom -> base_footprint` before navigation can operate.
 
 ## Rebuild bringup
 

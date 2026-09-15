@@ -1,0 +1,33 @@
+schema_version: 1
+
+# Runtime interface names only. Physical geometry remains authoritative in
+# src/carbot_description/config/carbot_parameters.yaml.
+canonical_robot_parameters: /workspace/ros-humble/isaac_3d_lidar_amr_ws/src/carbot_description/config/carbot_parameters.yaml
+
+frames:
+  map: map
+  odom: odom
+  robot_base: base_footprint
+  body: base_link
+  lidar: front_3d_lidar
+
+topics:
+  pointcloud: /livox/lidar
+  padded_pointcloud: /livox/lidar_nvblox
+  scan: /scan
+  odom: /odom
+  cmd_vel: /cmd_vel
+  wheel_ticks: /wheel_ticks
+
+maps:
+  nav2_yaml: /workspace/ros-humble/isaac_3d_lidar_amr_ws/maps/2d/warehouse_v3.yaml
+  nvblox: /workspace/ros-humble/isaac_3d_lidar_amr_ws/maps/nvblox/warehouse_v3.nvblx
+
+scan_projection:
+  min_height_m: 0.10
+  max_height_m: 0.65
+  min_range_m: 0.50
+  max_range_m: 20.0
+  angle_min_rad: -3.14
+  angle_max_rad: 3.14
+  angle_increment_rad: 0.0174

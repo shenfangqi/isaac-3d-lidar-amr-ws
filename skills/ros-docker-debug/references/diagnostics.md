@@ -23,7 +23,8 @@ ros2 lifecycle get /planner_server --no-daemon
 ros2 lifecycle get /controller_server --no-daemon
 ros2 lifecycle get /behavior_server --no-daemon
 ros2 run tf2_ros tf2_echo map odom
-ros2 run tf2_ros tf2_echo odom base_link
+ros2 run tf2_ros tf2_echo odom base_footprint
+ros2 run tf2_ros tf2_echo map base_footprint
 ros2 run tf2_ros tf2_echo map base_link
 ros2 topic info /scan -v --no-daemon
 ros2 topic info /map -v --no-daemon

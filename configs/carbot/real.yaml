@@ -1,0 +1,18 @@
+schema_version: 1
+runtime: real
+use_sim_time: false
+clock_source: system
+odom_source: jetson_wheel_ticks
+localization_default: amcl
+amcl_initial_pose_default: manual
+allow_ground_truth_map_to_odom: false
+allow_chassis_odom_relay: false
+required_external_interfaces:
+  - /wheel_ticks
+  - /odom
+  - odom->base_footprint
+nav2_params_file: /workspace/ros-humble/isaac_3d_lidar_amr_ws/configs/nav2_params_real.yaml
+amcl_params_file: /workspace/ros-humble/isaac_3d_lidar_amr_ws/configs/amcl_params_real.yaml
+velocity_limits:
+  linear_mps: 0.10
+  angular_rad_s: 0.30

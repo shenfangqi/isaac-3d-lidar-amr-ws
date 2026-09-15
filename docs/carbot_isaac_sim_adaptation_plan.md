@@ -220,6 +220,11 @@ isaac_sim/scripts/build_carbot_usd.py
 
 ### 阶段 E：sim/real 启动和 Nav2 配置分离
 
+实现状态（2026-09-14）：已建立公共、仿真、真机运行配置和独立 launch；
+一键仿真已切换到 Carbot，直接使用 `/odom`，以 `base_footprint` 为 Nav2
+基座，加载原 `warehouse_v3`，并通过 ground-truth 导航与 AMCL 冷启动回归。
+真机入口已完成静态/launch 解析验证，实际硬件里程计和导航仍需现场验收。
+
 建立清晰的公共层、仿真层和真机层，不再在同一 launch 内写死时间源和 odom relay。
 
 ```text

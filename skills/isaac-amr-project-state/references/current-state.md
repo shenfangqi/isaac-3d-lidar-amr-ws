@@ -1,12 +1,37 @@
 # Current authoritative project state
 
-## Shutdown checkpoint: 2026-09-14 — Carbot Phase D complete
+## Shutdown checkpoint: 2026-09-14 — Carbot Phase E complete
 
-The Carbot Phase D blank-mapping implementation and visual inspection are
-complete. `./stop_nav_all.sh` then stopped `ros2-dev-humble`,
-`isaac-ros-nvblox`, and `isaac-sim` cleanly. No RViz, WebRTC Client, Isaac Kit,
-nvblox, or pointcloud padder process remains, and port 49100 is no longer
-listening. The next run starts from a clean stopped state.
+Carbot Phase E separates the simulation and physical-robot ROS configurations.
+The simulation path passed both ground-truth and AMCL cold-start health checks;
+the ground-truth run also completed a short `NavigateToPose` goal with
+`SUCCEEDED` and zero recoveries. The real-hardware path has passed configuration,
+launch-argument, lint, and package tests only; it has not been motion-tested on
+the physical robot.
+
+After validation, `./stop_nav_all.sh` stopped `ros2-dev-humble`,
+`isaac-ros-nvblox`, and `isaac-sim` cleanly. No project RViz, Isaac Kit,
+nvblox, pointcloud padder, or Carbot launch process remains, and TCP port 49100
+is not listening. The next session starts from a clean stopped state.
+
+- `launch/carbot_sim.launch.py` defaults to ground truth and may select AMCL;
+  `launch/carbot_real.launch.py` is AMCL-only and defaults to manual Initial Pose.
+  `launch/nav_stack.launch.py` remains only as a simulation compatibility wrapper.
+- `configs/carbot/common.yaml` owns interface names and points to the canonical
+  robot geometry. The sim and real profiles explicitly separate clock, odometry,
+  localization, limits, and parameter files.
+- Both costmaps use the measured Carbot polygon
+  `[[0.155,0.133],[0.155,-0.133],[-0.130,-0.133],[-0.130,0.133]]`, with
+  `base_footprint` as the navigation base and `inflation_radius=0.45 m`.
+- Simulation consumes Isaac's `/odom` directly. No `/chassis/odom` relay exists.
+  The real profile requires external `/odom` and `odom -> base_footprint` from
+  the Jetson-side odometry pipeline.
+- The preserved `warehouse_v3` map remains the default for nvblox and Nav2.
+  The Carbot cold-start checks confirmed `417 x 424` at `0.05 m/cell`, live raw
+  and padded Mid-360 point clouds, `/scan`, costmaps, and `map -> base_link`.
+- The local parent `start_nav_all.sh` and `stop_nav_all.sh` were updated for the
+  Carbot scene/scripts, direct `/odom`, Carbot health invariants, and the new
+  RViz configuration. They live one directory above this Git repository.
 
 - The generated Carbot composition disables `/World/Robot/Shen_Carter`,
   `/World/ROS2_Carter_Graph`, and the legacy `/World/ROS2_LidarRTX`; only the
@@ -22,9 +47,8 @@ listening. The next run starts from a clean stopped state.
 - Live TF reports `odom -> front_3d_lidar = [-0.003, 0, 0.157]`. A blank-map
   run produced a live `0.05 m` OccupancyGrid, confirming the Carbot cloud-to-map
   path. This is a new live map, not the saved `warehouse_v3` map.
-- The existing saved-map `start_nav_all.sh` remains on its validated legacy
-  Carter runtime pending Phase E integration. Do not run it concurrently with
-  this Phase D component stack.
+- The old Carter prims remain disabled in the generated composition and must not
+  be re-enabled alongside the Carbot articulation or ROS graph.
 
 ## Physical Jetson target: recorded 2026-09-06
 
@@ -75,23 +99,23 @@ The current engineering objective after validated simulation navigation is real-
 - `maps/2d/warehouse_v3.pgm` is `417 x 424` at `0.05 m/pixel`.
 - `maps/2d/warehouse_v3.yaml` has origin `[-14.4, -7.6, 0]` and must use `free_thresh: 0.196` so gray-205 unknown cells remain unknown.
 - Reloaded `/map` statistics were 117,570 unknown, 52,618 free, and 6,620 occupied cells.
-- `launch/nvblox_with_map.launch.py` and `launch/nav_stack.launch.py` default to warehouse_v3.
-- `configs/nav2_params.yaml` uses `GridBased.allow_unknown=false`, `global_costmap.track_unknown_space=true`, `robot_radius=0.35`, `inflation_radius=0.45`, and `xy_goal_tolerance=0.10`.
-- The simulated projected `/scan` uses `base_link`, height `0.10..0.65 m`, range minimum `0.5 m`, 361 rays, and Best Effort/Volatile QoS.
+- `launch/nvblox_with_map.launch.py`, `launch/carbot_sim.launch.py`, and `launch/carbot_real.launch.py` default to warehouse_v3.
+- `configs/nav2_params_{sim,real}.yaml` use `GridBased.allow_unknown=false`, `global_costmap.track_unknown_space=true`, the measured Carbot polygon, `inflation_radius=0.45`, and `xy_goal_tolerance=0.10`.
+- The projected `/scan` uses `base_footprint`, height `0.10..0.65 m`, range minimum `0.5 m`, 361 rays, and Best Effort/Volatile QoS.
 - The only simulated raw 3D LiDAR topic is `/livox/lidar`; nvblox consumes `/livox/lidar_nvblox` padded to `1000 x 40`.
 - Rotation is limited to about `0.35 rad/s`; relevant behavior plugin limits require a Navigation restart after configuration changes.
 
 ## Saved-map runtime design
 
-The normal launcher defaults are:
+The normal simulation launcher defaults are:
 
 ```text
-LOCALIZATION_MODE=amcl
+LOCALIZATION_MODE=ground_truth
 AMCL_INITIAL_POSE_MODE=odom_identity
 START_RVIZ=1
 ```
 
-`odom_identity` is valid only for the odom-aligned warehouse_v3 Isaac simulation. `nav_stack.launch.py` also supports:
+`odom_identity` is valid only for the odom-aligned warehouse_v3 Isaac simulation. `carbot_sim.launch.py` supports:
 
 ```text
 localization_mode:=ground_truth
@@ -110,7 +134,7 @@ amcl_initial_pose_mode:=manual
 
 Before sending a Goal, require:
 
-- Exactly one nvblox node, container, pointcloud padder, projected scan node, relay, map server, Nav2 server, AMCL, and RViz instance.
+- Exactly one nvblox node, container, pointcloud padder, projected scan node, robot-state publisher, map server, and each Nav2 server; no odometry relay.
 - No ground-truth `map -> odom` publisher while using AMCL, and no leftover one-shot initializer.
 - `map_server`, `amcl`, `controller_server`, `planner_server`, `behavior_server`, and `bt_navigator` active.
 - `/navigate_to_pose`, `/spin`, and `/backup` available.

@@ -17,16 +17,17 @@ extrinsic calibration of the physical installation.
 
 ## Run
 
-The saved-map full-stack launcher still exercises the validated legacy Carter
-runtime and is intentionally left unchanged until Phase E:
+The Phase E saved-map full-stack launcher uses Carbot, loads `warehouse_v3`,
+and defaults to deterministic ground-truth localization:
 
 ```bash
 cd /home/shenfq/projects/ros-humble
 ./start_nav_all.sh
 ```
 
-For the Carbot Phase D mapping demo, start the containers first, then run each
-command in a separate terminal. Do not run it alongside `start_nav_all.sh`.
+For the Carbot blank-mapping component demo, start the containers first, then
+run each command in a separate terminal. Do not run it alongside
+`start_nav_all.sh`.
 
 ```bash
 ./isaac_sim/run_carbot.sh

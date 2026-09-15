@@ -52,14 +52,14 @@ There are three supported routes. Inspect the container and Isaac processes befo
 
 ### Automated navigation modes
 
-The default launcher uses `auto_play_mid360.py`, opens the warehouse, installs the Mid-360 RTX proxy, starts the timeline, and runs the full saved-map navigation stack without a WebRTC stream:
+The default launcher uses `auto_play_carbot.py`, opens the generated Carbot warehouse composition, starts its independent Mid-360 RTX graph and timeline, and runs the full saved-map navigation stack without a WebRTC stream:
 
 ```bash
 cd /home/shenfq/projects/ros-humble
 ./start_nav_all.sh
 ```
 
-The unified WebRTC mode uses `runheadless.sh` plus `streaming_auto_play.py` inside the same Isaac process, then starts nvblox, Nav2, AMCL, and RViz as usual:
+The unified WebRTC mode uses `runheadless.sh` plus `streaming_carbot.py` inside the same Isaac process, then starts nvblox, Carbot Nav2, the selected localization mode, and RViz as usual:
 
 ```bash
 cd /home/shenfq/projects/ros-humble
@@ -69,7 +69,7 @@ ISAAC_WEBRTC=1 ./start_nav_all.sh
 
 Connect the client to `127.0.0.1`. Do not launch the client until the launcher reports `Isaac WebRTC : ready-at-127.0.0.1`. Success still requires `[ OK ] All startup health checks passed.` Use `ISAAC_WEBRTC=1 ./start_nav_all.sh --health-check` when rechecking this mode so the WebRTC gates are included.
 
-Both automated modes load the same `warehouse_3d_nav_origin_carter.usd` and Play it automatically. Stop either mode with `./stop_nav_all.sh`.
+Both automated modes generate and load the same Carbot composition from the preserved warehouse scene and Play it automatically. Stop either mode with `./stop_nav_all.sh`.
 
 ### Direct non-streaming Isaac process
 
@@ -84,7 +84,7 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file:///workspace/ros-humble/cyclonedds_ros_local.xml
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$isaac_sim_package_path/exts/isaacsim.ros2.bridge/humble/lib
 export ROS_DOMAIN_ID=0
-./python.sh /workspace/ros-humble/isaac_3d_lidar_amr_ws/isaac_sim/auto_play_mid360.py
+./python.sh /workspace/ros-humble/isaac_3d_lidar_amr_ws/isaac_sim/auto_play_carbot.py
 ```
 
 ### Standalone interactive WebRTC UI mode
@@ -131,9 +131,9 @@ On the same host, launch the client and connect to `127.0.0.1`:
 In the streamed Isaac UI, open:
 
 ```text
-/workspace/ros-humble/isaac_3d_lidar_amr_ws/isaac_sim/usd/warehouse_3d_nav_origin_carter.usd
+/workspace/ros-humble/isaac_3d_lidar_amr_ws/isaac_sim/usd/warehouse_3d_nav_origin_carbot.usd
 ```
 
-Wait for `/nova_carter_ROS111` to appear in the Stage tree, then press Play. The toolbar control changing from Play to Pause is the visual confirmation that the timeline is running.
+Wait for `/World/Carbot` and its ROS 2 graph to appear in the Stage tree, then press Play. The toolbar control changing from Play to Pause is the visual confirmation that the timeline is running.
 
-`runheadless.sh` already runs an Isaac Sim Kit application. Never execute `python.sh auto_play_mid360.py` while it is active: that starts a second Isaac Sim instance rather than controlling the streamed one. Closing the AppImage also does not stop the server; interrupt the `runheadless.sh` shell and stop the `isaac-sim` container when finished.
+`runheadless.sh` already runs an Isaac Sim Kit application. Never execute `python.sh auto_play_carbot.py` while it is active: that starts a second Isaac Sim instance rather than controlling the streamed one. Closing the AppImage also does not stop the server; interrupt the `runheadless.sh` shell and stop the `isaac-sim` container when finished.

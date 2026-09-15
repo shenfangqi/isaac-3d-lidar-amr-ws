@@ -1,0 +1,13 @@
+schema_version: 1
+runtime: simulation
+use_sim_time: true
+clock_source: /clock
+odom_source: isaac_direct
+localization_default: ground_truth
+allow_ground_truth_map_to_odom: true
+allow_chassis_odom_relay: false
+nav2_params_file: /workspace/ros-humble/isaac_3d_lidar_amr_ws/configs/nav2_params_sim.yaml
+amcl_params_file: /workspace/ros-humble/isaac_3d_lidar_amr_ws/configs/amcl_params_sim.yaml
+velocity_limits:
+  linear_mps: 0.30
+  angular_rad_s: 0.35

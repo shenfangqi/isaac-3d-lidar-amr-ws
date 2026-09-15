@@ -44,13 +44,13 @@ source /workspace/ros-humble/isaac_3d_lidar_amr_ws/scripts/real_robot_ros_env.sh
 
 ## 启动真实 Nav2 前的硬门槛
 
-当前完整启动器仍是 Isaac 仿真启动器，不得用它控制履带车。允许真实 Nav2 加载物理 LAN DDS 配置前，必须逐项验证：
+阶段 E 已提供独立的 `launch/carbot_real.launch.py`、`configs/carbot/real.yaml`、实机 Nav2/AMCL 参数和系统时间配置；这些文件已通过静态与启动参数检查，但尚未在真实硬件上完成闭环联调。不得用仿真启动器控制履带车。允许真实 Nav2 加载物理 LAN DDS 配置前，必须逐项验证：
 
 - ESP32 对 `/cmd_vel` 的履带差速换算、限速和指令超时停车已生效。
 - 实体急停有效，第一次运动验证时履带架空。
 - 真实 `/odom` 存在，时间戳和 `frame_id` 正确。
-- `odom -> base_link` 是真实底盘 TF，不能使用 Isaac `/chassis/odom` relay。
-- Mid-360 提供真实点云或 `/scan`，并使用实测 `base_link -> lidar` 外参。
+- `odom -> base_footprint` 是真实底盘 TF，不能使用 Isaac `/chassis/odom` relay。
+- Mid-360 提供真实点云或 `/scan`，并使用实测 `base_link -> front_3d_lidar` 外参。
 - Nav2、AMCL、RViz 和传感器全部使用系统时间，即 `use_sim_time=false`。
 - AMCL 使用 `manual` 或经过测量的 `fixed` Initial Pose，不使用仿真的 `odom_identity`。
 - 物理 LAN Domain 0 中只有一个最终 `/cmd_vel` 发布链路。
