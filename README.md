@@ -181,6 +181,11 @@ Carbot USD，但策略只接触与 Nav2/真机一致的高层 Twist 和可迁移
 会在 Jetson 里程计、履带运动学、执行器、摩擦和传感器外参完成实测前阻止策略发布。
 运行方法和验证边界见该目录的 README。
 
+需要通过桌面 AppImage 检查 Isaac Lab 场景时，必须使用该 README 中记录的
+`--livestream 1` 持续会话启动流程；等待服务端完全就绪后，双击
+`isaacsim-webrtc-client.AppImage` 并连接 `127.0.0.1`。Simulation Output 的
+USD/Fabric 选项只影响视口同步，不负责建立 WebRTC 连接。
+
 ## 新建地图与自动探索
 
 新建地图时不要加载旧 `.nvblx`，只启动纯 nvblox：

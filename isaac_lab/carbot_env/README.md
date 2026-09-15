@@ -31,6 +31,38 @@ docker exec isaac-sim bash -lc '
 docker stop isaac-sim
 ```
 
+## WebRTC interactive launch
+
+Use the following persistent launch sequence when inspecting the Phase F scene
+with the desktop Isaac Sim WebRTC Streaming Client. Do not run another Isaac Sim
+or Isaac Lab process in the same container at the same time.
+
+```bash
+docker start isaac-sim
+docker exec -it \
+  -e TERM=xterm \
+  -e PUBLIC_IP=127.0.0.1 \
+  isaac-sim bash -lc '
+    cd /workspace/ros-humble/isaac_3d_lidar_amr_ws
+    exec /workspace/IsaacLab/isaaclab.sh -p \
+      isaac_lab/carbot_env/scripts/smoke_env.py \
+      --livestream 1 --steps 100000000
+  '
+```
+
+Wait for both `Streaming server started` and
+`Completed setting up the environment`. Then double-click
+`~/桌面/myApps/isaacsim-webrtc-client.AppImage`, enter `127.0.0.1`, and select
+**Connect**. The AppImage may be started normally from the desktop; when it is
+started by automation, it must be kept in a persistent terminal/session because
+a short-lived background command can terminate the Electron client when that
+command exits.
+
+The Simulation Output `USD`/Fabric selection affects how simulation state is
+synchronized to the viewport; it does not establish the WebRTC connection. For
+a clean shutdown, close the client, press Ctrl+C in the persistent server
+terminal, and then run `docker stop isaac-sim`.
+
 The smoke scene is flat and is intended to validate loading, interfaces, tensor
 dimensions, reset, and zero-action safety. It is not evidence of calibrated
 tracked dynamics or successful policy training.
