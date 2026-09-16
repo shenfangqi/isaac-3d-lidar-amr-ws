@@ -20,6 +20,7 @@ PARAMETER_PATH = (
 )
 PROFILE_PATH = WORKSPACE / "isaac_sim/lidar_configs/Livox_Mid360_Approx.json"
 LEGACY_LIDAR_GRAPH_PATH = "/World/ROS2_LidarRTX"
+LEGACY_ROBOT_ROOT_PATH = "/World/Robot"
 sys.path.insert(0, str(WORKSPACE))
 
 
@@ -28,7 +29,7 @@ def is_legacy_carter_path(path):
     return (
         "carter" in lowered
         or "nova_" in lowered
-        or str(path) == LEGACY_LIDAR_GRAPH_PATH
+        or str(path) in (LEGACY_LIDAR_GRAPH_PATH, LEGACY_ROBOT_ROOT_PATH)
     )
 
 
@@ -89,11 +90,8 @@ async def load_and_control():
     ]
 
     print(f"Opening streaming Carbot warehouse: {SCENE_PATH}", flush=True)
-    omni.usd.get_context().open_stage(str(SCENE_PATH))
+    await omni.usd.get_context().open_stage_async(str(SCENE_PATH))
     stage = omni.usd.get_context().get_stage()
-    if stage is None:
-        await app.next_update_async()
-        stage = omni.usd.get_context().get_stage()
     if stage is not None:
         disabled_legacy_roots = deactivate_legacy_carter_roots(stage)
         print(
@@ -110,6 +108,7 @@ async def load_and_control():
         f"Carbot Mid-360 ready: {mid360_handles[0].GetPath()}; "
         f"{mid360_config['pointcloud_topic']} "
         f"[frame_id={mid360_config['frame_id']}]; "
+        f"rate={mid360_config['pointcloud_rate_hz']} Hz; "
         "RTX origin is the temporary housing-bottom reference",
         flush=True,
     )

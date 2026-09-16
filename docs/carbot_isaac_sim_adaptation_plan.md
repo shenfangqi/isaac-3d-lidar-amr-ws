@@ -1,7 +1,7 @@
 # Carbot 真机参数适配 Isaac Sim / Isaac Lab 开发计划
 
-更新时间：2026-09-13
-状态：待实施
+更新时间：2026-09-16
+状态：阶段 A～G 仿真基线已完成；真机标定与策略发布仍受硬件门禁阻塞
 目标：在保留现有 MID360、nvblox、RViz2、SLAM/建图和 Nav2 接口的前提下，将当前 Nova Carter 仿真底盘替换为尽量接近 Carbot 真机的履带差速模型，并为后续 Isaac Lab 强化学习训练建立可复用环境。
 
 ## 1. 开工前状态和保护边界
@@ -288,6 +288,12 @@ isaac_lab/carbot_env/
 ```
 
 ### 阶段 G：验证和验收
+
+实现状态（2026-09-16）：静态/契约测试、Isaac Lab G1～G7 单体运动门禁、
+ROS 接口、MID360/nvblox、保存地图以及 Nav2 直线和转向目标均已通过。
+最终场景使用唯一的 `/World/Carbot`，完整结果与边界见
+[`carbot_phase_g_validation_report.md`](carbot_phase_g_validation_report.md)。
+真机标定项目不因这些仿真结果而关闭。
 
 #### 静态验证
 

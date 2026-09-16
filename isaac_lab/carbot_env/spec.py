@@ -60,6 +60,9 @@ def load_environment_spec():
             "wheel_joint_coordinate_sign"
         ],
     }
+    spec["simulation"]["control_mode"] = robot["simulation"][
+        "control_mode"
+    ]
     spec["domain_randomization"] = deepcopy(robot["domain_randomization"])
     return spec
 

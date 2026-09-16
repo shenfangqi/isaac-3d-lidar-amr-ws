@@ -32,6 +32,9 @@ def test_policy_action_is_deployable_high_level_twist(spec):
     assert action["reserved_execution_modes"]["left_right_track_velocity"][
         "enabled"
     ] is False
+    assert spec["simulation"]["control_mode"] == (
+        "ideal_kinematic_tracked_differential"
+    )
 
 
 def test_limits_and_randomization_resolve_from_single_parameter_sources(spec):

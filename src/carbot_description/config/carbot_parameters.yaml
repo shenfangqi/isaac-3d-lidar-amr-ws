@@ -112,7 +112,7 @@ interfaces:
 
 simulation:
   control_mode: ideal_kinematic_tracked_differential
-  articulation_root_prim: /Carbot/base_footprint
+  articulation_root_prim: /World/Carbot/base_footprint
   wheel_joint_coordinate_sign: -1.0
 
 dynamics:

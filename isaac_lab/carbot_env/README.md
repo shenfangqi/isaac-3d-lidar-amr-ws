@@ -4,7 +4,9 @@ This is the initial manager-based goal-navigation environment for Carbot. Its
 policy action is always physical-unit `[linear.x, angular.z]`; the action term
 applies simulation Nav2 velocity limits, canonical acceleration limits, coupled
 wheel saturation, the imported joint sign, and the canonical 500 ms watchdog.
-PWM and motor torque are not policy outputs.
+It commands all twelve wheel joints and, while the canonical simulation mode is
+`ideal_kinematic_tracked_differential`, enforces the same bounded planar body
+velocity as the Isaac Sim runtime. PWM and motor torque are not policy outputs.
 
 The policy observation group contains a relative goal, odometry-compatible
 planar velocity, projected gravity, 72 horizontal ray ranges, a 5 x 5 height
@@ -64,8 +66,9 @@ a clean shutdown, close the client, press Ctrl+C in the persistent server
 terminal, and then run `docker stop isaac-sim`.
 
 The smoke scene is flat and is intended to validate loading, interfaces, tensor
-dimensions, reset, and zero-action safety. It is not evidence of calibrated
-tracked dynamics or successful policy training.
+dimensions, reset, and zero-action safety. The ideal planar execution mode is a
+temporary baseline, not evidence of calibrated tracked contact dynamics or
+successful policy training.
 
 ## Sim-to-Real gate
 

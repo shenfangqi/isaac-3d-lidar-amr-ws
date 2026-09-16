@@ -154,6 +154,10 @@ class ActionsCfg:
             "wheel_joint_coordinate_sign"
         ],
         watchdog_timeout_s=LIMITS["watchdog_timeout_s"],
+        ideal_kinematic=(
+            ROBOT["simulation"]["control_mode"]
+            == "ideal_kinematic_tracked_differential"
+        ),
     )
 
 

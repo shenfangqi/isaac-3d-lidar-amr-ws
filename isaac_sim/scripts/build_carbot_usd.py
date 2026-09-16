@@ -24,6 +24,7 @@ DEFAULT_SCENE_OUTPUT = (
 )
 CARTER_ORIGIN_Y_M = 0.9844150670532934
 LEGACY_LIDAR_GRAPH_PATH = "/World/ROS2_LidarRTX"
+LEGACY_ROBOT_ROOT_PATH = "/World/Robot"
 
 
 def is_legacy_carter_path(path):
@@ -31,7 +32,7 @@ def is_legacy_carter_path(path):
     return (
         "carter" in lowered
         or "nova_" in lowered
-        or str(path) == LEGACY_LIDAR_GRAPH_PATH
+        or str(path) in (LEGACY_LIDAR_GRAPH_PATH, LEGACY_ROBOT_ROOT_PATH)
     )
 
 
@@ -101,7 +102,11 @@ def import_robot():
         status, import_config = omni.kit.commands.execute("URDFCreateImportConfig")
         if not status:
             raise RuntimeError("Isaac Sim failed to create a URDF import config")
-        import_config.merge_fixed_joints = False
+        # Keep massless sensor/visual frames from becoming separate 1 kg rigid
+        # bodies under the importer default.  Their transforms remain in the
+        # imported hierarchy while their geometry and inertia are merged into
+        # the physical parent body.
+        import_config.merge_fixed_joints = True
         import_config.convex_decomp = False
         import_config.import_inertia_tensor = True
         import_config.fix_base = False
@@ -148,6 +153,17 @@ def import_robot():
             raise RuntimeError(
                 f"Expected 12 wheel joints, found {len(revolute_joints)}"
             )
+        # The URDF importer defaults angular drives to acceleration mode.  The
+        # canonical wheel damping is a physical N*m*s/rad gain, so these
+        # velocity drives must use force mode for the configured effort limits
+        # and wheel dynamics to have their intended meaning.
+        for joint in revolute_joints:
+            drive = UsdPhysics.DriveAPI.Get(joint, "angular")
+            if not drive:
+                raise RuntimeError(
+                    f"Wheel joint has no angular drive: {joint.GetPath()}"
+                )
+            drive.GetTypeAttr().Set("force")
         if len(collision_prims) != 13:
             raise RuntimeError(
                 f"Expected 13 collision bodies, found {len(collision_prims)}"
@@ -206,7 +222,8 @@ def compose_warehouse():
     stage.GetRootLayer().subLayerPaths = [
         os.path.relpath(args.warehouse, args.scene_output.parent)
     ]
-    carbot = UsdGeom.Xform.Define(stage, Sdf.Path("/Carbot"))
+    carbot_path = Sdf.Path("/World/Carbot")
+    carbot = UsdGeom.Xform.Define(stage, carbot_path)
     carbot.GetPrim().GetReferences().AddReference(
         os.path.relpath(args.output, args.scene_output.parent)
     )
@@ -235,8 +252,10 @@ def compose_warehouse():
     os.replace(temporary_scene, args.scene_output)
 
     composed = Usd.Stage.Open(str(args.scene_output))
-    if composed is None or not composed.GetPrimAtPath("/Carbot").IsValid():
-        raise RuntimeError("Generated warehouse does not contain /Carbot")
+    if composed is None or not composed.GetPrimAtPath(carbot_path).IsValid():
+        raise RuntimeError(
+            "Generated warehouse does not contain /World/Carbot"
+        )
     active_legacy_prims = [
         str(prim.GetPath())
         for prim in composed.Traverse()

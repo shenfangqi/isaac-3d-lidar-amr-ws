@@ -25,7 +25,8 @@ cd /isaac-sim
 The importer creates `isaac_sim/usd/carbot.usd`, its generated
 `isaac_sim/usd/configuration/carbot_*.usd` layers, and the Carter-free
 `isaac_sim/usd/warehouse_3d_nav_origin_carbot.usd`. The latter sublayers the
-existing robot-free warehouse and places `/Carbot` at the former Carter origin.
+existing robot-free warehouse and places `/World/Carbot` at the former Carter
+origin.
 Control and RTX LiDAR ROS graphs are added in later implementation stages.
 
 ## Differential-control runtime

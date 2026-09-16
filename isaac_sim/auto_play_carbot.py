@@ -265,7 +265,9 @@ def main():
     update_app(300)
     stage = omni.usd.get_context().get_stage()
     if stage is None or not stage.GetPrimAtPath(robot_prim_path).IsValid():
-        raise RuntimeError("Carbot warehouse failed to load /Carbot")
+        raise RuntimeError(
+            f"Carbot warehouse failed to load {robot_prim_path}"
+        )
 
     mid360_handles = create_mid360_pipeline(stage, parameters)
     mid360_config = mid360_runtime_config(parameters)
@@ -273,6 +275,7 @@ def main():
         f"Carbot Mid-360 ready: {mid360_handles[0].GetPath()}; "
         f"{mid360_config['pointcloud_topic']} "
         f"[frame_id={mid360_config['frame_id']}]; "
+        f"rate={mid360_config['pointcloud_rate_hz']} Hz; "
         "RTX origin is the temporary housing-bottom reference",
         flush=True,
     )
