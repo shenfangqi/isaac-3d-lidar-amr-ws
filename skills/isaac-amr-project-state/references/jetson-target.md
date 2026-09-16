@@ -19,6 +19,7 @@ Last verified: 2026-09-06 (Asia/Tokyo).
 | Authentication | Dedicated Ed25519 key; password fallback may be available |
 | Physical robot ROS domain | `0` (matches completed ESP32 firmware) |
 | micro-ROS Agent | User service `micro-ros-agent.service`, UDP 8888 |
+| Wheel odometry | User service `carbot-wheel-odometry.service` |
 
 The local host configuration is in `~/.ssh/config`. The project-specific private key is `~/.ssh/id_ed25519_isaac_jetson`; its public key is installed in the Jetson user's `~/.ssh/authorized_keys`. The private-key fingerprint is:
 
@@ -94,7 +95,7 @@ The following ROS-related directories existed under `/home/shenfq/Projects` when
 
 The complete `isaac_3d_lidar_amr_ws` was not identified during the initial shallow inventory. Do not assume that this workstation checkout already exists on the Jetson. Before deployment, inspect the destination, storage, Git state, ROS overlays, running processes, Docker objects, and attached hardware. Preserve existing files and ask before overwriting or replacing a deployment.
 
-The tracked-base host integration is maintained in `/home/shenfq/Projects/carbot-ros2`. Its Agent and the completed ESP32 firmware use `ROS_DOMAIN_ID=0`. Isaac simulation also uses Domain 0 but remains isolated by the workstation's loopback-only DDS profile; physical operation requires explicitly loading the LAN DDS profile. The ESP32 performs the differential-track conversion and subscribes to standard `/cmd_vel`. Do not start the legacy `carbot_driver` alongside Nav2 because it publishes its own nonzero `/cmd_vel` stream.
+The tracked-base host integration is maintained in `/home/shenfq/Projects/carbot-ros2`. Its Agent and the completed ESP32 firmware use `ROS_DOMAIN_ID=0`. Isaac simulation also uses Domain 0 but remains isolated by the workstation's loopback-only DDS profile; physical operation requires explicitly loading the LAN DDS profile. The ESP32 performs the differential-track conversion and subscribes to standard `/cmd_vel`. The deployed `carbot_msgs` and `carbot_hardware` packages support the enabled `carbot-wheel-odometry.service`, which is the sole `/odom` and `odom -> base_footprint` owner. Do not start the legacy `carbot_driver` alongside Nav2 because it publishes its own nonzero `/cmd_vel` stream.
 
 ## Remote-operation rules
 

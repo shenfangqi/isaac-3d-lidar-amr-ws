@@ -1,5 +1,7 @@
 # Current authoritative project state
 
+Newest checkpoint: [Physical Carbot checkpoint: 2026-09-16](#physical-carbot-checkpoint-2026-09-16).
+
 ## Shutdown checkpoint: 2026-09-15 — Carbot Phase F foundation complete
 
 The project now contains a runnable Isaac Lab manager-based Carbot foundation
@@ -90,6 +92,16 @@ The project's real-hardware target is reachable through the local SSH alias `isa
 - A non-motion `std_msgs/msg/String` probe passed bidirectionally between workstation CycloneDDS and Jetson Fast DDS on Domain 0. The ESP32 was intentionally off during this check, so repeat the `/cmd_vel` endpoint check after it is started.
 - The ESP32 static-resource issue reported as `publisher init failed` was fixed in its firmware. After clearing stale Agent sessions, `carbot_base` maintained one `/cmd_vel` subscription and four publishers: `/wheel_ticks`, `/imu/data_raw`, `/battery_state`, and `/carbot/status`. With the chassis lifted, 2026-09-06 ROS 2 smoke tests verified all differential-drive directions through standard `/cmd_vel`: forward at `linear.x=0.08 m/s`, reverse at `linear.x=-0.08 m/s`, in-place left at `angular.z=+0.25 rad/s`, and in-place right at `angular.z=-0.25 rad/s`. The user visually confirmed the track directions were correct. Every motion was followed by repeated zero Twist messages, and the final `/cmd_vel` subscription count remained one. The Jetson currently lacks matching Python type support for the ESP32's `carbot_msgs`, so the custom wheel/status payloads were not decoded during those tests.
 - Do not let the existing Isaac navigation launcher load the physical LAN DDS profile. Real hardware still requires verified `/odom`, `odom -> base_footprint`, Mid-360 data/extrinsics, `use_sim_time=false`, AMCL initialization, command timeout, and physical emergency stop before any nonzero command is allowed.
+
+## Physical Carbot checkpoint: 2026-09-16
+
+- Workstation simulation, nvblox, and Nav2 were stopped before joining the physical LAN. Only the host-networked Humble container remains available for physical diagnostics.
+- The authoritative ESP32 `carbot_msgs` definitions from firmware commit `63dd45c` were added to this workspace and deployed to Jetson. Live `/wheel_ticks` decoded at about 50 Hz; a 15 s lifted static sample had zero left/right drift and stable boot ID `549633487`.
+- `carbot_hardware` was deployed to `/home/shenfq/Projects/carbot-ros2`. Enabled user service `carbot-wheel-odometry.service` is active alongside `micro-ros-agent.service`. The workstation observed exactly one `/odom` publisher and a live `odom -> base_footprint` TF.
+- With both tracks lifted, one-shot forward/reverse and positive/negative turn tests passed tick-sign checks. A one-shot `0.05 m/s` command first changed ticks at about 73 ms and stopped changing at about 586 ms; explicit zero commands followed. The vehicle has no standard physical e-stop. The phone web UI red stop did not override a continuous ROS command and is not an independent e-stop. In a later lifted trial, manually cutting ESP32 power about 1.3 s after motion began caused telemetry loss and the operator visually confirmed that the tracks stopped. Repowering caused no motion; ROS returned with new boot ID `2491872445`, command source 0, and zero ticks. This cutoff is accepted only for supervised low-speed calibration with a dedicated operator able to reach it immediately. Final autonomous-navigation acceptance still requires direct drive-power or hardware-enable interruption.
+- Directional deadband is strongly asymmetric. In forward vehicle motion, the M3/left track did not sustain motion at `0.01-0.03 m/s` and became stable near `0.05 m/s`; in reverse it sustained motion near `0.02 m/s`. Ground-load braking and slip remain pending.
+- ESP32 IMU is currently invalid for fusion. 447 stationary samples had a median acceleration norm of `96.590896 m/s^2`; the driver already scales acceleration to m/s² and the ROS publisher multiplies by standard gravity again. Dynamic gyro is also effectively unresponsive: during externally measured approximately 86° left and 92° right ground turns, bias-corrected integration of all three ROS angular-velocity axes remained near zero and `gyro.z` peaked at only about `0.004 rad/s`. Diagnose sensor refresh/scale, fix, and reflash before IMU/extrinsic fusion work.
+- Raw bags, ESP32 telemetry, metadata, and interpretation are under `calibration_data/2026-09-16_lifted`. The ground-trial procedure is `docs/carbot_ground_calibration_protocol.md`.
 
 ## Live checkpoint: 2026-08-29
 

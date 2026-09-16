@@ -1,5 +1,14 @@
 # Carbot 开发交接记录（2026-09-16）
 
+> 当日真机续测更新：`carbot_msgs` 已解码，Jetson 唯一 wheel odometry 服务已部署；
+> 架空 watchdog、四向符号、方向死区和静止 IMU 已取得原始证据。最新状态见
+> `skills/isaac-amr-project-state/references/current-state.md` 的
+> “Physical Carbot checkpoint: 2026-09-16”，原始数据见
+> `calibration_data/2026-09-16_lifted/README.md`。车辆当前没有标准实体急停；手机网页红色
+> “停止”不能压过持续 ROS 速度命令。架空测试中人工切断 ESP32 供电后，现场目视确认
+> 履带停止，重新上电也未自启。该开关仅允许专人值守的低速受控标定；最终自主导航
+> 验收仍需直接切断驱动动力或硬件使能的标准急停。
+
 ## 当前 Git 状态
 
 - 分支：`codex/carbot-isaac-sim-adaptation`

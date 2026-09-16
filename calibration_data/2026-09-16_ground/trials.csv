@@ -1,0 +1,7 @@
+trial_id,surface,payload_kg,motion,measured_distance_m,measured_yaw_rad,left_tick_delta,right_tick_delta,battery_voltage_v,notes
+forward_0p05_10s,wood_floor,0,forward,0.441,,4962,5045,,left and right field measurements both 0.441 m; cmd 0.05 m/s for 10 s
+reverse_0p05_10s,wood_floor,0,reverse,0.4375,,-4784,-5003,,field measurements left 0.430 m and right 0.445 m with slight tilt; cmd -0.05 m/s for 10 s
+forward_0p05_10s_repeat2,wood_floor,0,forward,0.435,,4782,5022,,field measurements left 0.430 m and right 0.440 m; nose yawed left; cmd 0.05 m/s for 10 s
+reverse_0p05_10s_repeat2,wood_floor,0,reverse,0.4325,,-4822,-5017,,field measurements at nose left 0.425 m and right 0.440 m; nose yawed right; cmd -0.05 m/s for 10 s
+turn_left_composite_0p20,wood_floor,0,turn_left,,1.500983157,-1487,2762,,combined 8 s and 4 s cmd +0.20 rad/s bags; final heading 4 deg short of 90 deg
+turn_right_composite_0p20,wood_floor,0,turn_right,,-1.605702912,1917,-2723,,combined 12 s and 2 s cmd -0.20 rad/s bags; final heading approximately 92 deg

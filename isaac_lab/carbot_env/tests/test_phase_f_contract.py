@@ -111,7 +111,6 @@ def test_hardware_backlog_blocks_policy_release():
         "pending"
     )
     assert {
-        "jetson_odometry_owner",
         "track_slip_surface_variation",
         "actuator_latency_deadband_braking",
         "mid360_origin_and_extrinsics",
@@ -119,6 +118,12 @@ def test_hardware_backlog_blocks_policy_release():
         "observation_parity",
         "real_navigation_acceptance",
     }.issubset(blockers)
+    assert items["jetson_wheel_ticks_decode"]["state"] == (
+        "physical_verified"
+    )
+    assert items["jetson_wheel_ticks_decode"]["blocking_calibration"] is False
+    assert items["jetson_odometry_owner"]["state"] == "physical_verified"
+    assert items["jetson_odometry_owner"]["blocking_calibration"] is False
 
 
 def test_safety_boundary_matches_existing_cmd_vel_limiter(spec):

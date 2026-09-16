@@ -21,14 +21,19 @@ Jetson 项目：
 /home/shenfq/Projects/carbot-ros2
 ```
 
-Agent 用户服务：
+Agent 与轮式里程计用户服务：
 
 ```bash
 ssh isaac-jetson 'systemctl --user status micro-ros-agent.service'
+ssh isaac-jetson 'systemctl --user status carbot-wheel-odometry.service'
 ssh isaac-jetson 'journalctl --user -u micro-ros-agent.service -n 100 --no-pager'
 ```
 
-Jetson 侧只运行 Agent。不要启动 `carbot_driver`，因为它会成为额外的非零 `/cmd_vel` 发布者。
+2026-09-16 已在 Jetson 的 `/home/shenfq/Projects/carbot-ros2` 部署
+`carbot_msgs` 与 `carbot_hardware`。`carbot-wheel-odometry.service` 是唯一
+`/wheel_ticks -> /odom` 及 `odom -> base_footprint` owner，并在 ESP32
+`time_synchronized=true` 后才发布。不要启动 `carbot_driver`，因为它会成为额外的
+非零 `/cmd_vel` 发布者。
 
 ## 工作站真实机器人环境
 
@@ -47,9 +52,12 @@ source /workspace/ros-humble/isaac_3d_lidar_amr_ws/scripts/real_robot_ros_env.sh
 阶段 E 已提供独立的 `launch/carbot_real.launch.py`、`configs/carbot/real.yaml`、实机 Nav2/AMCL 参数和系统时间配置；这些文件已通过静态与启动参数检查，但尚未在真实硬件上完成闭环联调。不得用仿真启动器控制履带车。允许真实 Nav2 加载物理 LAN DDS 配置前，必须逐项验证：
 
 - ESP32 对 `/cmd_vel` 的履带差速换算、限速和指令超时停车已生效。
-- 实体急停有效，第一次运动验证时履带架空。
-- 真实 `/odom` 存在，时间戳和 `frame_id` 正确。
-- `odom -> base_footprint` 是真实底盘 TF，不能使用 Isaac `/chassis/odom` relay。
+- 架空试验已验证外置 ESP32 人工断电开关可停车且重新上电不自启；该开关仅用于
+  专人值守的低速标定。标准硬件急停仍未安装，自主导航验收前必须补齐。
+- `carbot-wheel-odometry.service` active，物理 ROS 图中 `/odom` 发布者恰好一个，
+  时间戳和 `frame_id` 正确。
+- `odom -> base_footprint` 由该 Jetson 服务唯一发布，不能使用 Isaac
+  `/chassis/odom` relay。
 - Mid-360 提供真实点云或 `/scan`，并使用实测 `base_link -> front_3d_lidar` 外参。
 - Nav2、AMCL、RViz 和传感器全部使用系统时间，即 `use_sim_time=false`。
 - AMCL 使用 `manual` 或经过测量的 `fixed` Initial Pose，不使用仿真的 `odom_identity`。
