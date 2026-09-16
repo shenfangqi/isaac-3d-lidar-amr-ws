@@ -23,10 +23,11 @@ bodies and all 12 wheel joints, exposed a two-dimensional action and a
   `TEMP_ESTIMATE_NOT_CALIBRATED`. They are training assumptions, not physical
   confidence intervals.
 - `isaac_lab/carbot_env/hardware_calibration_backlog.yaml` is the persistent
-  Sim-to-Real release gate. All Jetson odometry, radius/separation/slip, actuator,
-  inertial, friction, time/extrinsics, physical watchdog/e-stop, observation
-  parity, and real-navigation items remain pending. Simulation results must not
-  close them and policy release remains blocked.
+  Sim-to-Real release gate. Effective radius `0.02175 m` and effective track
+  separation `0.254 m` are confirmed baselines with real-vehicle acceptance
+  checks pending; they are not missing-calibration blockers. Jetson odometry,
+  slip, actuator dynamics, inertial/friction values, time/extrinsics, physical
+  watchdog/e-stop, observation parity, and real navigation remain blocking.
 - After validation, the dedicated project containers were stopped. No Phase F
   policy has been trained, frozen, exported, or deployed.
 

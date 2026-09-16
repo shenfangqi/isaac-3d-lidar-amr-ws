@@ -94,18 +94,31 @@ def test_hardware_backlog_blocks_policy_release():
     backlog = load_hardware_calibration_backlog()
     assert backlog["status"] == "BLOCKING_SIM_TO_REAL_CALIBRATION"
     assert backlog["policy_release_blocked"] is True
-    items = {item["id"]: item["state"] for item in backlog["items"]}
-    assert all(state == "pending" for state in items.values())
+    items = {item["id"]: item for item in backlog["items"]}
+    blockers = {
+        item_id
+        for item_id, item in items.items()
+        if item["blocking_calibration"]
+    }
+    assert items["effective_radius"]["state"] == "baseline_confirmed"
+    assert items["effective_radius"]["blocking_calibration"] is False
+    assert items["effective_radius"]["release_verification"] == "pending"
+    assert items["effective_track_separation"]["state"] == (
+        "baseline_confirmed"
+    )
+    assert items["effective_track_separation"]["blocking_calibration"] is False
+    assert items["effective_track_separation"]["release_verification"] == (
+        "pending"
+    )
     assert {
         "jetson_odometry_owner",
-        "effective_radius_and_asymmetry",
-        "effective_track_separation_and_slip",
+        "track_slip_surface_variation",
         "actuator_latency_deadband_braking",
         "mid360_origin_and_extrinsics",
         "command_watchdog_and_estop",
         "observation_parity",
         "real_navigation_acceptance",
-    }.issubset(items)
+    }.issubset(blockers)
 
 
 def test_safety_boundary_matches_existing_cmd_vel_limiter(spec):

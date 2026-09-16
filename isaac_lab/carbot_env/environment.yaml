@@ -56,4 +56,4 @@ domain_randomization:
 sim_to_real:
   hardware_calibration_backlog: hardware_calibration_backlog.yaml
   policy_freeze_allowed: false
-  reason: Jetson odometry, latency, slip, actuator and sensor extrinsics remain unvalidated
+  reason: Jetson odometry, slip, actuator dynamics and sensor extrinsics remain unvalidated; effective radius and track-separation baselines are confirmed

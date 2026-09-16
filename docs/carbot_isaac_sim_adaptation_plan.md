@@ -267,7 +267,8 @@ Nav2：
 加速度限制、耦合轮速饱和和 500 ms watchdog 后才映射到 12 个轮关节。第一版
 policy observation 包含相对目标、平面速度、重力投影、72 束 LiDAR、5 x 5
 高度采样和上一动作，不包含 Isaac ground-truth 位姿。任务、奖励和课程配置与
-USD 解耦；课程与左右履带直接 action 暂不启用。Jetson 里程计、有效轮径/轮距、
+USD 解耦；课程与左右履带直接 action 暂不启用。有效轮径 `0.02175 m` 与
+有效轮距 `0.254 m` 已确认为基线，只保留真车验收复核。Jetson 里程计、
 侧滑、执行器、惯量、摩擦、传感器外参和实机安全验收仍由
 `isaac_lab/carbot_env/hardware_calibration_backlog.yaml` 持续阻塞策略发布。
 

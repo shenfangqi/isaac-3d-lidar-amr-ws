@@ -178,7 +178,9 @@ rviz2 -d \
 Carbot USD，但策略只接触与 Nav2/真机一致的高层 Twist 和可迁移观察量。当前
 动力学与随机化仍标记为 `TEMP_ESTIMATE_NOT_CALIBRATED`，且
 [`hardware_calibration_backlog.yaml`](isaac_lab/carbot_env/hardware_calibration_backlog.yaml)
-会在 Jetson 里程计、履带运动学、执行器、摩擦和传感器外参完成实测前阻止策略发布。
+会在 Jetson 里程计、履带侧滑、执行器动态、摩擦和传感器外参完成实测前阻止策略发布。
+有效半径 `0.02175 m` 和有效轮距 `0.254 m` 已是确认基线，只保留真车验收复核，
+不再作为缺失标定阻塞项。
 运行方法和验证边界见该目录的 README。
 
 需要通过桌面 AppImage 检查 Isaac Lab 场景时，必须使用该 README 中记录的

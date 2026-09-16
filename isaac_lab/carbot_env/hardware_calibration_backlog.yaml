@@ -1,48 +1,69 @@
 schema_version: 1
 status: BLOCKING_SIM_TO_REAL_CALIBRATION
 policy_release_blocked: true
-updated: 2026-09-15
+updated: 2026-09-16
 
 items:
   - id: jetson_wheel_ticks_decode
     state: pending
+    blocking_calibration: true
     evidence_required: Decode live carbot_msgs WheelTicks at 50 Hz on Jetson/workstation.
   - id: jetson_odometry_owner
     state: pending
+    blocking_calibration: true
     evidence_required: Verify exactly one /wheel_ticks -> /odom and odom -> base_footprint owner.
-  - id: effective_radius_and_asymmetry
+  - id: effective_radius
+    state: baseline_confirmed
+    blocking_calibration: false
+    baseline_value_m: 0.02175
+    release_verification: pending
+    evidence_required: Confirm the accepted baseline with forward and reverse measured 1 m trials; use the result as acceptance evidence, not as a missing calibration gate.
+  - id: effective_track_separation
+    state: baseline_confirmed
+    blocking_calibration: false
+    baseline_value_m: 0.254
+    release_verification: pending
+    evidence_required: Confirm the accepted baseline with left/right 90 and 360 degree trials; use the result as acceptance evidence, not as a missing calibration gate.
+  - id: track_slip_surface_variation
     state: pending
-    evidence_required: Forward and reverse measured 1 m trials with left/right error.
-  - id: effective_track_separation_and_slip
-    state: pending
-    evidence_required: Left/right 90 and 360 degree trials on representative floors.
+    blocking_calibration: true
+    evidence_required: Measure longitudinal and turning slip on representative floors and under representative payloads.
   - id: actuator_latency_deadband_braking
     state: pending
+    blocking_calibration: true
     evidence_required: Timestamped command/RPM/PWM/voltage step and stop trials.
   - id: mass_com_inertia
     state: pending
+    blocking_calibration: true
     evidence_required: Measured mass, support-point center of mass, and CAD or pendulum inertia estimate.
   - id: track_friction
     state: pending
+    blocking_calibration: true
     evidence_required: Controlled pull or incline tests including longitudinal/lateral slip.
   - id: imu_extrinsics_and_time
     state: pending
+    blocking_calibration: true
     evidence_required: Measured imu_link transform and synchronized IMU/wheel timestamps.
   - id: mid360_origin_and_extrinsics
     state: pending
+    blocking_calibration: true
     evidence_required: Verify Livox origin O, especially Z, and base_link transform on final assembly.
   - id: command_watchdog_and_estop
     state: pending
+    blocking_calibration: true
     evidence_required: Physical 500 ms timeout and independent emergency-stop tests.
   - id: observation_parity
     state: pending
+    blocking_calibration: true
     evidence_required: Compare real observation units, rate, latency, dropout and normalization with training.
   - id: real_navigation_acceptance
     state: pending
+    blocking_calibration: true
     evidence_required: Manual AMCL initialization and guarded 0.10 m/s short-goal validation.
 
 rules:
   - Never replace a pending state with a simulation-only result.
+  - Confirmed effective radius and track-separation baselines require real-vehicle acceptance evidence but are not missing-calibration blockers.
   - Feed measured ranges back to the canonical parameter source and domain randomization.
   - Do not tune Nav2 to conceal odometry, TF, actuator, or sensor-calibration errors.
   - Do not freeze or deploy a policy while policy_release_blocked is true.

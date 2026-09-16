@@ -73,9 +73,11 @@ successful policy training.
 ## Sim-to-Real gate
 
 [`hardware_calibration_backlog.yaml`](hardware_calibration_backlog.yaml) is a
-persistent release gate. Jetson wheel-tick decoding and odometry ownership,
-effective radius/track separation, slip, latency, deadband, braking, inertial
+persistent release gate. Effective radius `0.02175 m` and effective track
+separation `0.254 m` are confirmed baselines; their real-vehicle trials are
+acceptance checks rather than missing-calibration blockers. Jetson wheel-tick
+decoding and odometry ownership, slip, latency, deadband, braking, inertial
 parameters, friction, IMU/Mid-360 extrinsics, physical watchdog/e-stop, and
-real observation parity are still pending. Simulation-only results must never
-close those items. Measured values must flow back to the canonical Carbot
+real observation parity remain blocking. Simulation-only results must never
+close blocking items. Measured values must flow back to the canonical Carbot
 parameter source before domain-randomization ranges or a policy are frozen.

@@ -56,9 +56,11 @@ G7 中接触解析的瞬时同侧轮速差只作信息记录。当前
 
 以下项目仍以
 [`hardware_calibration_backlog.yaml`](../isaac_lab/carbot_env/hardware_calibration_backlog.yaml)
-为准：Jetson wheel tick 解码与里程计唯一归属、有效轮径/轮距和左右不对称、
-履带侧滑、执行器延迟/死区/制动、质量/重心/惯量、摩擦、IMU 与 MID360
+为准：Jetson wheel tick 解码与里程计唯一归属、履带侧滑、
+执行器延迟/死区/制动、质量/重心/惯量、摩擦、IMU 与 MID360
 外参和时间同步、实体 watchdog/急停、观察量一致性以及真机导航验收。
+有效半径 `0.02175 m` 和有效轮距 `0.254 m` 是确认基线；1 m 与
+90°/360° 真车试验属于发布验收复核，不是缺失标定阻塞项。
 
 开始真机测试前必须关闭仿真 ROS 图，架空履带并确认实体急停；在真实
 watchdog 和唯一 odom/TF 发布责任得到验证前不得发送非零速度命令。
