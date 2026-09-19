@@ -39,21 +39,33 @@ def test_policy_action_is_deployable_high_level_twist(spec):
 
 def test_limits_and_randomization_resolve_from_single_parameter_sources(spec):
     robot = load_robot_parameters()
-    with (PROJECT_ROOT / "configs/carbot/sim.yaml").open(
+    with (PROJECT_ROOT / "configs/carbot/real.yaml").open(
         encoding="utf-8"
     ) as stream:
-        simulation = yaml.safe_load(stream)
+        deployment = yaml.safe_load(stream)
     limits = spec["action"]["limits"]
-    assert limits["linear_velocity_mps"] == simulation["velocity_limits"][
+    assert limits["linear_velocity_mps"] == deployment["velocity_limits"][
         "linear_mps"
     ]
-    assert limits["angular_velocity_rad_s"] == simulation["velocity_limits"][
+    assert limits["angular_velocity_rad_s"] == deployment["velocity_limits"][
         "angular_rad_s"
     ]
+    assert limits["linear_acceleration_mps2"] == deployment[
+        "acceleration_limits"
+    ]["linear_mps2"]
+    assert limits["angular_acceleration_rad_s2"] == deployment[
+        "acceleration_limits"
+    ]["angular_rad_s2"]
     assert limits["watchdog_timeout_s"] == robot["control"][
         "cmd_vel_timeout_s"
     ]
     assert spec["domain_randomization"] == robot["domain_randomization"]
+    assert spec["hardware_response"] == robot["hardware_response"]
+    assert spec["action"]["hardware_response"]["track_deadband"] == {
+        "forward_min_sustainable_mps": 0.05,
+        "reverse_min_sustainable_mps": 0.02,
+        "reliable_in_place_angular_command_rad_s": [0.40, 0.50],
+    }
     assert spec["domain_randomization"]["calibration_status"] == (
         "TEMP_ESTIMATE_NOT_CALIBRATED"
     )
@@ -102,13 +114,15 @@ def test_hardware_backlog_blocks_policy_release():
     }
     assert items["effective_radius"]["state"] == "baseline_confirmed"
     assert items["effective_radius"]["blocking_calibration"] is False
-    assert items["effective_radius"]["release_verification"] == "pending"
+    assert items["effective_radius"]["release_verification"] == (
+        "wood_floor_no_payload_complete"
+    )
     assert items["effective_track_separation"]["state"] == (
         "baseline_confirmed"
     )
     assert items["effective_track_separation"]["blocking_calibration"] is False
     assert items["effective_track_separation"]["release_verification"] == (
-        "pending"
+        "wood_floor_no_payload_complete"
     )
     assert {
         "track_slip_surface_variation",
@@ -124,6 +138,9 @@ def test_hardware_backlog_blocks_policy_release():
     assert items["jetson_wheel_ticks_decode"]["blocking_calibration"] is False
     assert items["jetson_odometry_owner"]["state"] == "physical_verified"
     assert items["jetson_odometry_owner"]["blocking_calibration"] is False
+    assert items["real_navigation_acceptance"]["state"] == (
+        "supervised_1p4m_route_verified_hardware_estop_pending"
+    )
 
 
 def test_safety_boundary_matches_existing_cmd_vel_limiter(spec):

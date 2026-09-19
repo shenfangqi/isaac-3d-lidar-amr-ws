@@ -1,0 +1,17 @@
+[Unit]
+Description=Carbot robot description and static sensor transforms
+After=network-online.target
+ConditionPathExists=/home/shenfq/Projects/carbot-ros2/install/carbot_description/share/carbot_description/launch/description.launch.py
+
+[Service]
+Type=simple
+Environment=ROS_DOMAIN_ID=0
+WorkingDirectory=/home/shenfq/Projects/carbot-ros2
+ExecStart=/bin/bash -lc 'source /opt/ros/humble/setup.bash && source /home/shenfq/Projects/carbot-ros2/install/local_setup.bash && exec ros2 launch carbot_description description.launch.py use_sim_time:=false'
+Restart=on-failure
+RestartSec=2
+KillSignal=SIGINT
+TimeoutStopSec=10
+
+[Install]
+WantedBy=default.target

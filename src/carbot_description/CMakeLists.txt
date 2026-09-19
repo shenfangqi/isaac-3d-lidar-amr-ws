@@ -3,7 +3,7 @@ project(carbot_description)
 
 find_package(ament_cmake REQUIRED)
 
-install(DIRECTORY config launch urdf
+install(DIRECTORY config launch systemd urdf
   DESTINATION share/${PROJECT_NAME}
 )
 

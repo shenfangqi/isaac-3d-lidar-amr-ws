@@ -55,10 +55,12 @@ docker exec -it ros2-dev-humble bash -lc '
 ```
 
 The simulated point cloud is `/livox/lidar`; its frame is the Carbot
-compatibility frame `front_3d_lidar`, colocated with `lidar_link` and
-`livox_frame` until the manufacturer coordinate origin O is measured. The
-housing bottom is at `0.157 m`, its top is at `0.222 m`, and the current RTX
-origin offset from the housing bottom is explicitly temporary and uncalibrated.
+compatibility frame `front_3d_lidar`, colocated with `livox_frame`. The official
+mechanical drawing places coordinate origin O `0.047 m` above the housing
+bottom. With the measured housing top at `0.222 m` and the official `0.060 m`
+housing height, the modeled housing bottom is at `0.162 m` and the point-cloud
+origin is at `0.209 m` above ground. An installed floor-plane fit measured
+approximately `0.2066 m`, providing an independent check of the model.
 
 For RViz inspection, run the Carbot description and open the Phase D config:
 

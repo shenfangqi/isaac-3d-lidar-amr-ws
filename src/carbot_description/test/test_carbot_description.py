@@ -43,7 +43,7 @@ def test_required_frame_tree_exists(description):
     assert parents["lidar_link"] == "base_link"
     assert parents["livox_frame"] == "lidar_link"
     assert parents["front_3d_lidar"] == "lidar_link"
-    assert parents["imu_link"] == "lidar_link"
+    assert parents["imu_link"] == "livox_frame"
 
 
 def test_twelve_wheel_joints_are_continuous_and_never_steering(description):
@@ -94,7 +94,7 @@ def test_lidar_housing_top_matches_measured_height(description, parameters):
         - lidar["housing_height_m"]
         - geometry["base_link_height_m"]
     )
-    assert expected_mount_z == pytest.approx(0.067)
+    assert expected_mount_z == pytest.approx(0.072)
 
     lidar_joint = next(
         joint for joint in description.findall("joint")
@@ -120,7 +120,7 @@ def test_lidar_housing_top_matches_measured_height(description, parameters):
         housing.find("geometry/cylinder").attrib["length"]
     )
     housing_center_z = float(housing.find("origin").attrib["xyz"].split()[2])
-    assert housing_height == pytest.approx(0.065)
+    assert housing_height == pytest.approx(0.060)
     assert housing_center_z == pytest.approx(housing_height / 2.0)
     modeled_top_height = (
         geometry["base_link_height_m"]
@@ -129,6 +129,27 @@ def test_lidar_housing_top_matches_measured_height(description, parameters):
         + housing_height / 2.0
     )
     assert modeled_top_height == pytest.approx(0.222)
+
+    fixed_joints = {
+        joint.attrib["name"]: joint for joint in description.findall("joint")
+    }
+    expected_origin_z = lidar[
+        "coordinate_origin_height_from_housing_bottom_m"
+    ]
+    for name in (
+        "lidar_link_to_livox_frame",
+        "lidar_link_to_front_3d_lidar",
+    ):
+        xyz = [
+            float(value)
+            for value in fixed_joints[name].find("origin").attrib["xyz"].split()
+        ]
+        assert xyz == pytest.approx([0.0, 0.0, expected_origin_z])
+
+    livox_height_from_ground = (
+        geometry["base_link_height_m"] + expected_mount_z + expected_origin_z
+    )
+    assert livox_height_from_ground == pytest.approx(0.209)
 
 
 def test_wheel_centers_use_physical_geometry(description, parameters):

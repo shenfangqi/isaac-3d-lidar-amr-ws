@@ -81,24 +81,50 @@ control:
     policy: scale_both_sides_equally
     expression: abs(v) + abs(omega) * effective_track_separation_m / 2 <= effective_sprocket_radius_m * max_wheel_velocity_rad_s
 
+# Physical response evidence from the supervised wood-floor acceptance runs.
+# These values describe the present vehicle, not universal safety limits.
+hardware_response:
+  calibration_status: PARTIAL_PHYSICAL_EVIDENCE
+  surface: wood_floor
+  added_payload_kg: 0.0
+  track_deadband:
+    forward_min_sustainable_mps: 0.05
+    reverse_min_sustainable_mps: 0.02
+    reliable_in_place_angular_command_rad_s: [0.40, 0.50]
+  timing:
+    first_motion_latency_s: 0.073
+    ground_stop_tail_s: [0.57, 0.92]
+  observed_motion:
+    longitudinal_external_minus_encoder_fraction: [0.0036, 0.0206]
+    yaw_external_over_wheel_gain: [0.976, 1.025]
+  navigation:
+    max_linear_velocity_mps: 0.10
+    max_angular_velocity_rad_s: 0.50
+    rpp_max_angular_acceleration_rad_s2: 10.0
+    smoother_angular_acceleration_rad_s2: 2.0
+
 sensors:
   mid360:
     parent_frame: lidar_link
     real_frame: livox_frame
     simulation_compatibility_frame: front_3d_lidar
     simulation_profile_name: Livox_Mid360_Approx
-    # Temporary until the manufacturer coordinate origin O is measured.
-    simulation_rtx_origin_from_housing_bottom_m: [0.0, 0.0, 0.0]
+    coordinate_origin_height_from_housing_bottom_m: 0.047
+    simulation_rtx_origin_from_housing_bottom_m: [0.0, 0.0, 0.047]
     mount_translation_xy_from_base_link_m: [-0.003, 0.0]
     housing_top_height_from_ground_m: 0.222
-    housing_height_m: 0.065
+    housing_height_m: 0.060
     rotation_rpy_rad: [0.0, 0.0, 0.0]
     pointcloud_topic: /livox/lidar
+    pointcloud_type: sensor_msgs/msg/PointCloud2
     pointcloud_rate_hz: 10
-    imu_topic: /livox/imu
+    vendor_imu_topic: /livox/imu
+    imu_topic: /mid360/imu/data_raw
+    acceleration_input_unit: g
+    acceleration_output_unit: m/s^2
     imu_rate_hz: 200
     observed_points_per_frame: [19584, 20448]
-    z_origin_requires_final_assembly_verification: true
+    z_origin_requires_final_assembly_verification: false
     visual_proxy:
       radius_m: 0.025
 
@@ -135,10 +161,10 @@ dynamics:
 
 sensor_frame_assumptions:
   calibration_status: TEMP_ESTIMATE_NOT_CALIBRATED
-  imu_parent_frame: lidar_link
+  imu_parent_frame: livox_frame
   imu_translation_m: [0.0, 0.0, 0.0]
   imu_rotation_rpy_rad: [0.0, 0.0, 0.0]
-  note: imu_link is temporarily colocated with the MID360 origin pending installation verification.
+  note: imu_link uses the Livox data frame axes; the internal IMU lever arm still requires manufacturer data or dynamic validation.
 
 domain_randomization:
   calibration_status: TEMP_ESTIMATE_NOT_CALIBRATED
@@ -152,6 +178,11 @@ domain_randomization:
   friction_scale: [0.6, 1.4]
   actuator_strength_scale: [0.75, 1.25]
   command_latency_s: [0.02, 0.15]
+  forward_track_deadband_mps: [0.04, 0.06]
+  reverse_track_deadband_mps: [0.015, 0.03]
+  longitudinal_gain: [0.97, 1.03]
+  yaw_gain: [0.97, 1.03]
+  stop_tail_s: [0.5, 1.0]
   point_dropout_fraction: [0.0, 0.05]
 
 # Provenance IDs make measured, source-derived, ground-calibrated, observed,
@@ -182,16 +213,31 @@ provenance:
     status: confirmed_baseline
     scope: [robot.drive_type, kinematics.encoder_counts_per_revolution, control, interfaces.wheel_ticks]
     note: Firmware and controller interface values supplied for this adaptation.
+  PHYSICAL_EVIDENCE_CARBOT_2026_09_19:
+    category: measured_value
+    status: partial_physical_evidence
+    scope: [hardware_response]
+    note: Supervised wood-floor, zero-added-payload evidence. It constrains the current deployment profile and domain-randomization envelope but does not replace multi-surface or payload calibration.
   MEASURED_VALUE_MID360_MOUNT_2026_09_13:
     category: measured_value
-    status: z_origin_pending_final_assembly_verification
-    scope: [sensors.mid360.parent_frame, sensors.mid360.real_frame, sensors.mid360.simulation_compatibility_frame, sensors.mid360.mount_translation_xy_from_base_link_m, sensors.mid360.housing_top_height_from_ground_m, sensors.mid360.housing_height_m, sensors.mid360.rotation_rpy_rad, sensors.mid360.z_origin_requires_final_assembly_verification]
-    note: Housing top is 0.222 m above ground and housing height is 0.065 m; the Livox coordinate origin O inside the housing still requires verification.
+    status: confirmed_baseline
+    scope: [sensors.mid360.parent_frame, sensors.mid360.real_frame, sensors.mid360.simulation_compatibility_frame, sensors.mid360.mount_translation_xy_from_base_link_m, sensors.mid360.housing_top_height_from_ground_m, sensors.mid360.rotation_rpy_rad]
+    note: Housing top is 0.222 m above ground. On the final assembly the M12 connector faces the vehicle rear; the manufacturer top-view coordinate drawing places the connector on the sensor -X side, so sensor +X faces the vehicle front and nominal yaw is 0 rad. Mount XY and nominal roll/pitch come from the assembly measurements; sub-degree RPY refinement remains a separate calibration item.
+  MANUFACTURER_AND_POINTCLOUD_VALUE_MID360_2026_09_18:
+    category: manufacturer_specification
+    status: confirmed_baseline
+    scope: [sensors.mid360.coordinate_origin_height_from_housing_bottom_m, sensors.mid360.simulation_rtx_origin_from_housing_bottom_m, sensors.mid360.housing_height_m, sensors.mid360.z_origin_requires_final_assembly_verification]
+    note: The official mechanical drawing gives a 0.060 m housing height and origin O at 0.047 m above the bottom. Together with the measured 0.222 m housing top this predicts O at 0.209 m above ground; an installed point-cloud floor fit measured 0.2066 m, confirming the baseline within about 2.4 mm.
   OBSERVED_VALUE_MID360_2026_09_13:
     category: observed_value
     status: confirmed_baseline
-    scope: [sensors.mid360.pointcloud_topic, sensors.mid360.pointcloud_rate_hz, sensors.mid360.imu_topic, sensors.mid360.imu_rate_hz, sensors.mid360.observed_points_per_frame]
+    scope: [sensors.mid360.pointcloud_topic, sensors.mid360.pointcloud_type, sensors.mid360.pointcloud_rate_hz, sensors.mid360.imu_rate_hz, sensors.mid360.observed_points_per_frame]
     note: Topics, rates, and observed real-sensor points-per-frame range.
+  SOURCE_CODE_VALUE_MID360_IMU_ADAPTER_2026_09_18:
+    category: source_code_value
+    status: implemented_design
+    scope: [sensors.mid360.vendor_imu_topic, sensors.mid360.imu_topic, sensors.mid360.acceleration_input_unit, sensors.mid360.acceleration_output_unit]
+    note: Livox ROS Driver 2 forwards accelerometer values in g; the adapter publishes ROS-compliant acceleration in m/s^2 and marks orientation unavailable.
   DESIGN_VALUE_CARBOT_SIMULATION_2026_09_13:
     category: design_value
     status: implemented_design
@@ -200,5 +246,5 @@ provenance:
   TEMP_ESTIMATE_NOT_CALIBRATED:
     category: temporary_estimate
     status: TEMP_ESTIMATE_NOT_CALIBRATED
-    scope: [sensors.mid360.visual_proxy, sensors.mid360.simulation_rtx_origin_from_housing_bottom_m, dynamics, sensor_frame_assumptions, domain_randomization]
+    scope: [sensors.mid360.visual_proxy, dynamics, sensor_frame_assumptions, domain_randomization]
     note: Startup simulation assumptions and training ranges, not calibration confidence intervals.

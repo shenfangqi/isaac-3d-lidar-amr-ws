@@ -153,10 +153,31 @@ class CarbotTwistAction(ActionTerm):
             max=1.0,
         )
         self._wheel_scale[:] = scale
-        self._applied_actions[:] = self._processed_actions * scale.unsqueeze(1)
+        left = self._apply_track_deadband(left * scale)
+        right = self._apply_track_deadband(right * scale)
+        self._applied_actions[:, 0] = radius * (left + right) / 2.0
+        self._applied_actions[:, 1] = (
+            radius * (right - left) / self.cfg.effective_track_separation_m
+        )
         sign = self.cfg.wheel_joint_coordinate_sign
-        self._left_targets[:] = (sign * left * scale).unsqueeze(1)
-        self._right_targets[:] = (sign * right * scale).unsqueeze(1)
+        self._left_targets[:] = (sign * left).unsqueeze(1)
+        self._right_targets[:] = (sign * right).unsqueeze(1)
+
+    def _apply_track_deadband(self, wheel_velocity_rad_s):
+        """Zero per-track targets below the measured directional threshold."""
+        radius = self.cfg.effective_sprocket_radius_m
+        forward = self.cfg.forward_track_deadband_mps / radius
+        reverse = self.cfg.reverse_track_deadband_mps / radius
+        threshold = torch.where(
+            wheel_velocity_rad_s >= 0.0,
+            torch.full_like(wheel_velocity_rad_s, forward),
+            torch.full_like(wheel_velocity_rad_s, reverse),
+        )
+        return torch.where(
+            torch.abs(wheel_velocity_rad_s) >= threshold,
+            wheel_velocity_rad_s,
+            torch.zeros_like(wheel_velocity_rad_s),
+        )
 
     def _apply_ideal_planar_kinematics(self, dt_s):
         """Enforce the bounded planar velocity while calibration is pending.
@@ -295,4 +316,6 @@ class CarbotTwistActionCfg(ActionTermCfg):
     effective_sprocket_radius_m: float = MISSING
     wheel_joint_coordinate_sign: float = MISSING
     watchdog_timeout_s: float = MISSING
+    forward_track_deadband_mps: float = MISSING
+    reverse_track_deadband_mps: float = MISSING
     ideal_kinematic: bool = False

@@ -105,6 +105,58 @@ def test_ideal_sim_does_not_apply_real_robot_trim(parameters):
     assert control["high_fidelity_right_straight_trim"] == 1.0005
 
 
+def test_physical_response_envelope_matches_acceptance_evidence(parameters):
+    response = parameters["hardware_response"]
+    deadband = response["track_deadband"]
+    assert response["calibration_status"] == "PARTIAL_PHYSICAL_EVIDENCE"
+    assert response["surface"] == "wood_floor"
+    assert response["added_payload_kg"] == 0.0
+    assert deadband["forward_min_sustainable_mps"] == 0.05
+    assert deadband["reverse_min_sustainable_mps"] == 0.02
+    assert deadband["reliable_in_place_angular_command_rad_s"] == [
+        0.40,
+        0.50,
+    ]
+    assert response["timing"]["first_motion_latency_s"] == 0.073
+    assert response["timing"]["ground_stop_tail_s"] == [0.57, 0.92]
+
+
+def test_randomization_ranges_cover_observed_response(parameters):
+    response = parameters["hardware_response"]
+    randomization = parameters["domain_randomization"]
+
+    def covered(value, bounds):
+        return bounds[0] <= value <= bounds[1]
+
+    assert covered(
+        response["track_deadband"]["forward_min_sustainable_mps"],
+        randomization["forward_track_deadband_mps"],
+    )
+    assert covered(
+        response["track_deadband"]["reverse_min_sustainable_mps"],
+        randomization["reverse_track_deadband_mps"],
+    )
+    assert covered(
+        response["timing"]["first_motion_latency_s"],
+        randomization["command_latency_s"],
+    )
+    assert randomization["stop_tail_s"][0] <= min(
+        response["timing"]["ground_stop_tail_s"]
+    )
+    assert randomization["stop_tail_s"][1] >= max(
+        response["timing"]["ground_stop_tail_s"]
+    )
+    assert randomization["longitudinal_gain"][0] <= 1.0 <= (
+        randomization["longitudinal_gain"][1]
+    )
+    assert randomization["yaw_gain"][0] <= min(
+        response["observed_motion"]["yaw_external_over_wheel_gain"]
+    )
+    assert randomization["yaw_gain"][1] >= max(
+        response["observed_motion"]["yaw_external_over_wheel_gain"]
+    )
+
+
 def test_temporary_values_are_explicitly_unvalidated(parameters):
     marker = "TEMP_ESTIMATE_NOT_CALIBRATED"
     assert parameters["dynamics"]["calibration_status"] == marker
@@ -113,7 +165,6 @@ def test_temporary_values_are_explicitly_unvalidated(parameters):
     assert temporary_source["status"] == marker
     assert set(temporary_source["scope"]) == {
         "sensors.mid360.visual_proxy",
-        "sensors.mid360.simulation_rtx_origin_from_housing_bottom_m",
         "dynamics",
         "sensor_frame_assumptions",
         "domain_randomization",
@@ -146,6 +197,7 @@ def test_critical_values_have_expected_provenance(parameters):
             "measured_value",
             "ground_calibrated_value",
             "source_code_value",
+            "manufacturer_specification",
             "observed_value",
             "design_value",
             "temporary_estimate",
@@ -158,11 +210,15 @@ def test_mid360_runtime_contract(parameters):
     lidar = parameters["sensors"]["mid360"]
     assert lidar["simulation_profile_name"] == "Livox_Mid360_Approx"
     assert lidar["pointcloud_topic"] == "/livox/lidar"
+    assert lidar["vendor_imu_topic"] == "/livox/imu"
+    assert lidar["imu_topic"] == "/mid360/imu/data_raw"
+    assert lidar["acceleration_input_unit"] == "g"
+    assert lidar["acceleration_output_unit"] == "m/s^2"
     assert lidar["simulation_compatibility_frame"] == "front_3d_lidar"
     assert lidar["simulation_rtx_origin_from_housing_bottom_m"] == [
         0.0,
         0.0,
-        0.0,
+        0.047,
     ]
 
 

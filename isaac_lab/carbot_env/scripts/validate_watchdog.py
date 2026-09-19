@@ -11,7 +11,7 @@ from isaaclab.app import AppLauncher
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--startup-delay", type=float, default=12.0)
 parser.add_argument("--zero-seconds", type=float, default=3.0)
-parser.add_argument("--command-speed", type=float, default=0.20)
+parser.add_argument("--command-speed", type=float, default=0.10)
 parser.add_argument("--command-seconds", type=float, default=3.0)
 parser.add_argument("--watchdog-observe-seconds", type=float, default=3.0)
 parser.add_argument("--hold-seconds", type=float, default=3600.0)

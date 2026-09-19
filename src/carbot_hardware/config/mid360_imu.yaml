@@ -1,0 +1,5 @@
+mid360_imu_adapter:
+  ros__parameters:
+    input_topic: /livox/imu
+    output_topic: /mid360/imu/data_raw
+    gravity_mps2: 9.80665

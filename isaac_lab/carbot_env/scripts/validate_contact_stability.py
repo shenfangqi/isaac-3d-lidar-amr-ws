@@ -200,13 +200,13 @@ def main():
     monitor.begin_motion_reference()
     left_start = action_term.left_wheel_travel_rad[0].clone()
     right_start = action_term.right_wheel_travel_rad[0].clone()
-    monitor.run(command(linear=0.20), 3.0, "FORWARD 0.20 m/s")
+    monitor.run(command(linear=0.10), 3.0, "FORWARD 0.10 m/s")
     monitor.run(zeros, 2.0, "STOP-1")
-    monitor.run(command(linear=-0.20), 3.0, "REVERSE 0.20 m/s")
+    monitor.run(command(linear=-0.10), 3.0, "REVERSE 0.10 m/s")
     monitor.run(zeros, 2.0, "STOP-2")
-    monitor.run(command(angular=0.35), 5.0, "IN-PLACE TURN 0.35 rad/s")
+    monitor.run(command(angular=0.50), 5.0, "IN-PLACE TURN 0.50 rad/s")
     monitor.run(zeros, 2.0, "STOP-3")
-    monitor.run(command(linear=0.12, angular=-0.35), 6.0, "RIGHT ARC")
+    monitor.run(command(linear=0.10, angular=-0.50), 6.0, "RIGHT ARC")
     monitor.run(zeros, 3.0, "FINAL STOP")
 
     final_position = robot.data.root_pos_w[0, :2]

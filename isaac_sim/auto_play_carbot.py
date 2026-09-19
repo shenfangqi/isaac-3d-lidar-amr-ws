@@ -276,7 +276,7 @@ def main():
         f"{mid360_config['pointcloud_topic']} "
         f"[frame_id={mid360_config['frame_id']}]; "
         f"rate={mid360_config['pointcloud_rate_hz']} Hz; "
-        "RTX origin is the temporary housing-bottom reference",
+        "RTX origin uses the verified Livox O offset",
         flush=True,
     )
 

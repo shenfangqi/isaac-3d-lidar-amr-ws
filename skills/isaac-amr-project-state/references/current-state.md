@@ -1,6 +1,32 @@
 # Current authoritative project state
 
-Newest checkpoint: [Physical Carbot checkpoint: 2026-09-16](#physical-carbot-checkpoint-2026-09-16).
+Newest checkpoint: [Physical Carbot software closure: 2026-09-19](#physical-carbot-software-closure-2026-09-19).
+
+## Physical Carbot software closure: 2026-09-19
+
+- The supervised mapping/return acceptance covered about `1.435 m`. Saved-map
+  navigation returned `SUCCEEDED`; final map position/yaw error was about
+  `5.7 cm/9.6 deg`, and a separate Spin restored the route-start heading to
+  within about `0.2 deg`. No longer artificial distance trial is required.
+- The canonical parameter source now records partial physical evidence for
+  directional track deadband (`0.05 m/s` forward, `0.02 m/s` reverse), reliable
+  turn command (`0.40--0.50 rad/s`), first-motion latency, stop tail, and
+  longitudinal/yaw gain. Isaac Lab consumes the real deployment envelope
+  (`0.10 m/s`, `0.50 rad/s`, `0.20 m/s^2`, `2.00 rad/s^2`) and applies the
+  measured directional deadband per track.
+- Jetson saved-map startup is consolidated in
+  `scripts/jetson_navigation_start.sh`: inactive launch and read-only preflight,
+  localization activation, initial-pose plus `map -> odom` confirmation, then
+  navigation activation and final silent velocity-topology checks. Diagnostic
+  mode remains isolated on `/cmd_vel_diagnostic`.
+- Isaac regression passed 43 tests with 8 optional-dependency skips. Headless
+  checks passed at `0.9935 m` for the one-metre run, symmetric `+/-138.69 deg`
+  turns, and a `0.510 s` watchdog trigger. The Isaac container was stopped.
+- ESP32 was powered down by the operator after a battery alarm. Do not request
+  further physical motion until the battery and safety conditions are restored.
+  The standard hardware e-stop, multi-surface/payload calibration, precision
+  MID-360 extrinsics, and periodic ESP32 time resynchronization still block
+  unattended autonomy and policy release.
 
 ## Shutdown checkpoint: 2026-09-15 — Carbot Phase F foundation complete
 

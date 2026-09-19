@@ -15,6 +15,7 @@
   <xacro:property name="wheel_mass" value="${p['dynamics']['per_wheel_mass_kg']}"/>
   <xacro:property name="lidar_housing_height" value="${p['sensors']['mid360']['housing_height_m']}"/>
   <xacro:property name="lidar_mount_z" value="${p['sensors']['mid360']['housing_top_height_from_ground_m'] - lidar_housing_height - p['geometry']['base_link_height_m']}"/>
+  <xacro:property name="livox_origin_z" value="${p['sensors']['mid360']['coordinate_origin_height_from_housing_bottom_m']}"/>
 
   <material name="carbot_blue">
     <color rgba="0.08 0.24 0.55 1.0"/>
@@ -160,13 +161,13 @@
   <link name="livox_frame"/>
   <joint name="lidar_link_to_livox_frame" type="fixed">
     <parent link="lidar_link"/><child link="livox_frame"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <origin xyz="0 0 ${livox_origin_z}" rpy="0 0 0"/>
   </joint>
 
   <link name="front_3d_lidar"/>
   <joint name="lidar_link_to_front_3d_lidar" type="fixed">
     <parent link="lidar_link"/><child link="front_3d_lidar"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <origin xyz="0 0 ${livox_origin_z}" rpy="0 0 0"/>
   </joint>
 
   <link name="imu_link"/>

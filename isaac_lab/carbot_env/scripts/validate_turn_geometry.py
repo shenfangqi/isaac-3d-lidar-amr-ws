@@ -12,7 +12,7 @@ from isaaclab.app import AppLauncher
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--startup-delay", type=float, default=12.0)
 parser.add_argument("--start-trigger-file")
-parser.add_argument("--angular-speed", type=float, default=0.35)
+parser.add_argument("--angular-speed", type=float, default=0.50)
 parser.add_argument("--stop-seconds", type=float, default=3.0)
 parser.add_argument("--hold-seconds", type=float, default=3600.0)
 parser.add_argument("--render-stride", type=int, default=10)

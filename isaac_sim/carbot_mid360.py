@@ -22,6 +22,7 @@ def mid360_runtime_config(parameters):
     return {
         "profile_name": mid360["simulation_profile_name"],
         "pointcloud_topic": mid360["pointcloud_topic"],
+        "pointcloud_type": mid360["pointcloud_type"],
         "pointcloud_rate_hz": pointcloud_rate_hz,
         "frame_skip_count": rounded_step_count - 1,
         "frame_id": mid360["simulation_compatibility_frame"],

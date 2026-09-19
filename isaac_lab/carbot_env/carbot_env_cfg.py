@@ -154,6 +154,12 @@ class ActionsCfg:
             "wheel_joint_coordinate_sign"
         ],
         watchdog_timeout_s=LIMITS["watchdog_timeout_s"],
+        forward_track_deadband_mps=ACTION["hardware_response"][
+            "track_deadband"
+        ]["forward_min_sustainable_mps"],
+        reverse_track_deadband_mps=ACTION["hardware_response"][
+            "track_deadband"
+        ]["reverse_min_sustainable_mps"],
         ideal_kinematic=(
             ROBOT["simulation"]["control_mode"]
             == "ideal_kinematic_tracked_differential"

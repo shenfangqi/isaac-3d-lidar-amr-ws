@@ -1,4 +1,10 @@
 std_msgs/Header header
+uint8 DISCONNECT_NONE=0
+uint8 DISCONNECT_WIFI=1
+uint8 DISCONNECT_EXECUTOR=2
+uint8 DISCONNECT_PUBLISHER=3
+uint8 DISCONNECT_AGENT_PING=4
+uint8 DISCONNECT_ENTITY_INIT=5
 uint64 sequence
 uint32 boot_id
 uint64 device_stamp_us
@@ -10,4 +16,7 @@ bool imu_ready
 uint8 active_command_source
 uint32 invalid_cmd_count
 uint32 reconnect_count
+uint8 last_disconnect_reason
+uint32 consecutive_ping_failures
+uint64 session_uptime_ms
 int64 clock_offset_ns

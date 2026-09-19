@@ -26,6 +26,14 @@ setup(
             os.path.join('share', package_name, 'config/nvblox'),
             glob('config/nvblox/*.yaml')
         ),
+        (
+            os.path.join('share', package_name, 'config/slam_toolbox'),
+            glob('config/slam_toolbox/*.yaml')
+        ),
+        (
+            os.path.join('share', package_name, 'config/nav2'),
+            glob('config/nav2/*.yaml')
+        ),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

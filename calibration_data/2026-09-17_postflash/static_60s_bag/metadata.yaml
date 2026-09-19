@@ -1,0 +1,44 @@
+rosbag2_bagfile_information:
+  version: 5
+  storage_identifier: sqlite3
+  duration:
+    nanoseconds: 58983297151
+  starting_time:
+    nanoseconds_since_epoch: 1789647274003094530
+  message_count: 6136
+  topics_with_message_count:
+    - topic_metadata:
+        name: /wheel_ticks
+        type: carbot_msgs/msg/WheelTicks
+        serialization_format: cdr
+        offered_qos_profiles: "- history: 3\n  depth: 0\n  reliability: 2\n  durability: 2\n  deadline:\n    sec: 9223372036\n    nsec: 854775807\n  lifespan:\n    sec: 9223372036\n    nsec: 854775807\n  liveliness: 1\n  liveliness_lease_duration:\n    sec: 9223372036\n    nsec: 854775807\n  avoid_ros_namespace_conventions: false"
+      message_count: 2950
+    - topic_metadata:
+        name: /imu/data_raw
+        type: sensor_msgs/msg/Imu
+        serialization_format: cdr
+        offered_qos_profiles: "- history: 3\n  depth: 0\n  reliability: 2\n  durability: 2\n  deadline:\n    sec: 9223372036\n    nsec: 854775807\n  lifespan:\n    sec: 9223372036\n    nsec: 854775807\n  liveliness: 1\n  liveliness_lease_duration:\n    sec: 9223372036\n    nsec: 854775807\n  avoid_ros_namespace_conventions: false"
+      message_count: 2950
+    - topic_metadata:
+        name: /carbot/status
+        type: carbot_msgs/msg/CarbotStatus
+        serialization_format: cdr
+        offered_qos_profiles: "- history: 3\n  depth: 0\n  reliability: 2\n  durability: 2\n  deadline:\n    sec: 9223372036\n    nsec: 854775807\n  lifespan:\n    sec: 9223372036\n    nsec: 854775807\n  liveliness: 1\n  liveliness_lease_duration:\n    sec: 9223372036\n    nsec: 854775807\n  avoid_ros_namespace_conventions: false"
+      message_count: 118
+    - topic_metadata:
+        name: /battery_state
+        type: sensor_msgs/msg/BatteryState
+        serialization_format: cdr
+        offered_qos_profiles: "- history: 3\n  depth: 0\n  reliability: 2\n  durability: 2\n  deadline:\n    sec: 9223372036\n    nsec: 854775807\n  lifespan:\n    sec: 9223372036\n    nsec: 854775807\n  liveliness: 1\n  liveliness_lease_duration:\n    sec: 9223372036\n    nsec: 854775807\n  avoid_ros_namespace_conventions: false"
+      message_count: 118
+  compression_format: ""
+  compression_mode: ""
+  relative_file_paths:
+    - carbot_postflash_static_60s_20260917_0.db3
+  files:
+    - path: carbot_postflash_static_60s_20260917_0.db3
+      starting_time:
+        nanoseconds_since_epoch: 1789647274003094530
+      duration:
+        nanoseconds: 58983297151
+      message_count: 6136

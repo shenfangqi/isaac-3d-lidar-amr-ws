@@ -21,10 +21,11 @@ def test_runtime_config_comes_from_canonical_parameters():
     assert config == {
         "profile_name": "Livox_Mid360_Approx",
         "pointcloud_topic": "/livox/lidar",
+        "pointcloud_type": "sensor_msgs/msg/PointCloud2",
         "pointcloud_rate_hz": 10,
         "frame_skip_count": 4,
         "frame_id": "front_3d_lidar",
-        "origin_from_housing_bottom_m": (0.0, 0.0, 0.0),
+        "origin_from_housing_bottom_m": (0.0, 0.0, 0.047),
     }
 
 

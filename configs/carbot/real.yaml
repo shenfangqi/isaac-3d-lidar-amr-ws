@@ -15,4 +15,12 @@ nav2_params_file: /workspace/ros-humble/isaac_3d_lidar_amr_ws/configs/nav2_param
 amcl_params_file: /workspace/ros-humble/isaac_3d_lidar_amr_ws/configs/amcl_params_real.yaml
 velocity_limits:
   linear_mps: 0.10
-  angular_rad_s: 0.30
+  angular_rad_s: 0.50
+acceleration_limits:
+  linear_mps2: 0.20
+  angular_rad_s2: 2.00
+physical_response:
+  source: src/carbot_description/config/carbot_parameters.yaml#hardware_response
+  minimum_reliable_angular_rad_s: 0.40
+  rpp_max_angular_acceleration_rad_s2: 10.0
+  smoother_angular_acceleration_rad_s2: 2.0

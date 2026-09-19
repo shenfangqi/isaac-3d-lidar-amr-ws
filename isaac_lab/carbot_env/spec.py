@@ -14,7 +14,7 @@ HARDWARE_BACKLOG_PATH = Path(__file__).with_name(
 ROBOT_PARAMETERS_PATH = (
     PROJECT_ROOT / "src/carbot_description/config/carbot_parameters.yaml"
 )
-SIM_PROFILE_PATH = PROJECT_ROOT / "configs/carbot/sim.yaml"
+DEPLOYMENT_PROFILE_PATH = PROJECT_ROOT / "configs/carbot/real.yaml"
 
 
 def _load_yaml(path):
@@ -28,21 +28,21 @@ def load_robot_parameters():
 
 
 def load_environment_spec():
-    """Resolve the Phase F spec from canonical robot and sim parameters."""
+    """Resolve the Phase F spec from canonical and deployment parameters."""
     spec = deepcopy(_load_yaml(ENVIRONMENT_SPEC_PATH))
     robot = load_robot_parameters()
-    simulation = _load_yaml(SIM_PROFILE_PATH)
+    deployment = _load_yaml(DEPLOYMENT_PROFILE_PATH)
     action = spec["action"]
     action["limits"] = {
-        "linear_velocity_mps": simulation["velocity_limits"]["linear_mps"],
-        "angular_velocity_rad_s": simulation["velocity_limits"][
+        "linear_velocity_mps": deployment["velocity_limits"]["linear_mps"],
+        "angular_velocity_rad_s": deployment["velocity_limits"][
             "angular_rad_s"
         ],
-        "linear_acceleration_mps2": robot["control"][
-            "max_linear_acceleration_mps2"
+        "linear_acceleration_mps2": deployment["acceleration_limits"][
+            "linear_mps2"
         ],
-        "angular_acceleration_rad_s2": robot["control"][
-            "max_angular_acceleration_rad_s2"
+        "angular_acceleration_rad_s2": deployment["acceleration_limits"][
+            "angular_rad_s2"
         ],
         "wheel_velocity_rad_s": robot["control"][
             "max_wheel_velocity_rad_s"
@@ -60,10 +60,12 @@ def load_environment_spec():
             "wheel_joint_coordinate_sign"
         ],
     }
+    action["hardware_response"] = deepcopy(robot["hardware_response"])
     spec["simulation"]["control_mode"] = robot["simulation"][
         "control_mode"
     ]
     spec["domain_randomization"] = deepcopy(robot["domain_randomization"])
+    spec["hardware_response"] = deepcopy(robot["hardware_response"])
     return spec
 
 

@@ -82,6 +82,8 @@ def main():
     # production action term must exercise its saturation path.
     cfg.actions.twist.max_linear_velocity_mps = 0.50
     cfg.actions.twist.max_angular_velocity_rad_s = 3.50
+    cfg.actions.twist.forward_track_deadband_mps = 0.0
+    cfg.actions.twist.reverse_track_deadband_mps = 0.0
 
     env = ManagerBasedRLEnv(cfg=cfg)
     env.reset()

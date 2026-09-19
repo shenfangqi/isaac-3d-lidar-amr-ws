@@ -103,17 +103,19 @@ differential_period_s: 0.02
 ```yaml
 mount_translation_xy_from_base_link_m: [-0.003, 0.0]
 housing_top_height_from_ground_m: 0.222
-housing_height_m: 0.065
+housing_height_m: 0.060
+coordinate_origin_height_from_housing_bottom_m: 0.047
 rotation_rpy_rad: [0.0, 0.0, 0.0]
 pointcloud_topic: /livox/lidar
 real_frame: livox_frame
 pointcloud_rate_hz: 10
-imu_topic: /livox/imu
+vendor_imu_topic: /livox/imu  # Livox acceleration is in g
+imu_topic: /mid360/imu/data_raw  # ROS SI acceleration in m/s^2
 imu_rate_hz: 200
 real_points_per_frame_observed: 19584..20448
 ```
 
-MID360 外壳底面离地为 `0.157 m`，相对 `base_link` 为 `0.067 m`。`0.222 m` 是外壳顶面离地高度，不是厂家坐标原点 O；O 在外壳内的精确位置仍需复核。Isaac RTX 配置只是覆盖范围近似，不复制 Livox 非重复扫描、逐点时间、运动畸变和真实漏点。
+MID360 外壳顶面实测离地 `0.222 m`。官方机械图给出外壳总高 `0.060 m`、坐标原点 O 位于底面上方 `0.047 m`，因此底面和 O 分别离地 `0.162 m`、`0.209 m`，O 相对 `base_link` 为 `0.119 m`。装车静态点云的木地板平面拟合高度约 `0.2066 m`，与机械尺寸推导相差约 `2.4 mm`。Isaac RTX 配置只是覆盖范围近似，不复制 Livox 非重复扫描、逐点时间、运动畸变和真实漏点。
 
 ### 2.4 真机编码器接口
 
@@ -209,12 +211,16 @@ isaac_sim/scripts/build_carbot_usd.py
 
 实现状态（2026-09-14）：已接入 Carbot 独立 RTX MID360 coverage proxy，
 禁用 Carter 雷达 ROS 图，发布 `/livox/lidar`，并通过 `1000 x 40`
-补齐点云完成空白 nvblox OccupancyGrid 运行验证。厂家坐标原点 O 仍为待测项。
+补齐点云完成空白 nvblox OccupancyGrid 运行验证。2026-09-18 已按厂家机械图和
+装车地板平面拟合修正坐标原点 O 的 Z 偏移。2026-09-19 真机链路已通过独立
+`mid360_nvblox_real.launch.py` 验证：Jetson 发布约 5k 点、60 KB、10 Hz 的
+XYZ-only Sensor Data 点云，主机 nvblox 生成非空 OccupancyGrid，且 TF 持续可用。
 
-1. 将 MID360 外壳放到实测底面高度 `0.157 m`、顶面高度 `0.222 m`，XY 为 `[-0.003, 0]`、RPY 0；RTX 传感器原点待厂家坐标 O 复核后设置。
+1. 将 MID360 外壳放到推导底面高度 `0.162 m`、实测顶面高度 `0.222 m`，XY 为 `[-0.003, 0]`、RPY 0；RTX 和 `livox_frame` 使用厂家坐标 O 的底面上方 `0.047 m` 偏移。
 2. 保留 `/livox/lidar`；仿真发布 PointCloud2。
 3. 同时提供 `livox_frame`、`lidar_link` 和旧 `front_3d_lidar` 的兼容 TF。
-4. 保留 `/pointcloud_padder` 和 `/livox/lidar_nvblox` 的 `1000 x 40` 约束。
+4. 仿真保留 `/pointcloud_padder` 和 `/livox/lidar_nvblox` 的 `1000 x 40` 约束；
+   真机使用 `/mid360/points_xyz`，由 nvblox GPU 将无组织散点投影到 range image。
 5. 保存地图导航初期继续使用 `lidar_min_valid_range_m=0.5`，避免改变已验证 `warehouse_v3` 行为；Carbot 自遮挡验证后再决定是否降低。
 6. 检查新底盘和履带是否进入点云视野；通过过滤或碰撞/可见性配置解决自反射，不用错误外参掩盖问题。
 
@@ -391,7 +397,8 @@ point_dropout_fraction: [0.0, 0.05]
 4. 阶跃加速、制动和滑行，拟合延迟、转矩、阻尼和死区。
 5. 称重/支点法估算重心；用 CAD 或摆动试验更新惯量。
 6. 拉力计或受控斜坡试验估算履带摩擦。
-7. 复核 `imu_link` 安装外参和 MID360 原点 O 的 Z。
+7. MID-360 原点 O 的 Z 和名义轴向已确认；继续以机械或地图外部基准精修
+   XY/亚度级 RPY，并确认内部 IMU 杠杆臂与 PTP 时间同步。
 
 标定结果必须回填公共参数来源记录；不得用调 Nav2 参数掩盖底盘或 TF 错误。
 

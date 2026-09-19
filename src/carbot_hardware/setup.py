@@ -14,7 +14,10 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         ("share/" + package_name + "/config", glob("config/*.yaml")),
         ("share/" + package_name + "/launch", glob("launch/*.launch.py")),
-        ("share/" + package_name + "/systemd", glob("systemd/*.service")),
+        (
+            "share/" + package_name + "/systemd",
+            glob("systemd/*.service") + glob("systemd/*.cfg"),
+        ),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -24,6 +27,8 @@ setup(
     license="Apache-2.0",
     entry_points={
         "console_scripts": [
+            "mid360_imu_adapter = carbot_hardware.mid360_imu_adapter:main",
+            "pointcloud_xyz_relay = carbot_hardware.pointcloud_xyz_relay:main",
             "wheel_odometry = carbot_hardware.wheel_odometry:main",
         ],
     },

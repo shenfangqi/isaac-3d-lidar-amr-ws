@@ -7,7 +7,8 @@ action:
   fields: [linear_x_mps, angular_z_rad_s]
   normalized: false
   safety_source: src/carbot_description/config/carbot_parameters.yaml#control
-  navigation_limit_source: configs/carbot/sim.yaml#velocity_limits
+  navigation_limit_source: configs/carbot/real.yaml#velocity_limits
+  navigation_acceleration_source: configs/carbot/real.yaml#acceleration_limits
   primary_execution_mode: tracked_joint_velocity
   reserved_execution_modes:
     left_right_track_velocity:
@@ -56,4 +57,4 @@ domain_randomization:
 sim_to_real:
   hardware_calibration_backlog: hardware_calibration_backlog.yaml
   policy_freeze_allowed: false
-  reason: Jetson odometry, slip, actuator dynamics and sensor extrinsics remain unvalidated; effective radius and track-separation baselines are confirmed
+  reason: Real navigation and kinematic baselines are verified; multi-surface slip, payload dynamics, hardware e-stop and precision sensor extrinsics still block policy release
