@@ -27,7 +27,9 @@ maps:
 
 scan_projection:
   min_height_m: 0.10
-  max_height_m: 0.65
+  # Treat returns through the minimum safe overhead clearance as obstacles.
+  # The 0.35 m ceiling leaves 0.11 m above the 0.24 m Carbot.
+  max_height_m: 0.35
   min_range_m: 0.50
   max_range_m: 20.0
   angle_min_rad: -3.14

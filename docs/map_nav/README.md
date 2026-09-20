@@ -538,7 +538,7 @@ GridBased.allow_unknown = false
 ```text
 target_frame:    base_footprint
 min_height:      0.10 m
-max_height:      0.65 m
+max_height:      0.35 m
 angle_min/max:   -3.14 / 3.14
 angle_increment: 0.0174 rad
 range_min:       0.5 m
@@ -554,7 +554,7 @@ frame_id = base_footprint
 无小于 0.5 m 的回波
 ```
 
-高度切片只保留机器人会碰到的障碍带，避免把地面和高处货架全部投影进二维 Costmap。`range_min=0.5` 用于过滤约 `0.34 m` 的车体自身回波。
+高度切片只保留机器人会碰到的障碍带，避免把地面和高处货架全部投影进二维 Costmap。Carbot 实测总高为 `0.24 m`；当前 `0.35 m` 上限为顶置 MID-360 保留 `0.11 m` 的地面起伏、姿态和重建误差余量。低于 `0.35 m` 的净空必须视为不可通行，不能为了钻入床底而降低此值。`range_min=0.5` 用于过滤约 `0.34 m` 的车体自身回波。
 
 如果 `/scan` 看不到：
 

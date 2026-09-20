@@ -164,8 +164,44 @@ def test_sim_global_planning_uses_stable_scan_and_conditional_replanning():
 
 def test_common_runtime_config_points_to_canonical_geometry():
     common = load_yaml("configs/carbot/common.yaml")
+    canonical = load_yaml(
+        "src/carbot_description/config/carbot_parameters.yaml"
+    )["geometry"]
     assert common["frames"]["robot_base"] == "base_footprint"
     assert common["topics"]["odom"] == "/odom"
     assert common["topics"]["pointcloud"] == "/livox/lidar"
     assert common["maps"]["nav2_yaml"].endswith("warehouse_v3.yaml")
     assert "geometry" not in common
+    clearance = common["scan_projection"]["max_height_m"]
+    assert clearance == canonical["minimum_overhead_clearance_m"] == 0.35
+    assert clearance - canonical["overall_size_m"][2] >= 0.10
+
+
+def test_all_scan_and_esdf_paths_share_overhead_clearance():
+    clearance = 0.35
+    launch_paths = (
+        "src/isaac_3d_lidar_bringup/launch/"
+        "carbot_navigation_real.launch.py",
+        "src/isaac_3d_lidar_bringup/launch/"
+        "mid360_nvblox_real.launch.py",
+        "src/isaac_3d_lidar_exploration/launch/explore_nvblox.launch.py",
+    )
+    for path in launch_paths:
+        source = (WORKSPACE / path).read_text(encoding="utf-8")
+        assert f"'max_height': {clearance}" in source
+
+    nvblox_paths = (
+        "src/isaac_3d_lidar_bringup/config/nvblox/"
+        "mid360_nvblox_real.yaml",
+        "src/isaac_3d_lidar_bringup/config/nvblox/"
+        "mid360_nvblox_sim.yaml",
+    )
+    for path in nvblox_paths:
+        parameters = load_yaml(path)["/**"]["ros__parameters"]
+        assert parameters["static_mapper"][
+            "esdf_slice_max_height"
+        ] == clearance
+        if "dynamic_mapper" in parameters:
+            assert parameters["dynamic_mapper"][
+                "esdf_slice_max_height"
+            ] == clearance

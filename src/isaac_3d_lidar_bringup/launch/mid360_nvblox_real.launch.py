@@ -61,7 +61,8 @@ def generate_launch_description():
             'target_frame': 'base_footprint',
             'transform_tolerance': 0.05,
             'min_height': 0.10,
-            'max_height': 0.65,
+            # Preserve 0.11 m above the top-mounted MID-360.
+            'max_height': 0.35,
             'angle_min': -3.141592654,
             'angle_max': 3.141592654,
             'angle_increment': 0.017453293,

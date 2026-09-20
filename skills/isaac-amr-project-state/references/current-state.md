@@ -170,7 +170,10 @@ The current engineering objective after validated simulation navigation is real-
 - Reloaded `/map` statistics were 117,570 unknown, 52,618 free, and 6,620 occupied cells.
 - `launch/nvblox_with_map.launch.py`, `launch/carbot_sim.launch.py`, and `launch/carbot_real.launch.py` default to warehouse_v3.
 - `configs/nav2_params_{sim,real}.yaml` use `GridBased.allow_unknown=false`, `global_costmap.track_unknown_space=true`, the measured Carbot polygon, `inflation_radius=0.45`, and `xy_goal_tolerance=0.10`.
-- The projected `/scan` uses `base_footprint`, height `0.10..0.65 m`, range minimum `0.5 m`, 361 rays, and Best Effort/Volatile QoS.
+- The projected `/scan` is configured for `base_footprint`, height
+  `0.10..0.35 m`, range minimum `0.5 m`, 361 rays, and Best Effort/Volatile
+  QoS. The `0.35 m` ceiling leaves `0.11 m` over the `0.24 m` Carbot and its
+  top-mounted MID-360; this clearance change still requires live regression.
 - The only simulated raw 3D LiDAR topic is `/livox/lidar`; nvblox consumes `/livox/lidar_nvblox` padded to `1000 x 40`.
 - Rotation is limited to about `0.35 rad/s`; relevant behavior plugin limits require a Navigation restart after configuration changes.
 

@@ -8,6 +8,9 @@ robot:
 
 geometry:
   overall_size_m: [0.285, 0.266, 0.240]
+  # Minimum overhead clearance accepted for autonomous navigation. This leaves
+  # 0.11 m above the 0.24 m vehicle to protect the top-mounted MID-360.
+  minimum_overhead_clearance_m: 0.350
   base_link_height_m: 0.090
   physical_track_separation_m: 0.225
   track_width_m: 0.041
@@ -243,6 +246,11 @@ provenance:
     status: implemented_design
     scope: [geometry.body_visual, sensors.mid360.simulation_profile_name, simulation]
     note: Reviewable body proxy, Isaac articulation paths, and coordinate conventions; not hardware calibration values.
+  DESIGN_VALUE_CARBOT_OVERHEAD_CLEARANCE_2026_09_20:
+    category: design_value
+    status: pending_live_validation
+    scope: [geometry.minimum_overhead_clearance_m]
+    note: Conservative autonomous clearance selected to leave 0.11 m above the measured 0.24 m vehicle and protect the top-mounted MID-360; requires simulation and physical low-speed acceptance before unattended use.
   TEMP_ESTIMATE_NOT_CALIBRATED:
     category: temporary_estimate
     status: TEMP_ESTIMATE_NOT_CALIBRATED
