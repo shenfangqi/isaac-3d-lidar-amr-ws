@@ -1,6 +1,7 @@
 """Run Carbot control inside the existing Isaac Sim WebRTC Kit process."""
 
 import asyncio
+import math
 import sys
 from pathlib import Path
 
@@ -21,6 +22,8 @@ PARAMETER_PATH = (
 PROFILE_PATH = WORKSPACE / "isaac_sim/lidar_configs/Livox_Mid360_Approx.json"
 LEGACY_LIDAR_GRAPH_PATH = "/World/ROS2_LidarRTX"
 LEGACY_ROBOT_ROOT_PATH = "/World/Robot"
+DYNAMIC_OBSTACLE_PATH = "/World/CarbotDynamicValidationObstacle"
+DYNAMIC_OBSTACLE_COUNT = 4
 sys.path.insert(0, str(WORKSPACE))
 
 
@@ -51,6 +54,58 @@ async def update_app(app, count):
         await app.next_update_async()
 
 
+def create_dynamic_validation_obstacle(stage):
+    """Create hidden, static cubes controlled by a ROS validation topic."""
+    from pxr import Gf, UsdGeom, UsdPhysics
+
+    transforms = []
+    for index in range(DYNAMIC_OBSTACLE_COUNT):
+        path = f"{DYNAMIC_OBSTACLE_PATH}_{index}"
+        cube = UsdGeom.Cube.Define(stage, path)
+        cube.CreateSizeAttr(1.0)
+        cube.CreateDisplayColorAttr([Gf.Vec3f(0.95, 0.15, 0.05)])
+        UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
+        transform = UsdGeom.XformCommonAPI(cube.GetPrim())
+        transform.SetTranslate(Gf.Vec3d(0.0, 0.0, -100.0))
+        transform.SetScale(Gf.Vec3f(0.01, 0.01, 0.01))
+        transforms.append(transform)
+    return transforms
+
+
+def apply_dynamic_obstacle_command(transforms, command):
+    """Apply one or more 7-value cube commands; hide unused cubes."""
+    from pxr import Gf
+
+    if len(command) == 6:
+        command = [*command, 0.0]
+    if not command or len(command) % 7 != 0:
+        raise ValueError(
+            "dynamic obstacle command needs groups of 7 values: "
+            "x y z size_x size_y size_z yaw"
+        )
+    groups = [
+        command[index:index + 7] for index in range(0, len(command), 7)
+    ]
+    if len(groups) > len(transforms):
+        raise ValueError(
+            f"at most {len(transforms)} obstacle cubes are supported"
+        )
+    enabled_count = 0
+    for index, transform in enumerate(transforms):
+        values = groups[index] if index < len(groups) else None
+        if values is None or min(map(float, values[3:6])) <= 0.0:
+            transform.SetTranslate(Gf.Vec3d(0.0, 0.0, -100.0))
+            transform.SetScale(Gf.Vec3f(0.01, 0.01, 0.01))
+            transform.SetRotate(Gf.Vec3f(0.0, 0.0, 0.0))
+            continue
+        x, y, z, size_x, size_y, size_z, yaw = map(float, values)
+        transform.SetTranslate(Gf.Vec3d(x, y, z))
+        transform.SetScale(Gf.Vec3f(size_x, size_y, size_z))
+        transform.SetRotate(Gf.Vec3f(0.0, 0.0, math.degrees(yaw)))
+        enabled_count += 1
+    return enabled_count
+
+
 async def load_and_control():
     app = omni.kit.app.get_app()
     enable_extension("isaacsim.ros2.bridge")
@@ -59,6 +114,7 @@ async def load_and_control():
 
     import numpy as np
     import rclpy
+    from std_msgs.msg import Float64MultiArray
     from isaac_sim.auto_play_carbot import (
         CarbotCommandLimiter,
         CarbotRosNode,
@@ -112,6 +168,10 @@ async def load_and_control():
         "RTX origin uses the verified Livox O offset",
         flush=True,
     )
+    # Author the test-only cubes before World/RTX initialization. Keeping the
+    # prims resident and moving them from a hidden pose is more reliable than
+    # adding new geometry to the RTX scene while the timeline is running.
+    obstacle_transform = create_dynamic_validation_obstacle(stage)
 
     world = World(
         physics_dt=control_period_s,
@@ -149,6 +209,19 @@ async def load_and_control():
     if not rclpy.ok():
         rclpy.init(args=None)
     node = CarbotRosNode(limits)
+    obstacle_command = {"sequence": 0, "values": []}
+
+    def receive_obstacle_command(message):
+        obstacle_command["values"] = list(message.data)
+        obstacle_command["sequence"] += 1
+
+    node.create_subscription(
+        Float64MultiArray,
+        "/isaac_sim/dynamic_obstacle",
+        receive_obstacle_command,
+        10,
+    )
+    applied_obstacle_sequence = 0
     limiter = CarbotCommandLimiter(limits)
     last_publish_time = float("-inf")
     previous_simulation_time = world.current_time
@@ -168,6 +241,28 @@ async def load_and_control():
                 continue
             previous_simulation_time = simulation_time
             rclpy.spin_once(node, timeout_sec=0.0)
+            if obstacle_command["sequence"] != applied_obstacle_sequence:
+                stage_obstacle_command = list(obstacle_command["values"])
+                for index in range(0, len(stage_obstacle_command), 7):
+                    if len(stage_obstacle_command) - index < 6:
+                        break
+                    # Commands use the map/odom frame whose origin is the
+                    # robot's initial pose; USD uses absolute world space.
+                    stage_obstacle_command[index] += float(initial_position[0])
+                    stage_obstacle_command[index + 1] += float(
+                        initial_position[1]
+                    )
+                enabled_count = apply_dynamic_obstacle_command(
+                    obstacle_transform, stage_obstacle_command
+                )
+                applied_obstacle_sequence = obstacle_command["sequence"]
+                print(
+                    "Dynamic validation obstacle "
+                    f"{'enabled' if enabled_count else 'hidden'} "
+                    f"({enabled_count} cubes): "
+                    f"{obstacle_command['values']}",
+                    flush=True,
+                )
             command = limiter.update(
                 node.requested_linear_mps,
                 node.requested_angular_rad_s,

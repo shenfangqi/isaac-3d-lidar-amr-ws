@@ -25,6 +25,10 @@ def mid360_runtime_config(parameters):
         "pointcloud_type": mid360["pointcloud_type"],
         "pointcloud_rate_hz": pointcloud_rate_hz,
         "frame_skip_count": rounded_step_count - 1,
+        # The rotary proxy and publisher both run at 10 Hz.  Publishing only
+        # the instantaneous slice samples the same azimuth every revolution,
+        # which previously left the entire +X/front hemisphere empty.
+        "full_scan": True,
         "frame_id": mid360["simulation_compatibility_frame"],
         "origin_from_housing_bottom_m": tuple(
             mid360["simulation_rtx_origin_from_housing_bottom_m"]
@@ -150,7 +154,10 @@ def create_mid360_pipeline(stage, parameters):
                 ),
                 ("PublishPointCloud.inputs:frameId", config["frame_id"]),
                 ("PublishPointCloud.inputs:type", "point_cloud"),
-                ("PublishPointCloud.inputs:fullScan", False),
+                (
+                    "PublishPointCloud.inputs:fullScan",
+                    config["full_scan"],
+                ),
                 (
                     "PublishPointCloud.inputs:frameSkipCount",
                     config["frame_skip_count"],

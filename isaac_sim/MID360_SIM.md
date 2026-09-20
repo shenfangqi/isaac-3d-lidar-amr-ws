@@ -9,6 +9,11 @@ It models the main parameters that affect geometric coverage and navigation:
 - 10 Hz nominal revolution and 200,000 emitted points per second;
 - one return per ray.
 
+The ROS RTX helper publishes a completed rotary revolution (`fullScan=true`).
+Do not change it to instantaneous-slice output while the proxy rotation and
+ROS publication rates are both 10 Hz: that phase-locks every message to the
+same azimuth and can leave the vehicle-front `+X` hemisphere completely empty.
+
 Isaac Sim 4.5 does not have a native Livox scan model. The proxy is therefore
 a 40-emitter rotary sensor. It cannot validate the real non-repetitive scan
 pattern, Livox packet layout and `tag`/`line` fields, per-point timestamps,

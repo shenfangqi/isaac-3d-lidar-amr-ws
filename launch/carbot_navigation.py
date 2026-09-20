@@ -95,6 +95,43 @@ def build_navigation_actions(
         output="screen",
     )
 
+    # Keep the local controller on the raw scan so emergency collision
+    # reactions do not wait for filtering.  The global branch first removes
+    # returns already explained by the static map, then requires temporal
+    # consistency before a novel obstacle can invalidate the global path.
+    static_map_scan_filter = Node(
+        package="isaac_3d_lidar_bringup",
+        executable="static_map_scan_filter",
+        name="static_map_scan_filter",
+        parameters=[
+            {
+                "use_sim_time": use_sim_time,
+                "input_topic": topics["scan"],
+                "output_topic": topics["global_scan_static_filtered"],
+                "map_topic": "/map",
+                "map_frame": frames["map"],
+                "static_margin_m": 0.12,
+                "occupied_threshold": 65,
+            }
+        ],
+        output="screen",
+    )
+
+    global_scan_filter = Node(
+        package="laser_filters",
+        executable="scan_to_scan_filter_chain",
+        name="global_scan_filter",
+        remappings=[
+            ("scan", topics["global_scan_static_filtered"]),
+            ("scan_filtered", topics["global_scan"]),
+        ],
+        parameters=[
+            str(CONFIG_ROOT / "laser_filters_global_sim.yaml"),
+            {"use_sim_time": use_sim_time},
+        ],
+        output="screen",
+    )
+
     localization = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             str(
@@ -178,14 +215,24 @@ def build_navigation_actions(
         }.items(),
     )
 
-    return [
+    actions = [
         description,
         pointcloud_to_laserscan,
+    ]
+    if runtime == "sim":
+        actions.append(static_map_scan_filter)
+        actions.append(global_scan_filter)
+    actions.extend([
         amcl_pose_initializer,
         ground_truth_tf,
         TimerAction(
             period=5.0,
-            actions=[localization, ground_truth_map_server, ground_truth_lifecycle],
+            actions=[
+                localization,
+                ground_truth_map_server,
+                ground_truth_lifecycle,
+            ],
         ),
         TimerAction(period=15.0, actions=[navigation]),
-    ]
+    ])
+    return actions

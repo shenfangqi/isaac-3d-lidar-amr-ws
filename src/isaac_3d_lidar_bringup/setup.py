@@ -50,6 +50,8 @@ setup(
             'isaac_3d_lidar_bringup.amcl_pose_initializer:main',
             'pointcloud_padder = '
             'isaac_3d_lidar_bringup.pointcloud_padder:main',
+            'static_map_scan_filter = '
+            'isaac_3d_lidar_bringup.static_map_scan_filter:main',
         ],
     },
 )

@@ -614,6 +614,20 @@ configs/nav2_params_real.yaml
 
 修改 `behavior_server.max_rotational_vel` 后必须重启 Navigation。该 Spin 插件在 lifecycle configure 时缓存参数，仅在运行时 `ros2 param set` 可能显示成功，但实际动作仍使用旧速度。
 
+### 全局路径稳定与动态障碍
+
+仿真导航把同一帧投影 Scan 分成两条用途不同的链路：
+
+- local costmap 直接订阅 `/scan`，保持碰撞检测、减速和停车的最低延迟；
+- global costmap 订阅 `/scan_global_filtered`。`static_map_scan_filter` 先用 12 cm 静态地图遮罩移除已有墙体回波，再由 `global_scan_filter` 对五帧做时间中值；
+- `bt_navigator` 使用 `configs/behavior_trees/navigate_to_pose_replan_after_controller_failure.xml`，保持初始路径；local controller 遇到障碍后先等待 2 秒并重试原路径，持续失败才清理两级 costmap、再等待 2 秒让滤波 Scan 重新标记障碍，然后只触发一次全局重规划。
+
+在当前约 `10 Hz` 的 Scan 下，五帧中值要求新障碍至少出现在三帧中，约 `0.3 s` 后才会进入全局规划；local costmap 同期仍使用原始数据立即响应。静态地图遮罩仅用于消除地图墙缘与 Scan 之间约一至两格的长期偏差，不能接入 local costmap。这样只过滤全局改道输入，不会给近距离安全停车增加该延迟。
+
+Humble 的 `IsPathValid` 在狭窄通道可能拒绝 Navfn 刚生成的可行路径，因此这里不再用它作为重规划触发。行为树使用普通 memory `Sequence`：初始路径只计算一次；若原始 Scan 使 local controller 停车，先等待 2 秒并重试原路径，持续失败的恢复分支才清理代价地图、等待滤波链重新填充并计算一次全局绕行。若该路径仍不可执行，动作直接失败，不再进入 spin/backup 或更多规划循环。不要改回 `PipelineSequence`，它会在 `FollowPath` 运行期间反复 tick 前面的规划节点。
+
+这组参数目前只完成 Isaac Sim 验证。真机 MID-360 的点云时序、运动畸变和噪声不同，必须在 Jetson 上安装 `laser_filters`、部署同一行为树后，再分别完成临时障碍、持续堵路和旋转过程验收，不能直接把仿真滤波窗口视为真机定值。
+
 ## 12. 在 RViz 中发送 Goal
 
 第一次测试使用短距离、宽阔、已知自由区域。
@@ -962,6 +976,8 @@ launch/carbot_sim.launch.py
 launch/carbot_real.launch.py
 configs/nav2_params_sim.yaml
 configs/nav2_params_real.yaml
+configs/laser_filters_global_sim.yaml
+configs/behavior_trees/navigate_to_pose_replan_after_controller_failure.xml
 configs/amcl_params_sim.yaml
 configs/amcl_params_real.yaml
 configs/rviz/carbot_navigation.rviz

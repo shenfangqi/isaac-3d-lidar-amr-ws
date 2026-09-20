@@ -1,0 +1,20 @@
+global_scan_filter:
+  ros__parameters:
+    filter1:
+      name: temporal_median_5
+      type: laser_filters/LaserArrayFilter
+      params:
+        range_filter_chain:
+          filter1:
+            name: median_5
+            type: filters/MultiChannelMedianFilterFloat
+            params:
+              number_of_observations: 5
+              unused: 10
+        intensity_filter_chain:
+          filter1:
+            name: median_5
+            type: filters/MultiChannelMedianFilterFloat
+            params:
+              number_of_observations: 5
+              unused: 10

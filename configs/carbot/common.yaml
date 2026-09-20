@@ -15,6 +15,8 @@ topics:
   pointcloud: /livox/lidar
   padded_pointcloud: /livox/lidar_nvblox
   scan: /scan
+  global_scan_static_filtered: /scan_global_static_filtered
+  global_scan: /scan_global_filtered
   odom: /odom
   cmd_vel: /cmd_vel
   wheel_ticks: /wheel_ticks
