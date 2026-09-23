@@ -53,12 +53,21 @@ diagnostics and TF topics.
   link transition it entered `MASTER`; the Ethernet link remained
   `UP/LOWER_UP`. The Jetson is configured as the isolated-link master and the
   MID-360 as slave.
-- Exact `pmc` slave offset and mean path delay remain unrecorded because the
-  management socket is `root:root 0660` and the non-interactive SSH session
-  cannot satisfy the Jetson sudo password prompt. No permissions or PTP
-  configuration were changed to bypass this boundary.
+- A privileged read-only `pmc` query confirmed that the Jetson port is
+  `MASTER`. Its `offsetFromMaster=0` and `meanPathDelay=0` are grandmaster-local
+  values and were not misreported as the MID-360 slave offset.
+- Direct SDK2 reads of MID-360 internal keys `local_time_now`,
+  `last_sync_time`, `time_offset` and `time_sync_type` returned five offsets of
+  `-24.608/-23.034/-25.888/-28.612/-27.926 us`: mean `-26.014 us`, median
+  `-25.888 us`, standard deviation `2.063 us` and range
+  `-28.612..-23.034 us`. Every sample reported PTP sync type 1.
+- A read-only packet capture identified the MID-360 as `192.168.2.202`, clock
+  identity `e47a2c.fffe.8a8c78`, and confirmed continuous one-Hz Delay_Req /
+  Delay_Resp exchange with zero kernel packet loss. The sensor did not respond
+  to network management TLVs, so its servo mean path delay is not externally
+  exposed by this interface.
 
 Conclusion: ESP communication/time-header stability and Jetson service/ROS
-topology durability passed. MID-360 live publication is healthy. The two
-remaining observations are the bounded static EKF yaw drift and the privileged
-exact PTP offset query.
+topology durability passed. MID-360 live publication is healthy, and the exact
+slave time offset is now recorded. The remaining observation is the bounded
+static EKF yaw drift; slave servo mean path delay is not exposed by the device.

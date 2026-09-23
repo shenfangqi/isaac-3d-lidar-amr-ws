@@ -1,0 +1,42 @@
+{
+  "captured_at_local": "2026-09-23T16:20:58+09:00",
+  "jetson_master": {
+    "interface": "enP8p1s0",
+    "ip": "192.168.2.100",
+    "clock_identity": "3c6d66.fffe.beb463",
+    "port_state": "MASTER",
+    "steps_removed": 0,
+    "offset_from_master_ns": 0,
+    "mean_path_delay_ns": 0,
+    "note": "These are grandmaster-local values, not the MID-360 slave offset."
+  },
+  "mid360_slave": {
+    "ip": "192.168.2.202",
+    "clock_identity": "e47a2c.fffe.8a8c78",
+    "serial_number": "47MDM4U0020153",
+    "firmware": "13.18.2.21",
+    "time_sync_type": 1,
+    "time_sync_type_name": "PTP IEEE 1588v2.0",
+    "time_offset_definition": "device local time minus synchronization source time",
+    "time_offset_samples_ns": [-24608, -23034, -25888, -28612, -27926],
+    "time_offset_mean_ns": -26013.6,
+    "time_offset_median_ns": -25888,
+    "time_offset_population_stddev_ns": 2062.932824887907,
+    "time_offset_min_ns": -28612,
+    "time_offset_max_ns": -23034,
+    "sample_span_ns": 5578,
+    "mean_path_delay": null,
+    "mean_path_delay_note": "The MID-360 did not respond to network management TLVs; its slave servo mean path delay is not exposed by this interface."
+  },
+  "packet_observation": {
+    "delay_request_response_rate_hz": 1.0,
+    "captured_packets": 35,
+    "kernel_dropped_packets": 0,
+    "saved_pcap": false
+  },
+  "post_query_health": {
+    "mid360_service_active": true,
+    "adapted_imu_rate_hz": 200.028,
+    "cmd_vel_message_observed_in_3s": false
+  }
+}

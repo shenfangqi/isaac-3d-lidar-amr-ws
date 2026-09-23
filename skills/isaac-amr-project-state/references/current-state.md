@@ -226,11 +226,13 @@ and offline-twin checkpoints above.
   changed to a CSV string; local tests passed `10/10`, Jetson relay tests passed
   `3/3`, and the restarted stack contained the driver, IMU adapter and relay
   with no launch warnings/errors or service restarts.
-- System `ptp4l` is running as the isolated-link master, but its management
-  socket is `root:root 0660`; exact PTP offset could not be read without
-  privileged access and remains pending. `Linger=no` also remains unchanged,
-  so user services depend on a live login/session. No motion command, Nav2
-  launch or base-service restart occurred during this acceptance.
+- System `ptp4l` is running as the isolated-link master. A privileged read-only
+  query confirmed the Jetson port is `MASTER`; its own `offsetFromMaster=0`
+  must not be reported as the LiDAR offset. Direct SDK2 reads of the MID-360
+  `time_offset` key produced a five-sample mean of `-26.014 us`, median
+  `-25.888 us`, range `-28.612..-23.034 us` and standard deviation
+  `2.063 us`; all samples reported PTP `time_sync_type=1`. `Linger=no` remains
+  unchanged, so user services depend on a live login/session.
 
 ## MID-360 offline configuration closure: 2026-09-21
 

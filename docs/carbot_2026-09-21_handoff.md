@@ -49,7 +49,10 @@
 因此属于单次物理响应差异而不是 EKF 独有误差。完整证据见
 `calibration_data/2026-09-23_static_durability/README.md` 和
 `calibration_data/2026-09-23_cmd_comp_final/physical_final_04_detailed_analysis.json`。
-精确 PTP slave offset/mean path delay 仍因 root-only 管理 socket 未记录。
+通过 MID-360 SDK2 内部状态键完成精确 PTP slave offset 查询：5 次 offset 平均
+`-26.014 us`、中位数 `-25.888 us`、范围 `-28.612..-23.034 us`，全部
+`time_sync_type=1`。master 端 `pmc` 的 `offsetFromMaster=0` 仅表示 Jetson 是
+grandmaster，不能代替 slave offset；MID-360 未通过管理 TLV 暴露 mean path delay。
 
 已完成的主线包括：
 
@@ -62,7 +65,6 @@
 
 仍未完成的关键项目包括：
 
-- MID-360 精确 PTP offset；
 - LiDAR XYZ/RPY 已由地面反转和正交墙面测量闭环，但仍建议用测绘夹具独立
   复核约 `2 mm` X、`0.5 mm` Y 和 `0.20 deg` yaw 系统不确定度；MID-360
   内置 IMU 旋转/杠杆臂和点云相对时间偏差已完成；
@@ -278,8 +280,15 @@ required_input_fields_csv=x,y,z,intensity,tag,line,timestamp
 root:root 0660
 ```
 
-普通用户执行 `pmc` 会 `Permission denied`，因此精确 PTP offset 尚未记录。下一次
-有交互式 sudo 条件时，只做只读 PTP 状态查询，不要改变 ptp4l 配置。
+2026-09-23 已用交互式 sudo 只读查询该 socket：Jetson
+`CURRENT_DATA_SET` 为 `stepsRemoved=0`、`offsetFromMaster=0`、
+`meanPathDelay=0`，端口状态 `MASTER`。这些是 grandmaster 自身值，不是 MID-360
+slave offset。随后通过 SDK2 内部状态键 `0x8009..0x800C` 直接查询雷达，5 次
+`time_offset` 为 `-24.608/-23.034/-25.888/-28.612/-27.926 us`，平均
+`-26.014 us`、标准差 `2.063 us`，全部 `time_sync_type=1`。只读抓包同时确认
+雷达 `192.168.2.202` 每秒发送 Delay_Req，Jetson 对同序列返回 Delay_Resp，内核
+零丢包。雷达不响应网络 management TLV，因此没有把 master 的零值误写成 slave
+offset，也没有声称取得未暴露的 slave mean path delay。
 
 `loginctl` 仍显示 `Linger=no`。这意味着用户级的 MID-360、description、wheel
 odometry 和 micro-ROS 服务需要至少一个有效用户登录会话；本轮未擅自启用 linger。
