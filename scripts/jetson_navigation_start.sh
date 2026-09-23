@@ -48,6 +48,8 @@ topic_count() {
 
 cmd_publishers="$(topic_count /cmd_vel Publisher)"
 cmd_subscribers="$(topic_count /cmd_vel Subscription)"
+command_publishers="$(topic_count /cmd_vel_command Publisher)"
+command_subscribers="$(topic_count /cmd_vel_command Subscription)"
 if [[ "${cmd_subscribers:-0}" -lt 1 ]]; then
   echo "/cmd_vel has no base-controller subscriber." >&2
   exit 1
@@ -55,12 +57,16 @@ fi
 
 if [[ "${mode}" == "navigation-safe" ]]; then
   [[ "${cmd_publishers}" == "1" ]] || {
-    echo "/cmd_vel publisher count is ${cmd_publishers:-unknown}; expected 1." >&2
+    echo "/cmd_vel compensator publisher count is ${cmd_publishers:-unknown}; expected 1." >&2
+    exit 1
+  }
+  [[ "${command_publishers}" == "1" && "${command_subscribers}" == "1" ]] || {
+    echo "/cmd_vel_command topology is ${command_publishers:-?} publisher(s), ${command_subscribers:-?} subscriber(s); expected 1/1." >&2
     exit 1
   }
 else
-  [[ "${cmd_publishers}" == "0" ]] || {
-    echo "Diagnostic mode unexpectedly publishes real /cmd_vel." >&2
+  [[ "${cmd_publishers}" == "1" && "${command_publishers}" == "0" ]] || {
+    echo "Diagnostic mode has an unexpected actuating command source." >&2
     exit 1
   }
   diagnostic_publishers="$(topic_count /cmd_vel_diagnostic Publisher)"

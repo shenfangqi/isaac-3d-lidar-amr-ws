@@ -19,7 +19,9 @@ topics:
   global_scan: /scan_global_filtered
   odom: /odom
   cmd_vel: /cmd_vel
+  cmd_vel_command: /cmd_vel_command
   wheel_ticks: /wheel_ticks
+  overhead_clearance_markers: /overhead_clearance_markers
 
 maps:
   nav2_yaml: /workspace/ros-humble/isaac_3d_lidar_amr_ws/maps/2d/warehouse_v3.yaml
@@ -35,3 +37,23 @@ scan_projection:
   angle_min_rad: -3.14
   angle_max_rad: 3.14
   angle_increment_rad: 0.0174
+
+# Simulation-only physical fixtures. Isaac Sim creates the collision geometry,
+# while the ROS marker publisher reads the same records for RViz display.
+simulation_overhead_obstacles:
+  - name: pass
+    map_x_m: 2.0
+    map_y_m: 0.0
+    clearance_m: 0.40
+    size_x_m: 0.40
+    size_y_m: 1.00
+    thickness_m: 0.10
+    color_rgb: [0.10, 0.80, 0.25]
+  - name: blocked
+    map_x_m: -2.0
+    map_y_m: 0.0
+    clearance_m: 0.28
+    size_x_m: 0.40
+    size_y_m: 1.00
+    thickness_m: 0.10
+    color_rgb: [0.95, 0.20, 0.05]

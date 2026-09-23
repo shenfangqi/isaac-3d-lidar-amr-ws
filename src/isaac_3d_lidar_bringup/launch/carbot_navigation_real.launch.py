@@ -152,9 +152,9 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'cmd_vel_output',
-            default_value='cmd_vel',
+            default_value='/cmd_vel_command',
             description=(
-                'Final velocity topic. Use /cmd_vel_diagnostic for a '
+                'Compensator input topic. Use /cmd_vel_diagnostic for a '
                 'non-actuating control-pipeline diagnostic.'
             ),
         ),

@@ -1,6 +1,254 @@
 # Current authoritative project state
 
-Newest checkpoint: [Physical Carbot software closure: 2026-09-19](#physical-carbot-software-closure-2026-09-19).
+Session handoff and next-step procedure:
+[`docs/carbot_2026-09-21_handoff.md`](../../../docs/carbot_2026-09-21_handoff.md).
+
+Newest checkpoint: [right-turn command compensation acceptance: 2026-09-23](#right-turn-command-compensation-acceptance-2026-09-23).
+
+## Right-turn command compensation acceptance: 2026-09-23
+
+- The canonical right-turn command scale is `0.896`. The Jetson formal path is
+  `/cmd_vel_command -> cmd_vel_compensator -> /cmd_vel -> ESP32`; the enabled
+  `carbot-command-compensation.service` is the sole normal `/cmd_vel` publisher
+  and remains silent until an upstream command arrives. Nav2's real-robot
+  velocity smoother defaults to `/cmd_vel_command`. No ESP32 source or firmware
+  was changed.
+- Isaac Sim uses the same scale plus the measured uncompensated right-turn
+  response gain `1/0.896`. A final isolated sequence returned within `16.0 mm`,
+  with `+51.5662/-51.5662 deg` turns and zero yaw residual.
+- The final supervised real sequence measured `0.427 mm` forward/reverse return
+  error, `0.874 mm` full-sequence position error and `0.095 deg` final yaw error.
+  The individual turns were `+30.0185/-28.6048 deg` (pair residual `1.4137 deg`),
+  and the observed actuator-side right command was exactly `-0.2688 rad/s` for
+  a requested `-0.3000 rad/s`.
+- ESP boot ID stayed `268099638`; final ticks `8/14` remained unchanged during
+  the final audit. All micro-ROS, wheel, MID-360, EKF and compensation services
+  were active, and `/cmd_vel_command` returned to zero publishers. Evidence is
+  under `calibration_data/2026-09-23_cmd_comp_final/`.
+- Jetson still has `Linger=no`. A fresh SSH login can restart user services and
+  the ESP micro-ROS session may need roughly 25--60 seconds to reconnect. Motion
+  gates must wait for fresh ticks and the live ESP `/cmd_vel` subscription.
+
+## MID-360/wheel online EKF acceptance: 2026-09-22
+
+- Jetson now has `robot_localization` installed and enabled through
+  `carbot-state-estimation.service`. Raw encoder odometry is `/wheel/odom` with
+  no TF; the EKF is the sole `/odom` and dynamic `odom -> base_footprint`
+  publisher. The service is enabled and all micro-ROS, wheel, MID-360 and EKF
+  services were active at final acceptance.
+- The only estimator IMU remains `/mid360/imu/data_raw`; ESP32 `/imu/data_raw`
+  is excluded. The MID-360 adapter estimates temperature-dependent gyro-z bias
+  only while wheel odometry proves the chassis stationary. It publishes an
+  explicit conservative gyro-z covariance of `4e-6 (rad/s)^2` after 400
+  stationary samples.
+- The final EKF fuses wheel integrated yaw as a low-frequency anchor, wheel X/Y
+  velocity including the non-holonomic lateral-zero constraint, and MID-360
+  yaw rate as the high-frequency response. Dynamic process noise is enabled.
+- A `53.735 s` controlled bag contains `/cmd_vel`, real wheel motion, MID-360
+  IMU, compact point clouds, TF and one uninterrupted ESP boot. The readiness
+  gate passed. In the exact common replay window, point-cloud ICP measured
+  `0.18938698 rad`, wheel yaw measured `0.19008596 rad`, and EKF yaw measured
+  `0.18940368 rad`; EKF error was about `0.001 deg`.
+- Final 20 s online static acceptance measured zero X/Y drift, about
+  `0.00176 rad` yaw range, ending yaw covariance `5.1e-6 rad^2`, zero
+  `/cmd_vel` publishers, and unchanged wheel ticks. Evidence is under
+  `calibration_data/2026-09-22_ekf_dynamic/`.
+
+## MID-360-only fusion and dynamics audit: 2026-09-22
+
+- The only permitted estimator IMU is `/mid360/imu/data_raw`. ESP32 remains the
+  wheel-tick and base-control source; its legacy `/imu/data_raw` publisher had
+  zero subscribers in the live graph and is excluded from the EKF contract.
+- Live MID-360 output reported frame `imu_link`. The best existing combined bag
+  is not a valid driven fusion A/B: `/cmd_vel` is absent, wheel deltas are zero,
+  and the bag predates the `imu_link` frame correction. The automated readiness
+  gate rejects it, so live fusion remains disabled pending one controlled driven
+  MID-360/wheel bag and external-pose comparison. Jetson also does not currently
+  have `robot_localization` installed.
+- Matched-command Isaac profiling found 12.26% mean absolute linear-response
+  error and 16.74% yaw-response error relative to surveyed real trials. Isaac
+  stop tails were 0.02-0.16 s versus 0.57-0.92 s on the real floor. The model is
+  a navigation/interface contract, not yet a dynamics twin.
+- ESP32 firmware source now implements 60 s periodic epoch resampling, retains
+  the last valid offset after a failed sample, and limits offset changes to 2 ms.
+  Host unit tests and a full ESP-IDF 5.4.4 build pass at firmware commit
+  `ce613ed`. Flashing and the required 30-minute drift validation are pending
+  because neither workstation nor Jetson exposes an ESP32 USB serial device and
+  the firmware has no OTA endpoint.
+- Evidence and reusable scripts are under
+  `calibration_data/2026-09-22_alignment/`. The inert EKF configuration was
+  deployed to Jetson source/install with matching SHA-256, but no EKF process
+  was started. Final `/cmd_vel` publisher count was zero and wheel ticks were
+  unchanged over two seconds. No nonzero motion command was sent; workstation
+  ROS and Isaac containers were stopped.
+
+## MID-360 IMU extrinsic/time calibration: 2026-09-21
+
+- A `243.046 s` lifted/manual yaw-excitation bag produced `3595` 20-ms wall
+  poses and `48160` raw IMU samples. No `/cmd_vel` publisher was present.
+- Official MID-360 geometry gives `livox_frame -> imu_link` translation
+  `[0.011, 0.02329, -0.04412] m`; IMU and point-cloud axes are identical, so
+  rotation is identity. Dynamic yaw independently confirmed polarity and a
+  gyro scale of `0.996542`.
+- Wall yaw versus integrated gyro resolved a `+9.782937 ms` lag (IMU timestamp
+  later than effective LiDAR time), so `/mid360/imu/data_raw` now applies
+  `-0.009782937 s`. Three chunks span `9.1673-10.2468 ms`; retained uncertainty
+  is approximately `0.6 ms`. Full-fit `R^2=0.9999084`, RMS `0.119 deg`.
+- Raw `/livox/imu` is unchanged. Adapted output uses frame `imu_link`, SI
+  acceleration and unavailable orientation. The observed session gyro bias is
+  not hard-coded because it is temperature-dependent.
+- Evidence is in `calibration_data/2026-09-21_static_mid360/`; canonical
+  parameter SHA is
+  `b079ed22e68807d53896cd86e1738ec72a535b4ead613c4f2dc7d416da75567b`.
+- Jetson source/install hashes match. Online pairing of `747` raw/adapted IMU
+  samples measured `-9.783030 ms` median, output frame `imu_link`, and an
+  unavailable-orientation marker. Live `livox_frame -> imu_link` exactly
+  reports `[0.011, 0.02329, -0.04412] m` and identity rotation. IMU/raw/compact
+  rates were `200.11/10.04/10.01 Hz`; `/cmd_vel` publisher count remained zero
+  and wheel ticks remained `2/0`. The ESP32 was not restarted.
+
+## MID-360 parallel-wall yaw calibration: 2026-09-21
+
+- A `64.230 s` stationary bag was recorded after placing the chassis centerline
+  parallel to a nearby wall. No motion command was published and the wheel
+  ticks remained stationary.
+- The dominant wall was `0.421855 m` from the LiDAR. Its 64 per-frame normal
+  fits averaged `-91.12080 deg` after applying the accepted roll/pitch, with
+  `0.01011 deg` standard deviation. The accepted yaw is therefore
+  `+1.1206755 deg` (`+0.019559477 rad`).
+- The opposite wall implied `+1.3218736 deg`, so about `0.2012 deg` is retained
+  as wall/placement systematic uncertainty.
+- The measured wall-to-near-track outer-edge gap was `0.289 m`. Adding the
+  canonical `0.133 m` track outer half-width places the base centerline
+  `0.422 m` from the right wall. Against the fitted `0.42185533 m` LiDAR wall
+  distance, mount Y is `-0.00014467 m` (right of centerline), with about
+  `+/-0.0005 m` ruler uncertainty.
+- Rear-wall gaps to the right/left rear-drive-wheel outer extrema were
+  `1.153/1.155 m`. Their mean, the canonical `-0.13225 m` rear wheel extremum,
+  fitted `1.30078363 m` rear plane, accepted Y/Z and full tilted plane equation
+  resolve mount X to `+0.01656608 m`. The `2 mm` left/right spread is retained
+  as approximately `+/-2 mm` X uncertainty.
+- The canonical YAML, rebuilt URDF/Isaac USD and Jetson source/install now
+  consume the same RPY. The parameter SHA is
+  `b079ed22e68807d53896cd86e1738ec72a535b4ead613c4f2dc7d416da75567b`;
+  live `base_link -> lidar_link` reports translation
+  `[0.01656608, -0.00014467, 0.072] m`, and `base_link -> livox_frame` reports
+  `-0.352/-0.278/+1.121 deg` with point origin Z `0.119 m`.
+- `carbot_description` passed `52/52`, Isaac Lab CPU contracts passed `8/8`,
+  and all workstation ROS/Isaac containers were stopped after verification.
+  Analysis and the raw Pose D bag are stored with the A-B-A evidence.
+
+## MID-360 A-B-A roll/pitch calibration: 2026-09-21
+
+- Three stationary full-cloud bags were recorded on the Jetson with no Nav2
+  process and zero `/cmd_vel` publishers. All captures had zero wheel/odometry
+  drift. Pose C returned to Pose A without rebooting the ESP32 and reproduced
+  the fitted floor normal within `0.49 mm` height, `0.127 deg` roll and
+  `0.019 deg` pitch.
+- The chassis was manually reversed by approximately 180 degrees for Pose B.
+  Combining Pose B with the Pose A/C mean separates the reversing floor/support
+  component from the fixed sensor installation. The accepted MID-360 rotation
+  is roll `-0.3515327 deg` (`-0.006135404 rad`), pitch `-0.2783163 deg`
+  (`-0.004857536 rad`); the later parallel-wall result supplies yaw. The
+  canonical parameter source now contains this RPY, so both the robot
+  description and rebuilt Isaac USD
+  consume the same transform.
+- Mechanical height remains authoritative; the fitted floor distance is not
+  used as Z because track support and replacement changed it across poses.
+  XY was resolved by the later orthogonal-wall dimensional measurements. A
+  static IMU half-sum suggests a small gravity-direction offset but remains
+  confounded by accelerometer bias; it was not used in place of the later
+  official/dynamic IMU calibration.
+- Raw bags, analysis JSON, SHA-256 values and the reusable offline analyzer are
+  under `calibration_data/2026-09-21_static_mid360`. The large `.db3` files are
+  ignored by Git.
+- `carbot_description` passed its isolated `52/52` result and Isaac Lab CPU
+  contracts passed `8/8`. The regenerated USD records the canonical parameter
+  SHA and contains the calibrated lidar-link quaternion. Jetson source and
+  installed YAML hashes match the workstation; after a full Jetson reboot the
+  description, MID-360, wheel odometry, micro-ROS and PTP services all returned
+  active, and live `base_link -> livox_frame` remained `-0.352/-0.278/0 deg`
+  before the later parallel-wall yaw update.
+
+## MID-360 online deployment and acceptance: 2026-09-21
+
+- Jetson identity and both links were reverified: Wi-Fi `192.168.1.109/24`,
+  LiDAR Ethernet `192.168.2.100/24`, and MID-360 `192.168.2.202`. Three sensor
+  pings had zero loss; the Ethernet interface reported zero RX/TX errors,
+  drops, missed packets, carrier errors or collisions.
+- The repository-owned `MID360_config.json`, launch, full-field relay and live
+  validator were deployed to `/home/shenfq/Projects/carbot-ros2` and
+  `carbot_hardware` rebuilt successfully. Workstation, Jetson source and Jetson
+  install SHA-256 values match. The active driver reports the installed project
+  JSON path, `xfer_format=0`, and `publish_freq=10.0`.
+- Online validation confirmed exactly one LiDAR publisher and the raw fields
+  `x/y/z/intensity/tag/line/timestamp` in `livox_frame`. Direct CLI samples were
+  about `10.00 Hz` raw, `10.00 Hz` compact and `199.95 Hz` adapted IMU. A
+  separate 8-second contract run observed `19968` raw points, `9.75/9.99 Hz`
+  raw/compact and `191.74 Hz` IMU while processing all three streams in one
+  Python executor.
+- Per-point timestamps are epoch nanoseconds. In the sampled frame, the first
+  point differed from the ROS header by about `0.24 us`, the point span was
+  `100.01 ms`, and header-to-validator wall age was about `120.75 ms`.
+- Live acceptance exposed a ROS 2 Humble YAML ambiguity where field name `y`
+  in a string-array parameter became boolean. The contract parameter was
+  changed to a CSV string; local tests passed `10/10`, Jetson relay tests passed
+  `3/3`, and the restarted stack contained the driver, IMU adapter and relay
+  with no launch warnings/errors or service restarts.
+- System `ptp4l` is running as the isolated-link master, but its management
+  socket is `root:root 0660`; exact PTP offset could not be read without
+  privileged access and remains pending. `Linger=no` also remains unchanged,
+  so user services depend on a live login/session. No motion command, Nav2
+  launch or base-service restart occurred during this acceptance.
+
+## MID-360 offline configuration closure: 2026-09-21
+
+- `carbot_parameters.yaml` is now the canonical project source for official
+  MID-360 range, FoV, precision, point-rate, IMU, synchronization, mechanical,
+  power and environment limits, with direct Livox product/protocol URLs and
+  machine-checked provenance.
+- The Isaac RTX profile remains an approximate coverage proxy. Its `0.03 m`
+  range accuracy is tied to the conservative official 1-sigma limit;
+  `0.01 m` range resolution and `0.05 deg` angular standard deviations are
+  explicitly documented simulation assumptions, not manufacturer claims.
+- `carbot_hardware` now owns and installs `MID360_config.json`, configured for
+  the recorded Jetson `192.168.2.100` and sensor `192.168.2.202` addresses.
+  The launch no longer silently loads the Livox package's generic example.
+- `/livox/lidar` remains the authoritative full cloud with expected fields
+  `x/y/z/intensity/tag/line/timestamp`; the relay refuses to derive the
+  bandwidth-reduced `/mid360/points_xyz` stream if any expected source field is
+  absent. The compact stream is not suitable for timestamp, return-quality or
+  calibration analysis.
+- Offline targeted tests passed `25/25`; the isolated `carbot_description`
+  package test result passed `52/52`, and `carbot_description` plus
+  `carbot_hardware` built successfully. The installed package contains the new
+  JSON and its provenance note. Jetson deployment/config comparison and live
+  topic/rate/timestamp inspection remain pending until the Jetson and MID-360
+  can be powered. No physical hardware was contacted for this checkpoint.
+
+## Overhead-clearance simulation fixtures: 2026-09-20
+
+- Both the default headless and WebRTC Carbot launch paths now create two
+  persistent runtime collision beams without modifying the saved
+  `warehouse_v3` map: a green `0.40 m`-clearance beam at map `(2.0, 0.0)` and
+  a red `0.28 m`-clearance beam at map `(-2.0, 0.0)`. Both beams are
+  `0.40 x 1.00 x 0.10 m` and are recreated on every Isaac Sim startup.
+- RViz now subscribes to `/overhead_clearance_markers` and displays the same
+  fixtures as translucent cubes with `PASS: 0.40 m clearance` and
+  `BLOCKED: 0.28 m clearance` labels. Isaac collision geometry and the ROS
+  markers share `configs/carbot/common.yaml`; markers are visual only and do
+  not change the scan slice or navigation costs.
+- A full cold-start navigation acceptance passed all launcher health checks.
+  The `0.40 m` beam produced zero `/scan` hits and the one-plan route passed
+  directly underneath with `0.000 m` lateral offset. The `0.28 m` beam
+  produced up to 32 `/scan` hits and the one-plan route detoured with
+  `1.205 m` minimum lateral offset. Both goals and the intervening return-home
+  goal finished `SUCCEEDED`, and the final commanded speed was zero.
+- Repeat the acceptance with `python3 scripts/validate_overhead_clearance.py`
+  after starting the complete simulation stack. Marker-inclusive scoped
+  regression passed `41` tests with `8` optional-dependency skips. The latest
+  default headless-Isaac plus RViz start passed all health checks, including
+  the marker node/topic checks, and is currently running for user inspection.
 
 ## Physical Carbot software closure: 2026-09-19
 
@@ -95,15 +343,16 @@ is not listening. The next session starts from a clean stopped state.
 - The generated Carbot composition disables `/World/Robot/Shen_Carter`,
   `/World/ROS2_Carter_Graph`, and the legacy `/World/ROS2_LidarRTX`; only the
   Carbot articulation and its independent ROS 2 RTX graph are active.
-- The Mid-360 housing bottom is at `z=0.157 m`, its top is at `z=0.222 m`, and
-  its height is `0.065 m`. Its XY offset is `[-0.003, 0]`. The temporary RTX
-  origin is colocated with the housing bottom until manufacturer origin O is
-  measured; this is explicitly not a calibrated physical origin.
+- At this historical pre-calibration checkpoint, the Mid-360 housing bottom
+  was modeled at `z=0.157 m`, its top at `z=0.222 m`, and its XY offset as
+  `[-0.003, 0]`. These values are superseded by the 2026-09-21 manufacturer
+  origin and physical XYZ/RPY calibration recorded at the top of this file.
 - The raw `/livox/lidar` cloud is published exactly once with frame
   `front_3d_lidar`. The adapter pads it to `/livox/lidar_nvblox` at `1000 x 40`,
   and exactly one nvblox node consumes that topic with simulation time enabled
   and minimum valid range `0.5 m`.
-- Live TF reports `odom -> front_3d_lidar = [-0.003, 0, 0.157]`. A blank-map
+- At that checkpoint live TF reported
+  `odom -> front_3d_lidar = [-0.003, 0, 0.157]`. A blank-map
   run produced a live `0.05 m` OccupancyGrid, confirming the Carbot cloud-to-map
   path. This is a new live map, not the saved `warehouse_v3` map.
 - The old Carter prims remain disabled in the generated composition and must not

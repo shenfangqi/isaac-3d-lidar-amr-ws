@@ -12,7 +12,12 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
-        ("share/" + package_name + "/config", glob("config/*.yaml")),
+        (
+            "share/" + package_name + "/config",
+            glob("config/*.yaml")
+            + glob("config/*.json")
+            + glob("config/*.md"),
+        ),
         ("share/" + package_name + "/launch", glob("launch/*.launch.py")),
         (
             "share/" + package_name + "/systemd",
@@ -27,6 +32,7 @@ setup(
     license="Apache-2.0",
     entry_points={
         "console_scripts": [
+            "cmd_vel_compensator = carbot_hardware.cmd_vel_compensator:main",
             "mid360_imu_adapter = carbot_hardware.mid360_imu_adapter:main",
             "pointcloud_xyz_relay = carbot_hardware.pointcloud_xyz_relay:main",
             "wheel_odometry = carbot_hardware.wheel_odometry:main",

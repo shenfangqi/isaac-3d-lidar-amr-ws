@@ -55,6 +55,7 @@ check_user_service micro-ros-agent.service
 check_user_service carbot-wheel-odometry.service
 check_user_service carbot-mid360.service
 check_user_service carbot-description.service
+check_user_service carbot-command-compensation.service
 check_system_service carbot-mid360-ptp.service
 
 if [[ "$(docker inspect -f '{{.State.Running}}' "${container_name}" 2>/dev/null || true)" != "true" ]]; then
@@ -74,15 +75,27 @@ fi
 
 cmd_publishers="$(topic_count /cmd_vel Publisher)"
 cmd_subscribers="$(topic_count /cmd_vel Subscription)"
-if [[ "${cmd_publishers:-x}" == "0" ]]; then
-  pass "/cmd_vel has no publisher before Nav2 activation"
+command_publishers="$(topic_count /cmd_vel_command Publisher)"
+command_subscribers="$(topic_count /cmd_vel_command Subscription)"
+if [[ "${cmd_publishers:-x}" == "1" ]]; then
+  pass "/cmd_vel has exactly one compensator publisher"
 else
-  fail "/cmd_vel publisher count is ${cmd_publishers:-unknown}; expected 0"
+  fail "/cmd_vel publisher count is ${cmd_publishers:-unknown}; expected 1"
 fi
 if [[ "${cmd_subscribers:-0}" -ge 1 ]] 2>/dev/null; then
   pass "/cmd_vel has a base-controller subscriber"
 else
   fail "/cmd_vel has no base-controller subscriber"
+fi
+if [[ "${command_publishers:-x}" == "0" ]]; then
+  pass "/cmd_vel_command has no publisher before Nav2 activation"
+else
+  fail "/cmd_vel_command publisher count is ${command_publishers:-unknown}; expected 0"
+fi
+if [[ "${command_subscribers:-x}" == "1" ]]; then
+  pass "/cmd_vel_command has exactly one compensator subscriber"
+else
+  fail "/cmd_vel_command subscriber count is ${command_subscribers:-unknown}; expected 1"
 fi
 
 if timeout --kill-after=1s 4s docker exec "${container_name}" bash -lc \

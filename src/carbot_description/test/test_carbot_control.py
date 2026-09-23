@@ -91,3 +91,13 @@ def test_positive_linear_command_produces_positive_track_rates(limits):
 def test_positive_angular_command_has_faster_right_track(limits):
     left, right = carbot_control.body_to_wheels(0.0, 0.5, limits)
     assert left < 0.0 < right
+
+
+def test_calibrated_right_turn_matches_left_turn_in_isaac(limits):
+    left_limiter = carbot_control.CarbotCommandLimiter(limits)
+    right_limiter = carbot_control.CarbotCommandLimiter(limits)
+    left = left_limiter.update(0.0, 0.3, command_age_s=0.0, dt_s=1.0)
+    right = right_limiter.update(0.0, -0.3, command_age_s=0.0, dt_s=1.0)
+    assert right.applied_angular_rad_s == pytest.approx(
+        -left.applied_angular_rad_s
+    )

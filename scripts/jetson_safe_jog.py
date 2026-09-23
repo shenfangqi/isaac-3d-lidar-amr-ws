@@ -31,7 +31,7 @@ def main():
 
     rclpy.init()
     node = rclpy.create_node('carbot_safe_jog')
-    publisher = node.create_publisher(Twist, '/cmd_vel', 10)
+    publisher = node.create_publisher(Twist, '/cmd_vel_command', 10)
     interrupted = False
 
     def request_stop(_signum, _frame):
@@ -53,12 +53,12 @@ def main():
         discovery_deadline = time.monotonic() + 5.0
         while time.monotonic() < discovery_deadline:
             rclpy.spin_once(node, timeout_sec=0.05)
-            if node.count_subscribers('/cmd_vel') >= 1:
+            if node.count_subscribers('/cmd_vel_command') >= 1:
                 break
-        if node.count_subscribers('/cmd_vel') < 1:
-            raise RuntimeError('no /cmd_vel subscriber')
-        if node.count_publishers('/cmd_vel') != 1:
-            raise RuntimeError('another /cmd_vel publisher is present')
+        if node.count_subscribers('/cmd_vel_command') < 1:
+            raise RuntimeError('no /cmd_vel_command compensator subscriber')
+        if node.count_publishers('/cmd_vel_command') != 1:
+            raise RuntimeError('another /cmd_vel_command publisher is present')
 
         deadline = time.monotonic() + args.duration
         while time.monotonic() < deadline and not interrupted:

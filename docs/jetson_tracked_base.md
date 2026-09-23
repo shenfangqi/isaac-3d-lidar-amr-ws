@@ -165,7 +165,11 @@ source /workspace/ros-humble/isaac_3d_lidar_amr_ws/install/local_setup.bash
 source /workspace/ros-humble/isaac_3d_lidar_amr_ws/scripts/real_robot_ros_env.sh
 ```
 
-当前 Nav2 的 `navigation_launch.py` 将 controller 输出重映射到 `/cmd_vel_nav`，再由 `velocity_smoother` 输出标准 `/cmd_vel`。履带控制端只订阅最终的 `/cmd_vel`。
+当前 Nav2 的 `navigation_launch.py` 将 controller 输出重映射到
+`/cmd_vel_nav`，再由 `velocity_smoother` 输出 `/cmd_vel_command`。Jetson 的
+`cmd_vel_compensator` 对负 `angular.z` 应用规范参数 `0.896`，并输出标准
+`/cmd_vel`；履带控制端仍只订阅最终的 `/cmd_vel`。该分层避免同话题回环，
+也让 ESP32 固件保持不变。
 
 ## 启动真实 Nav2 前的硬门槛
 

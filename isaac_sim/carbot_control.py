@@ -23,12 +23,15 @@ class ControlLimits:
     max_linear_acceleration_mps2: float
     max_angular_acceleration_rad_s2: float
     cmd_vel_timeout_s: float
+    right_turn_command_scale: float
+    right_turn_response_gain: float
     right_straight_trim: float = 1.0
 
     @classmethod
     def from_parameters(cls, parameters):
         kinematics = parameters["kinematics"]
         control = parameters["control"]
+        observed_motion = parameters["hardware_response"]["observed_motion"]
         return cls(
             effective_track_separation_m=kinematics[
                 "effective_track_separation_m"
@@ -49,6 +52,10 @@ class ControlLimits:
                 "max_angular_acceleration_rad_s2"
             ],
             cmd_vel_timeout_s=control["cmd_vel_timeout_s"],
+            right_turn_command_scale=control["right_turn_command_scale"],
+            right_turn_response_gain=observed_motion[
+                "right_turn_response_gain_vs_left"
+            ],
             right_straight_trim=control["ideal_sim_right_straight_trim"],
         )
 
@@ -104,14 +111,20 @@ class CarbotCommandLimiter:
             self.limits.max_angular_acceleration_rad_s2 * dt_s,
         )
 
+        compensated_angular = self.angular_rad_s
+        if compensated_angular < 0.0:
+            compensated_angular *= self.limits.right_turn_command_scale
+            compensated_angular *= self.limits.right_turn_response_gain
         left, right = body_to_wheels(
-            self.linear_mps, self.angular_rad_s, self.limits
+            self.linear_mps, compensated_angular, self.limits
         )
         right *= self.limits.right_straight_trim
         left, right, wheel_scale = saturate_wheels(
             left, right, self.limits.max_wheel_velocity_rad_s
         )
-        applied_linear, applied_angular = wheels_to_body(left, right, self.limits)
+        applied_linear, applied_angular = wheels_to_body(
+            left, right, self.limits
+        )
         return LimitedCommand(
             requested_linear_mps=requested_linear,
             requested_angular_rad_s=requested_angular,

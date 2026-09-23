@@ -103,6 +103,11 @@ def test_ideal_sim_does_not_apply_real_robot_trim(parameters):
     control = parameters["control"]
     assert control["ideal_sim_right_straight_trim"] == 1.0
     assert control["high_fidelity_right_straight_trim"] == 1.0005
+    assert control["right_turn_command_scale"] == 0.896
+    gain = parameters["hardware_response"]["observed_motion"][
+        "right_turn_response_gain_vs_left"
+    ]
+    assert control["right_turn_command_scale"] * gain == pytest.approx(1.0)
 
 
 def test_physical_response_envelope_matches_acceptance_evidence(parameters):
@@ -166,9 +171,22 @@ def test_temporary_values_are_explicitly_unvalidated(parameters):
     assert set(temporary_source["scope"]) == {
         "sensors.mid360.visual_proxy",
         "dynamics",
-        "sensor_frame_assumptions",
         "domain_randomization",
     }
+
+
+def test_mid360_imu_extrinsics_and_time_calibration(parameters):
+    imu = parameters["sensor_frame_assumptions"]
+    assert imu["calibration_status"] == (
+        "MANUFACTURER_EXTRINSICS_AND_DYNAMIC_TIME_CALIBRATED"
+    )
+    assert imu["imu_parent_frame"] == "livox_frame"
+    assert imu["imu_translation_m"] == pytest.approx(
+        [0.011, 0.02329, -0.04412]
+    )
+    assert imu["imu_rotation_rpy_rad"] == pytest.approx([0.0, 0.0, 0.0])
+    assert imu["imu_timestamp_correction_s"] == pytest.approx(-0.009782937)
+    assert imu["imu_time_offset_uncertainty_s"] == pytest.approx(0.0006)
 
 
 def test_critical_values_have_expected_provenance(parameters):

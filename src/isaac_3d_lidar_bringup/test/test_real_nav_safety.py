@@ -70,7 +70,7 @@ def test_real_navigation_launch_is_inactive_and_has_one_final_velocity_path():
     assert launch_source.count("('cmd_vel', 'cmd_vel_nav')") == 3
     assert launch_source.count(
         "('cmd_vel_smoothed', cmd_vel_output)") == 1
-    assert "default_value='cmd_vel'" in launch_source
+    assert "default_value='/cmd_vel_command'" in launch_source
     assert 'Use /cmd_vel_diagnostic' in launch_source
     assert "'autostart': autostart" in launch_source
 
