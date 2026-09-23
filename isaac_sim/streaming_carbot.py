@@ -2,6 +2,7 @@
 
 import asyncio
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -124,10 +125,17 @@ async def load_and_control():
         quaternion_yaw_angle,
         rotate_vector,
     )
+    from isaac_sim.evidence_models import (
+        EvidenceActuatorModel,
+        load_evidence_profile,
+    )
     from isaac_sim.carbot_mid360 import (
         create_mid360_pipeline,
         install_profile,
         mid360_runtime_config,
+    )
+    from isaac_sim.overhead_clearance_obstacles import (
+        create_overhead_clearance_obstacles,
     )
     from isaacsim.core.api import World
     from isaacsim.core.prims import SingleArticulation
@@ -144,6 +152,18 @@ async def load_and_control():
     wheel_joint_sign = parameters["simulation"][
         "wheel_joint_coordinate_sign"
     ]
+    response_mode = os.environ.get(
+        "CARBOT_SIM_RESPONSE_MODE",
+        parameters["simulation"]["response_mode_default"],
+    )
+    if response_mode not in parameters["simulation"]["response_modes"]:
+        raise ValueError(f"unsupported CARBOT_SIM_RESPONSE_MODE={response_mode}")
+    response_model = None
+    if response_mode == "evidence_degraded":
+        evidence = load_evidence_profile(
+            WORKSPACE / parameters["simulation"]["evidence_profile"]
+        )
+        response_model = EvidenceActuatorModel(evidence["actuator"])
 
     print(f"Opening streaming Carbot warehouse: {SCENE_PATH}", flush=True)
     await omni.usd.get_context().open_stage_async(str(SCENE_PATH))
@@ -157,6 +177,19 @@ async def load_and_control():
     await update_app(app, 300)
     if stage is None or not stage.GetPrimAtPath(robot_prim_path).IsValid():
         raise RuntimeError(f"Carbot prim is missing: {robot_prim_path}")
+
+    overhead_obstacles = create_overhead_clearance_obstacles(
+        stage, robot_prim_path
+    )
+    print(
+        "Persistent overhead-clearance obstacles: "
+        + ", ".join(
+            f"{item.clearance_m:.2f} m at "
+            f"map=({item.map_x_m:.2f}, {item.map_y_m:.2f})"
+            for item in overhead_obstacles
+        ),
+        flush=True,
+    )
 
     mid360_handles = create_mid360_pipeline(stage, parameters)
     mid360_config = mid360_runtime_config(parameters)
@@ -222,7 +255,7 @@ async def load_and_control():
         10,
     )
     applied_obstacle_sequence = 0
-    limiter = CarbotCommandLimiter(limits)
+    limiter = CarbotCommandLimiter(limits, response_model=response_model)
     last_publish_time = float("-inf")
     previous_simulation_time = world.current_time
     print(

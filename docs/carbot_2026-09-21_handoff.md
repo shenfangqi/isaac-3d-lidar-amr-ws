@@ -32,6 +32,14 @@
 编码器静止，所有服务 active。未修改 ESP32 固件。证据见
 `calibration_data/2026-09-23_cmd_comp_final/README.md`。
 
+2026-09-23 断电离线补充：新增独立的 `evidence_degraded` 仿真模式，证据配置由
+已有真机录包自动生成到 `configs/carbot/evidence_degraded.yaml`。该模式加入命令
+延迟、有限响应、停止拖尾、编码器量化/稀疏丢包重复、MID-360 gyro 残差以及点云
+延迟/噪声/dropout；`evidence_ekf` 路径把真值隔离在 `/ground_truth/odom`，并让
+真实同构的轮里程计和 MID-360 EKF 独占 `/odom`。离线响应回归已通过。车辆全程
+断电，未连接 Jetson、雷达或 ESP32，也未修改 ESP32 仓库。该结果仍不是质量、
+摩擦、履带接触、电机电气特性均已标定的高保真动力学孪生。
+
 已完成的主线包括：
 
 - 车体主要尺寸、footprint、车高、有效轮径和有效履带间距对齐；
@@ -287,6 +295,21 @@ odometry 和 micro-ROS 服务需要至少一个有效用户登录会话；本轮
 - LiDAR XYZ/RPY 已由 2026-09-21 A-B-A 静态反转与正交墙面测量闭环，
   MID-360 内置 IMU 旋转/杠杆臂和点云相对时间偏差也已闭环；LiDAR 外参仍应在
   测绘夹具上独立复核。
+
+可选择的仿真运行模式：
+
+```bash
+# 导航确定性基线（默认）
+CARBOT_SIM_RESPONSE_MODE=ideal_navigation
+
+# 真机证据退化 + 与 Jetson 相同的轮速/MID-360 EKF 接口
+CARBOT_SIM_RESPONSE_MODE=evidence_degraded \
+CARBOT_SIM_ESTIMATOR_MODE=evidence_ekf
+```
+
+第二种模式需同时启动
+`carbot_hardware/launch/sim_evidence_state_estimation.launch.py`；仿真原始点云
+先发布到 `/livox/lidar_ground_truth`，退化节点再发布正式 `/livox/lidar`。
 
 2026-09-21 A-B-A 静态标定结果：Pose C 对 Pose A 的地面法向复现误差为
 `0.127 deg` roll、`0.019 deg` pitch，高度差 `0.49 mm`。分离反转地面/履带

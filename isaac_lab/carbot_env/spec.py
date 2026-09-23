@@ -15,6 +15,7 @@ ROBOT_PARAMETERS_PATH = (
     PROJECT_ROOT / "src/carbot_description/config/carbot_parameters.yaml"
 )
 DEPLOYMENT_PROFILE_PATH = PROJECT_ROOT / "configs/carbot/real.yaml"
+EVIDENCE_PROFILE_PATH = PROJECT_ROOT / "configs/carbot/evidence_degraded.yaml"
 
 
 def _load_yaml(path):
@@ -66,6 +67,7 @@ def load_environment_spec():
     ]
     spec["domain_randomization"] = deepcopy(robot["domain_randomization"])
     spec["hardware_response"] = deepcopy(robot["hardware_response"])
+    spec["evidence_profile"] = deepcopy(_load_yaml(EVIDENCE_PROFILE_PATH))
     return spec
 
 

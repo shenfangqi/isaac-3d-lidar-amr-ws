@@ -108,6 +108,12 @@ def test_ideal_sim_does_not_apply_real_robot_trim(parameters):
         "right_turn_response_gain_vs_left"
     ]
     assert control["right_turn_command_scale"] * gain == pytest.approx(1.0)
+    simulation = parameters["simulation"]
+    assert simulation["response_mode_default"] == "ideal_navigation"
+    assert simulation["response_modes"] == [
+        "ideal_navigation",
+        "evidence_degraded",
+    ]
 
 
 def test_physical_response_envelope_matches_acceptance_evidence(parameters):
@@ -165,7 +171,9 @@ def test_randomization_ranges_cover_observed_response(parameters):
 def test_temporary_values_are_explicitly_unvalidated(parameters):
     marker = "TEMP_ESTIMATE_NOT_CALIBRATED"
     assert parameters["dynamics"]["calibration_status"] == marker
-    assert parameters["domain_randomization"]["calibration_status"] == marker
+    assert parameters["domain_randomization"]["calibration_status"] == (
+        "PARTIAL_PHYSICAL_EVIDENCE_WITH_UNCALIBRATED_DYNAMICS"
+    )
     temporary_source = parameters["provenance"][marker]
     assert temporary_source["status"] == marker
     assert set(temporary_source["scope"]) == {

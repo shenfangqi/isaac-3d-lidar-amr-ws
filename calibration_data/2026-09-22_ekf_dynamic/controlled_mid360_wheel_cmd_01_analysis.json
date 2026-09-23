@@ -1,0 +1,43 @@
+{
+  "bag": "calibration_data/2026-09-22_ekf_dynamic/controlled_mid360_wheel_cmd_01",
+  "duration_s": 53.735094092,
+  "gyro_z_stationary": {
+    "bias_rad_s": 0.00414,
+    "noise_stddev_rad_s": 0.00105,
+    "measured_variance_rad2_s2": 1.1e-6,
+    "configured_covariance_floor_rad2_s2": 4.0e-6
+  },
+  "turn_agreement": {
+    "left_wheel_yaw_rad": 0.6425303842,
+    "left_bias_corrected_imu_yaw_rad": 0.6425819833,
+    "right_wheel_yaw_rad": -0.4476674389,
+    "right_bias_corrected_imu_yaw_rad": -0.4406965697
+  },
+  "lidar_icp": {
+    "cloud_frames": 529,
+    "accepted_frame_pairs": 528,
+    "median_pair_residual_m": 0.0177781354,
+    "final_yaw_rad": 0.1813253487
+  },
+  "isolated_ekf_ab": {
+    "ros_domain_id": 42,
+    "common_window_start_s": 1790079909.357228,
+    "common_window_end_s": 1790079957.198097,
+    "lidar_yaw_rad": 0.1893869800,
+    "wheel_yaw_rad": 0.1900859620,
+    "ekf_yaw_rad": 0.1894036762,
+    "wheel_absolute_lidar_error_rad": 0.0006989819,
+    "ekf_absolute_lidar_error_rad": 0.0000166961,
+    "absolute_error_improvement_rad": 0.0006822858,
+    "wheel_delta_xy_m": [-0.0840706109, 0.0022142714],
+    "ekf_delta_xy_m": [-0.0873733621, 0.0023236264],
+    "ekf_final_pose_covariance_xyyaw": [
+      0.0214485431,
+      0.0453788879,
+      0.0000346447
+    ],
+    "dynamic_process_noise_covariance": true,
+    "wheel_yaw_is_low_frequency_anchor": true
+  },
+  "decision": "offline_mid360_wheel_ekf_ab_passed"
+}

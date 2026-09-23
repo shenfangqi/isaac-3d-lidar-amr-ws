@@ -177,6 +177,9 @@ interfaces:
 
 simulation:
   control_mode: ideal_kinematic_tracked_differential
+  response_mode_default: ideal_navigation
+  response_modes: [ideal_navigation, evidence_degraded]
+  evidence_profile: configs/carbot/evidence_degraded.yaml
   articulation_root_prim: /World/Carbot/base_footprint
   wheel_joint_coordinate_sign: -1.0
 
@@ -210,7 +213,7 @@ sensor_frame_assumptions:
   note: Official axes are identical to the point-cloud axes. Dynamic wall/gyro alignment independently confirmed yaw polarity and resolved the IMU stamp correction; gyro bias remains temperature-dependent and is not hard-coded.
 
 domain_randomization:
-  calibration_status: TEMP_ESTIMATE_NOT_CALIBRATED
+  calibration_status: PARTIAL_PHYSICAL_EVIDENCE_WITH_UNCALIBRATED_DYNAMICS
   mass_kg: [1.6, 2.0]
   com_offset_m:
     x: [-0.02, 0.02]
@@ -220,13 +223,18 @@ domain_randomization:
   effective_radius_m: [0.0205, 0.0230]
   friction_scale: [0.6, 1.4]
   actuator_strength_scale: [0.75, 1.25]
-  command_latency_s: [0.02, 0.15]
+  command_latency_s: [0.06, 0.10]
   forward_track_deadband_mps: [0.04, 0.06]
   reverse_track_deadband_mps: [0.015, 0.03]
-  longitudinal_gain: [0.97, 1.03]
-  yaw_gain: [0.97, 1.03]
-  stop_tail_s: [0.5, 1.0]
+  # Include both the evidence-degraded vehicle and the unit-gain ideal
+  # navigation contract used for curriculum and A/B regression.
+  longitudinal_gain: [0.85, 1.03]
+  yaw_gain: [0.52, 1.03]
+  stop_tail_s: [0.57, 0.92]
   point_dropout_fraction: [0.0, 0.05]
+  encoder_drop_fraction: [0.0, 0.00044]
+  encoder_duplicate_fraction: [0.0, 0.000134]
+  imu_gyro_z_noise_stddev_rad_s: [0.0007, 0.0014]
 
 # Provenance IDs make measured, source-derived, ground-calibrated, observed,
 # design, and temporary values machine-checkable without duplicating values.

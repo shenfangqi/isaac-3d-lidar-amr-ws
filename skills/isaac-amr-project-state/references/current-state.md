@@ -3,7 +3,33 @@
 Session handoff and next-step procedure:
 [`docs/carbot_2026-09-21_handoff.md`](../../../docs/carbot_2026-09-21_handoff.md).
 
-Newest checkpoint: [right-turn command compensation acceptance: 2026-09-23](#right-turn-command-compensation-acceptance-2026-09-23).
+Newest checkpoint: [offline evidence-constrained twin: 2026-09-23](#offline-evidence-constrained-twin-2026-09-23).
+
+## Offline evidence-constrained twin: 2026-09-23
+
+- `ideal_navigation` remains the deterministic navigation baseline. A separate
+  `evidence_degraded` response mode now consumes the generated, versioned
+  `configs/carbot/evidence_degraded.yaml`; it models measured command latency,
+  directional finite-duration gains, braking tail, encoder quantization and
+  sparse faults, MID-360 gyro residuals, and point-cloud delay/noise/dropout.
+- `CARBOT_SIM_ESTIMATOR_MODE=evidence_ekf` publishes truth only on
+  `/ground_truth/odom`, publishes the real `/wheel_ticks`, `/carbot/status` and
+  `/mid360/imu/data_raw` contracts, and reserves `/odom` plus odom TF for the
+  same wheel-odometry and robot_localization configuration used on Jetson.
+- The deterministic offline response regression passes for the 20 ms runtime:
+  first observable response `0.10 s`, forward/reverse ten-second distances
+  `0.4308/-0.4274 m`, and stop tails `0.84 s`. These are evidence-model checks,
+  not new physical measurements or proof of a contact-dynamics twin.
+- An isolated full-process forward/turn test produced 500 truth and 404 EKF
+  samples; final EKF errors were `3.96 mm` and `0.044 deg`. The default
+  `ideal_navigation` stack then passed all startup health gates plus 0.4 m
+  straight and turning goals with `SUCCEEDED`, zero recoveries and zero final
+  velocity. Evidence is in `calibration_data/2026-09-23_offline_twin/`.
+- Domain-randomization timing, actuator, encoder and IMU ranges now include the
+  measured wood-floor zero-payload evidence while mass, COM, inertia, friction,
+  other surfaces and payloads remain uncalibrated release blockers.
+- This work was performed with the vehicle powered off. No Jetson, MID-360 or
+  ESP32 runtime was contacted, and no ESP32 source was changed.
 
 ## Right-turn command compensation acceptance: 2026-09-23
 
@@ -55,6 +81,11 @@ Newest checkpoint: [right-turn command compensation acceptance: 2026-09-23](#rig
   `calibration_data/2026-09-22_ekf_dynamic/`.
 
 ## MID-360-only fusion and dynamics audit: 2026-09-22
+
+This section is a historical pre-acceptance checkpoint. Its statements that
+robot_localization was absent, EKF was disabled, or firmware flashing was
+pending are superseded by the newer EKF acceptance, operator-confirmed flash,
+and offline-twin checkpoints above.
 
 - The only permitted estimator IMU is `/mid360/imu/data_raw`. ESP32 remains the
   wheel-tick and base-control source; its legacy `/imu/data_raw` publisher had

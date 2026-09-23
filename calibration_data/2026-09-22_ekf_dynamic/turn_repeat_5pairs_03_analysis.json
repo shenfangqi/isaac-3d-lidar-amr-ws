@@ -1,0 +1,38 @@
+{
+  "bag": "calibration_data/2026-09-22_ekf_dynamic/turn_repeat_5pairs_03",
+  "command": {
+    "angular_speed_rad_s": 0.3,
+    "duration_s": 3.0,
+    "settle_s": 2.0,
+    "pairs": 5
+  },
+  "ekf_yaw_deg": {
+    "left": [
+      29.1749721411,
+      30.2415127358,
+      29.9117934114,
+      30.6856567994,
+      30.9035016681
+    ],
+    "right": [
+      -35.7511406411,
+      -35.3129110544,
+      -35.5364718693,
+      -35.3510795928,
+      -35.2654621626
+    ]
+  },
+  "summary": {
+    "left_mean_deg": 30.1834873511,
+    "left_sample_stddev_deg": 0.6828034568,
+    "right_magnitude_mean_deg": 35.4434130641,
+    "right_magnitude_sample_stddev_deg": 0.2003615299,
+    "left_response_gain": 0.5853347045,
+    "right_response_gain": 0.6873380623,
+    "right_over_left_response": 1.1742650096,
+    "right_command_multiplier_to_match_left": 0.8515965236,
+    "left_command_multiplier_to_match_right": 1.1742650096,
+    "five_pair_net_ekf_yaw_deg": -26.2056647733
+  },
+  "decision": "repeatable_directional_turn_asymmetry_confirmed"
+}

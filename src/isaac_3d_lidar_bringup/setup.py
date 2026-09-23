@@ -50,6 +50,11 @@ setup(
             'isaac_3d_lidar_bringup.amcl_pose_initializer:main',
             'pointcloud_padder = '
             'isaac_3d_lidar_bringup.pointcloud_padder:main',
+            'pointcloud_evidence_degrader = '
+            'isaac_3d_lidar_bringup.pointcloud_evidence_degrader:main',
+            'overhead_clearance_marker_publisher = '
+            'isaac_3d_lidar_bringup.'
+            'overhead_clearance_marker_publisher:main',
             'static_map_scan_filter = '
             'isaac_3d_lidar_bringup.static_map_scan_filter:main',
         ],

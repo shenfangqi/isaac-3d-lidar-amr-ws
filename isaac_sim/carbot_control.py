@@ -73,14 +73,17 @@ class LimitedCommand:
 
 
 class CarbotCommandLimiter:
-    def __init__(self, limits):
+    def __init__(self, limits, response_model=None):
         self.limits = limits
+        self.response_model = response_model
         self.linear_mps = 0.0
         self.angular_rad_s = 0.0
 
     def reset(self):
         self.linear_mps = 0.0
         self.angular_rad_s = 0.0
+        if self.response_model is not None:
+            self.response_model.reset()
 
     def update(self, linear_mps, angular_rad_s, command_age_s, dt_s):
         if dt_s <= 0.0:
@@ -115,8 +118,13 @@ class CarbotCommandLimiter:
         if compensated_angular < 0.0:
             compensated_angular *= self.limits.right_turn_command_scale
             compensated_angular *= self.limits.right_turn_response_gain
+        applied_linear = self.linear_mps
+        if self.response_model is not None:
+            applied_linear, compensated_angular = self.response_model.update(
+                applied_linear, compensated_angular, dt_s
+            )
         left, right = body_to_wheels(
-            self.linear_mps, compensated_angular, self.limits
+            applied_linear, compensated_angular, self.limits
         )
         right *= self.limits.right_straight_trim
         left, right, wheel_scale = saturate_wheels(

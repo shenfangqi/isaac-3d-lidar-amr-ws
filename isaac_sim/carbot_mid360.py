@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 
 
-def mid360_runtime_config(parameters):
+def mid360_runtime_config(parameters, pointcloud_topic=None):
     """Return the simulation fields consumed by the Isaac runtime."""
     mid360 = parameters["sensors"]["mid360"]
     control_period_s = parameters["control"]["differential_period_s"]
@@ -21,7 +21,7 @@ def mid360_runtime_config(parameters):
         )
     return {
         "profile_name": mid360["simulation_profile_name"],
-        "pointcloud_topic": mid360["pointcloud_topic"],
+        "pointcloud_topic": pointcloud_topic or mid360["pointcloud_topic"],
         "pointcloud_type": mid360["pointcloud_type"],
         "pointcloud_rate_hz": pointcloud_rate_hz,
         "frame_skip_count": rounded_step_count - 1,
@@ -94,14 +94,14 @@ def install_profile(profile_path, get_extension_path_from_name):
     return installed_profile
 
 
-def create_mid360_pipeline(stage, parameters):
+def create_mid360_pipeline(stage, parameters, pointcloud_topic=None):
     """Attach an RTX lidar to Carbot and publish its PointCloud2 stream."""
     import omni.graph.core as og
     import omni.kit.commands
     import omni.replicator.core as rep
     from pxr import Gf
 
-    config = mid360_runtime_config(parameters)
+    config = mid360_runtime_config(parameters, pointcloud_topic)
     articulation_root_path = parameters["simulation"][
         "articulation_root_prim"
     ]

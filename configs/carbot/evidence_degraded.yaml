@@ -1,0 +1,68 @@
+schema_version: 1
+status: EVIDENCE_CONSTRAINED_WOOD_FLOOR_ZERO_PAYLOAD
+limitations:
+- not a calibrated mass/friction/contact dynamics twin
+- finite-duration gains are specific to wood floor and zero payload
+- PWM, motor RPM, voltage sag and current were not recorded together
+sources:
+- src/carbot_description/config/carbot_parameters.yaml
+- calibration_data/2026-09-22_ekf_dynamic/turn_repeat_5pairs_03_analysis.json
+- calibration_data/2026-09-23_cmd_comp_final/physical_final_04_analysis.json
+- calibration_data/2026-09-22_ekf_dynamic/controlled_mid360_wheel_cmd_01_analysis.json
+- calibration_data/2026-09-21_static_mid360/mid360_static_analysis.json
+actuator:
+  command_latency_s: 0.073
+  rise_time_constant_s: 0.12
+  rise_time_constant_status: bounded_assumption_from_existing_steps
+  stop_tail_s: 0.745
+  stop_tail_range_s:
+  - 0.57
+  - 0.92
+  stop_time_constant_s: 0.19043855288332193
+  stationary_threshold_mps: 0.001
+  linear_gain:
+    forward: 0.882
+    reverse: 0.875
+    status: surveyed_0p05_mps_10s_trials
+  yaw_gain:
+    left: 0.5821349284174
+    right_after_compensation: 0.5547206103531258
+    status: 2026_09_23_three_second_acceptance
+  right_turn_command_scale: 0.896
+  uncompensated_right_over_left_response: 1.1742650096
+  track_deadband_mps:
+    forward: 0.05
+    reverse: 0.02
+encoder:
+  counts_per_revolution: 1560
+  publish_rate_hz: 50
+  drop_fraction: 0.00022
+  duplicate_fraction: 6.7e-05
+  maximum_observed_receive_gap_s: 0.345
+  seed: 20260923
+imu:
+  publish_rate_hz: 200
+  gyro_z_noise_stddev_rad_s: 0.00105
+  gyro_z_residual_bias_rad_s: 0.00039022790315293063
+  gyro_z_covariance_rad2_s2: 4.0e-06
+  receive_latency_mean_s: 0.001468353267754714
+  receive_latency_stddev_s: 0.0002546382298822792
+  timestamp_correction_s: -0.009782937
+  seed: 20260924
+pointcloud:
+  publish_rate_hz: 10
+  range_noise_stddev_m: 0.03
+  point_dropout_fraction: 0.02
+  observed_points_per_frame:
+  - 19584
+  - 20448
+  receive_latency_mean_s: 0.1109323606058279
+  receive_latency_stddev_s: 0.0011617101538930915
+  point_timestamp_span_mean_s: 0.09998976568660825
+  seed: 20260925
+state_estimation:
+  wheel_odom_topic: /wheel/odom
+  imu_topic: /mid360/imu/data_raw
+  filtered_odom_topic: /odom
+  ground_truth_topic: /ground_truth/odom
+  ekf_config: src/carbot_hardware/config/mid360_wheel_ekf.yaml

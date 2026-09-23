@@ -10,11 +10,16 @@ from pathlib import Path
 os.environ.setdefault("ROS_DISTRO", "humble")
 os.environ.setdefault("RMW_IMPLEMENTATION", "rmw_cyclonedds_cpp")
 bridge_library = "/isaac-sim/exts/isaacsim.ros2.bridge/humble/lib"
+message_library = (
+    "/workspace/ros-humble/isaac_3d_lidar_amr_ws/install/carbot_msgs/lib"
+)
 library_path = os.environ.get("LD_LIBRARY_PATH", "")
-if bridge_library not in library_path.split(":"):
-    os.environ["LD_LIBRARY_PATH"] = ":".join(
-        value for value in (library_path, bridge_library) if value
+os.environ["LD_LIBRARY_PATH"] = ":".join(
+    dict.fromkeys(
+        value for value in (library_path, bridge_library, message_library)
+        if value
     )
+)
 
 WORKSPACE = Path("/workspace/ros-humble/isaac_3d_lidar_amr_ws")
 SCENE_PATH = WORKSPACE / "isaac_sim/usd/warehouse_3d_nav_origin_carbot.usd"
@@ -50,6 +55,10 @@ from geometry_msgs.msg import TransformStamped, Twist  # noqa: E402
 from isaac_sim.carbot_control import (  # noqa: E402
     CarbotCommandLimiter,
     ControlLimits,
+)
+from isaac_sim.evidence_models import (  # noqa: E402
+    EvidenceActuatorModel,
+    load_evidence_profile,
 )
 from isaacsim.core.api import World  # noqa: E402
 from isaacsim.core.prims import SingleArticulation  # noqa: E402
@@ -123,13 +132,14 @@ def time_message(seconds):
 
 
 class CarbotRosNode(Node):
-    def __init__(self, limits):
+    def __init__(self, limits, odom_topic="/odom", publish_odom_tf=True):
         super().__init__("carbot_isaac_sim")
         self.requested_linear_mps = 0.0
         self.requested_angular_rad_s = 0.0
         self.last_command_monotonic = float("-inf")
         self.watchdog_was_active = True
         self.limits = limits
+        self.publish_odom_tf = publish_odom_tf
 
         sensor_qos = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
@@ -150,7 +160,7 @@ class CarbotRosNode(Node):
             durability=DurabilityPolicy.VOLATILE,
         )
         self.create_subscription(Twist, "/cmd_vel", self.command_callback, 10)
-        self.odom_publisher = self.create_publisher(Odometry, "/odom", 10)
+        self.odom_publisher = self.create_publisher(Odometry, odom_topic, 10)
         self.joint_publisher = self.create_publisher(
             JointState, "/joint_states", sensor_qos
         )
@@ -224,7 +234,8 @@ def publish_state(
     transform.transform.rotation.x = float(planar_orientation[1])
     transform.transform.rotation.y = float(planar_orientation[2])
     transform.transform.rotation.z = float(planar_orientation[3])
-    node.tf_publisher.publish(TFMessage(transforms=[transform]))
+    if node.publish_odom_tf:
+        node.tf_publisher.publish(TFMessage(transforms=[transform]))
 
     joint_state = JointState()
     joint_state.header.stamp = stamp
@@ -247,6 +258,9 @@ def main():
         install_profile,
         mid360_runtime_config,
     )
+    from isaac_sim.overhead_clearance_obstacles import (
+        create_overhead_clearance_obstacles,
+    )
 
     profile_path = (
         WORKSPACE / "isaac_sim/lidar_configs/Livox_Mid360_Approx.json"
@@ -259,6 +273,32 @@ def main():
     control_period_s = parameters["control"]["differential_period_s"]
     robot_prim_path = parameters["simulation"]["articulation_root_prim"]
     wheel_joint_sign = parameters["simulation"]["wheel_joint_coordinate_sign"]
+    response_mode = os.environ.get(
+        "CARBOT_SIM_RESPONSE_MODE",
+        parameters["simulation"]["response_mode_default"],
+    )
+    if response_mode not in parameters["simulation"]["response_modes"]:
+        raise ValueError(f"unsupported CARBOT_SIM_RESPONSE_MODE={response_mode}")
+    response_model = None
+    evidence = None
+    if response_mode == "evidence_degraded":
+        evidence_path = WORKSPACE / parameters["simulation"][
+            "evidence_profile"
+        ]
+        evidence = load_evidence_profile(evidence_path)
+        response_model = EvidenceActuatorModel(evidence["actuator"])
+    estimator_mode = os.environ.get("CARBOT_SIM_ESTIMATOR_MODE", "direct")
+    if estimator_mode not in ("direct", "evidence_ekf"):
+        raise ValueError(
+            f"unsupported CARBOT_SIM_ESTIMATOR_MODE={estimator_mode}"
+        )
+    if estimator_mode == "evidence_ekf" and evidence is None:
+        raise ValueError("evidence_ekf requires evidence_degraded response mode")
+    raw_pointcloud_topic = (
+        "/livox/lidar_ground_truth"
+        if estimator_mode == "evidence_ekf"
+        else None
+    )
 
     print(f"Opening Carbot warehouse: {SCENE_PATH}", flush=True)
     omni.usd.get_context().open_stage(str(SCENE_PATH))
@@ -269,8 +309,23 @@ def main():
             f"Carbot warehouse failed to load {robot_prim_path}"
         )
 
-    mid360_handles = create_mid360_pipeline(stage, parameters)
-    mid360_config = mid360_runtime_config(parameters)
+    overhead_obstacles = create_overhead_clearance_obstacles(
+        stage, robot_prim_path
+    )
+    print(
+        "Persistent overhead-clearance obstacles: "
+        + ", ".join(
+            f"{item.clearance_m:.2f} m at "
+            f"map=({item.map_x_m:.2f}, {item.map_y_m:.2f})"
+            for item in overhead_obstacles
+        ),
+        flush=True,
+    )
+
+    mid360_handles = create_mid360_pipeline(
+        stage, parameters, raw_pointcloud_topic
+    )
+    mid360_config = mid360_runtime_config(parameters, raw_pointcloud_topic)
     print(
         f"Carbot Mid-360 ready: {mid360_handles[0].GetPath()}; "
         f"{mid360_config['pointcloud_topic']} "
@@ -305,12 +360,29 @@ def main():
     robot.set_world_pose(initial_position, initial_orientation)
 
     rclpy.init(args=None)
-    node = CarbotRosNode(limits)
-    limiter = CarbotCommandLimiter(limits)
+    node = CarbotRosNode(
+        limits,
+        odom_topic=(
+            evidence["state_estimation"]["ground_truth_topic"]
+            if estimator_mode == "evidence_ekf"
+            else "/odom"
+        ),
+        publish_odom_tf=estimator_mode == "direct",
+    )
+    evidence_observations = None
+    if estimator_mode == "evidence_ekf":
+        from isaac_sim.evidence_observations import (
+            EvidenceObservationPublisher,
+        )
+
+        evidence_observations = EvidenceObservationPublisher(
+            node, evidence, time_message
+        )
+    limiter = CarbotCommandLimiter(limits, response_model=response_model)
     last_publish_time = float("-inf")
     print(
-        "Carbot control ready: /cmd_vel -> 12 wheel joints; "
-        "publishing /odom /tf /joint_states /clock /livox/lidar",
+        f"Carbot control ready [{response_mode}, {estimator_mode}]: "
+        "/cmd_vel -> 12 wheel joints; publishing state and sensors",
         flush=True,
     )
 
@@ -379,6 +451,10 @@ def main():
                     initial_position,
                     initial_orientation,
                 )
+                if evidence_observations is not None:
+                    evidence_observations.update(
+                        world.current_time, command, control_period_s
+                    )
                 last_publish_time = world.current_time
             remaining_wall_time = control_period_s - (
                 time.monotonic() - loop_started

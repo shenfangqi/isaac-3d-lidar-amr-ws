@@ -102,7 +102,9 @@ class WheelOdometry(Node):
         self._odom_publisher = self.create_publisher(
             Odometry, str(self.get_parameter("odom_topic").value), 10
         )
-        self._tf_broadcaster = TransformBroadcaster(self)
+        self._tf_broadcaster = (
+            TransformBroadcaster(self) if self._publish_tf else None
+        )
         self._status_subscription = self.create_subscription(
             CarbotStatus,
             str(self.get_parameter("status_topic").value),
@@ -205,7 +207,7 @@ class WheelOdometry(Node):
         odom.twist.covariance = self._twist_covariance
         self._odom_publisher.publish(odom)
 
-        if self._publish_tf:
+        if self._tf_broadcaster is not None:
             transform = TransformStamped()
             transform.header = odom.header
             transform.child_frame_id = self._base_frame

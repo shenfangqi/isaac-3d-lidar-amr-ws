@@ -1,0 +1,12 @@
+{
+  "checks": {
+    "both_streams_healthy": true,
+    "position_error_below_2cm": true,
+    "yaw_error_below_2deg": true
+  },
+  "filtered_samples": 404,
+  "final_position_error_m": 0.003959701502079717,
+  "final_yaw_error_rad": 0.0007706946393170044,
+  "ground_truth_samples": 500,
+  "passed": true
+}

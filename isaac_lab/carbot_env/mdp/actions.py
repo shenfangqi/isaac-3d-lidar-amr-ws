@@ -143,6 +143,14 @@ class CarbotTwistAction(ActionTerm):
     def _wheel_targets(self):
         linear = self._processed_actions[:, 0]
         angular = self._processed_actions[:, 1]
+        right_turn = angular < 0.0
+        angular = torch.where(
+            right_turn,
+            angular
+            * self.cfg.right_turn_command_scale
+            * self.cfg.right_turn_response_gain_vs_left,
+            angular,
+        )
         half_separation = self.cfg.effective_track_separation_m / 2.0
         radius = self.cfg.effective_sprocket_radius_m
         left = (linear - angular * half_separation) / radius
@@ -318,4 +326,6 @@ class CarbotTwistActionCfg(ActionTermCfg):
     watchdog_timeout_s: float = MISSING
     forward_track_deadband_mps: float = MISSING
     reverse_track_deadband_mps: float = MISSING
+    right_turn_command_scale: float = 1.0
+    right_turn_response_gain_vs_left: float = 1.0
     ideal_kinematic: bool = False

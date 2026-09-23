@@ -160,6 +160,12 @@ class ActionsCfg:
         reverse_track_deadband_mps=ACTION["hardware_response"][
             "track_deadband"
         ]["reverse_min_sustainable_mps"],
+        right_turn_command_scale=ROBOT["control"][
+            "right_turn_command_scale"
+        ],
+        right_turn_response_gain_vs_left=ACTION["hardware_response"][
+            "observed_motion"
+        ]["right_turn_response_gain_vs_left"],
         ideal_kinematic=(
             ROBOT["simulation"]["control_mode"]
             == "ideal_kinematic_tracked_differential"

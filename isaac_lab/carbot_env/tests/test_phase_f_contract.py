@@ -67,7 +67,10 @@ def test_limits_and_randomization_resolve_from_single_parameter_sources(spec):
         "reliable_in_place_angular_command_rad_s": [0.40, 0.50],
     }
     assert spec["domain_randomization"]["calibration_status"] == (
-        "TEMP_ESTIMATE_NOT_CALIBRATED"
+        "PARTIAL_PHYSICAL_EVIDENCE_WITH_UNCALIBRATED_DYNAMICS"
+    )
+    assert spec["evidence_profile"]["status"].startswith(
+        "EVIDENCE_CONSTRAINED"
     )
     assert robot["dynamics"]["per_side_effort_limit_nm"] / 6.0 == (
         pytest.approx(0.08333333333333333)
@@ -127,11 +130,17 @@ def test_hardware_backlog_blocks_policy_release():
     assert {
         "track_slip_surface_variation",
         "actuator_latency_deadband_braking",
-        "mid360_origin_and_extrinsics",
         "command_watchdog_and_estop",
         "observation_parity",
         "real_navigation_acceptance",
     }.issubset(blockers)
+    assert items["mid360_origin_and_extrinsics"]["state"] == (
+        "lidar_and_imu_extrinsics_calibrated"
+    )
+    assert (
+        items["mid360_origin_and_extrinsics"]["blocking_calibration"]
+        is False
+    )
     assert items["jetson_wheel_ticks_decode"]["state"] == (
         "physical_verified"
     )

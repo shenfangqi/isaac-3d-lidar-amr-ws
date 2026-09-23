@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from isaac_sim.evidence_models import EvidenceActuatorModel
+
 
 DESCRIPTION_ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE = DESCRIPTION_ROOT.parents[1]
@@ -101,3 +103,18 @@ def test_calibrated_right_turn_matches_left_turn_in_isaac(limits):
     assert right.applied_angular_rad_s == pytest.approx(
         -left.applied_angular_rad_s
     )
+
+
+def test_evidence_response_mode_changes_transient_and_gain(limits):
+    profile = yaml.safe_load(
+        (WORKSPACE / "configs/carbot/evidence_degraded.yaml").read_text()
+    )
+    limiter = carbot_control.CarbotCommandLimiter(
+        limits, EvidenceActuatorModel(profile["actuator"])
+    )
+    early = limiter.update(0.1, 0.0, command_age_s=0.0, dt_s=0.02)
+    assert early.applied_linear_mps == 0.0
+    command = early
+    for _ in range(150):
+        command = limiter.update(0.1, 0.0, command_age_s=0.0, dt_s=0.02)
+    assert command.applied_linear_mps == pytest.approx(0.0882, rel=0.02)
