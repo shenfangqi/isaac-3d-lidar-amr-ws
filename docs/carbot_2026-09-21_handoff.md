@@ -40,6 +40,17 @@
 断电，未连接 Jetson、雷达或 ESP32，也未修改 ESP32 仓库。该结果仍不是质量、
 摩擦、履带接触、电机电气特性均已标定的高保真动力学孪生。
 
+2026-09-23 通电静止耐久补充：完成 32.76 分钟联合录包。ESP 全程同一 boot ID，
+时间同步有效、重连和 ping 失败均为零，轮计数保持 `0/0`；六项 Jetson 服务在
+31 个分钟采样点均为 `active/running` 且 `NRestarts=0`。MID-360 在线频率为约
+`200 Hz` IMU 和 `10 Hz` 点云，所有关键 header 严格单调。融合位置无漂移，静止
+航向净漂移 `0.905 deg`、最大偏离 `1.180 deg`。最终运动 bag 的 `1.414 deg`
+转向残差由轮里程、MID-360 gyro 和 EKF 分别复现为 `1.423/1.438/1.403 deg`，
+因此属于单次物理响应差异而不是 EKF 独有误差。完整证据见
+`calibration_data/2026-09-23_static_durability/README.md` 和
+`calibration_data/2026-09-23_cmd_comp_final/physical_final_04_detailed_analysis.json`。
+精确 PTP slave offset/mean path delay 仍因 root-only 管理 socket 未记录。
+
 已完成的主线包括：
 
 - 车体主要尺寸、footprint、车高、有效轮径和有效履带间距对齐；

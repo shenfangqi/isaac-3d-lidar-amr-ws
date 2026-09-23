@@ -38,3 +38,24 @@ rejected execution while the post-reboot micro-ROS session was reconnecting or
 while the read-only bag recorder added expected subscriptions. They contain no
 nonzero command. Large rosbag database files are ignored by Git; metadata,
 logs, the accepted JSON analysis and this summary remain tracked.
+
+## Detailed bag analysis
+
+`physical_final_04_detailed_analysis.json` adds header-time-based dynamics and
+cross-sensor checks:
+
+- steady forward/reverse velocity was `+0.05482/-0.05373 m/s`;
+- smoothed peak linear acceleration was about `0.215 m/s^2` in both directions;
+- steady left/right yaw rate was `+0.17243/-0.17251 rad/s`;
+- smoothed peak left/right angular acceleration was `0.702/0.780 rad/s^2`;
+- first-motion latency was `0.327..0.483 s` and stop tail was
+  `0.388..0.465 s` for these low-speed segments;
+- all tracked EKF pose/twist covariance values were finite.
+
+The isolated turn-pair residual is independently reproduced by wheel odometry
+(`1.423 deg`), bias-corrected MID-360 gyro integration (`1.438 deg`) and EKF
+(`1.403 deg`). It is therefore a physical finite-run response variation, not
+an EKF-only estimation error. The accepted right turn produced 95.33% of the
+left angle in this run. A single-run equal-angle estimate would be about
+`0.940`, but it does not supersede the five-pair calibration and visible final
+acceptance that selected the canonical `0.896`.
