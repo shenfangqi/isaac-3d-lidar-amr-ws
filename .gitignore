@@ -15,7 +15,7 @@
 .ruff_cache/
 
 # JavaScript dependencies
-**/node_modules/
+**/node_modules
 
 # IDE and OS metadata
 .vscode/
