@@ -2,7 +2,12 @@ import struct
 
 from sensor_msgs.msg import PointCloud2, PointField
 
-from carbot_hardware.pointcloud_xyz_relay import compact_xyz_cloud
+from carbot_hardware.pointcloud_xyz_relay import (
+    LIVOX_FULL_FIELD_NAMES,
+    compact_xyz_cloud,
+    missing_pointcloud_fields,
+    should_publish_frame,
+)
 
 
 def _field(name, offset):
@@ -29,6 +34,8 @@ def test_compact_xyz_cloud_strips_extra_fields():
     message.row_step = 32
     message.is_dense = True
     message.data = struct.pack('<ffffffff', 1, 2, 3, 9, 4, 5, 6, 8)
+    original_fields = list(message.fields)
+    original_data = bytes(message.data)
 
     output = compact_xyz_cloud(message)
 
@@ -40,6 +47,22 @@ def test_compact_xyz_cloud_strips_extra_fields():
     assert [field.name for field in output.fields] == ['x', 'y', 'z']
     assert struct.unpack('<ffffff', output.data) == (1, 2, 3, 4, 5, 6)
     assert output.is_dense
+    assert message.fields == original_fields
+    assert bytes(message.data) == original_data
+
+
+def test_full_livox_field_contract_is_checked_before_deriving_xyz():
+    message = PointCloud2()
+    message.fields = [
+        PointField(name=name, offset=index, datatype=PointField.UINT8, count=1)
+        for index, name in enumerate(LIVOX_FULL_FIELD_NAMES)
+    ]
+
+    assert missing_pointcloud_fields(message) == ()
+    message.fields = [
+        field for field in message.fields if field.name not in {'tag', 'line'}
+    ]
+    assert missing_pointcloud_fields(message) == ('tag', 'line')
 
 
 def test_compact_xyz_cloud_applies_stride_and_phase():
@@ -62,3 +85,18 @@ def test_compact_xyz_cloud_applies_stride_and_phase():
     assert output.width == 2
     assert output.row_step == 24
     assert struct.unpack('<ffffff', output.data) == (4, 5, 6, 10, 11, 12)
+
+
+def test_should_publish_frame_reduces_output_cadence():
+    assert [
+        index for index in range(12) if should_publish_frame(index, 5)
+    ] == [0, 5, 10]
+
+
+def test_should_publish_frame_rejects_invalid_arguments():
+    import pytest
+
+    with pytest.raises(ValueError, match='frame_index'):
+        should_publish_frame(-1, 1)
+    with pytest.raises(ValueError, match='frame_stride'):
+        should_publish_frame(0, 0)

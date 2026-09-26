@@ -1,0 +1,19 @@
+[Unit]
+Description=Carbot workstation Fast DDS discovery anchor
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+Environment=ROS_DOMAIN_ID=0
+Environment=RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+Environment=FASTRTPS_DEFAULT_PROFILES_FILE=/home/shenfq/Projects/carbot-ros2/configs/fastdds_jetson_workstation_peer.xml
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/bin/bash -lc 'source /opt/ros/humble/setup.bash && exec /usr/bin/python3 /home/shenfq/Projects/carbot-ros2/scripts/jetson_workstation_dds_anchor.py'
+Restart=on-failure
+RestartSec=2
+KillSignal=SIGINT
+TimeoutStopSec=5
+
+[Install]
+WantedBy=default.target

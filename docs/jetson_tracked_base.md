@@ -141,6 +141,44 @@ Jetson 项目：
 /home/shenfq/Projects/carbot-ros2
 ```
 
+## 手机网页遥控建图
+
+手机控制网页现在应运行在 Jetson，而不是 ESP32。Jetson 节点把网页指令送入已经
+标定的正式控制链：
+
+```text
+手机浏览器 -> Jetson :8080 -> /cmd_vel_command
+  -> cmd_vel_compensator -> /cmd_vel -> ESP32 micro-ROS
+```
+
+节点默认使用 `0.10 m/s` 直线速度和 `0.40 rad/s` 转向速度，网页默认未使能。
+使能时会检查 `/cmd_vel_command` 只有本节点一个发布者，且只有速度补偿节点一个
+订阅者；运行中拓扑变化会自动停用。按住按钮时浏览器每 100 ms 续租一次，松手、
+页面失焦或网络中断后，Jetson 最迟约 0.3 秒发布零速度。ESP32 自身的 500 ms
+`/cmd_vel` 看门狗仍是下一层保护。网页停车和软件看门狗都不能替代物理急停。
+
+部署到 `/home/shenfq/Projects/carbot-ros2` 并构建 `carbot_hardware` 后，安装用户服务：
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp install/carbot_hardware/share/carbot_hardware/systemd/carbot-web-teleop.service \
+  ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now carbot-web-teleop.service
+```
+
+确认 `carbot-command-compensation.service`、micro-ROS Agent、轮式里程计、状态估计、
+MID-360 和 mapping 容器均正常后，在同一可信 Wi-Fi 的手机打开：
+
+```text
+http://<Jetson-Wi-Fi-IP>:8080/
+```
+
+开始房间建图前使用 `scripts/jetson_nvblox_container.sh recreate mapping`。只允许
+Web 手动控制这一个上游速度源；不要同时运行 Nav2、键盘遥控或其他
+`/cmd_vel_command` 发布者。停车并在网页停用后，再执行
+`scripts/jetson_save_maps.sh MAP_NAME` 保存地图。
+
 Agent 与轮式里程计用户服务：
 
 ```bash

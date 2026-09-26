@@ -9,6 +9,24 @@ from sensor_msgs.msg import PointCloud2, PointField
 
 
 XYZ_NAMES = ('x', 'y', 'z')
+LIVOX_FULL_FIELD_NAMES = (
+    'x', 'y', 'z', 'intensity', 'tag', 'line', 'timestamp'
+)
+
+
+def missing_pointcloud_fields(msg, required_fields=LIVOX_FULL_FIELD_NAMES):
+    """Return required PointCloud2 fields absent from a source cloud."""
+    present = {field.name for field in msg.fields}
+    return tuple(name for name in required_fields if name not in present)
+
+
+def should_publish_frame(frame_index, frame_stride):
+    """Return whether an input frame belongs to the output cadence."""
+    if frame_index < 0:
+        raise ValueError('frame_index must be non-negative')
+    if frame_stride < 1:
+        raise ValueError('frame_stride must be at least 1')
+    return frame_index % frame_stride == 0
 
 
 def compact_xyz_cloud(msg, point_stride=1, phase=0):
@@ -73,13 +91,29 @@ class PointcloudXyzRelay(Node):
         self.declare_parameter('input_topic', '/livox/lidar')
         self.declare_parameter('output_topic', '/mid360/points_xyz')
         self.declare_parameter('point_stride', 4)
+        self.declare_parameter('frame_stride', 1)
+        self.declare_parameter(
+            'required_input_fields_csv', ','.join(LIVOX_FULL_FIELD_NAMES)
+        )
 
         input_topic = self.get_parameter('input_topic').value
         output_topic = self.get_parameter('output_topic').value
         self._point_stride = self.get_parameter('point_stride').value
+        self._frame_stride = self.get_parameter('frame_stride').value
+        self._required_input_fields = tuple(
+            name.strip()
+            for name in self.get_parameter('required_input_fields_csv')
+            .value.split(',')
+            if name.strip()
+        )
+        if not self._required_input_fields:
+            raise ValueError('required_input_fields_csv must not be empty')
         if self._point_stride < 1:
             raise ValueError('point_stride must be at least 1')
+        if self._frame_stride < 1:
+            raise ValueError('frame_stride must be at least 1')
         self._phase = 0
+        self._frame_index = 0
         self._publisher = self.create_publisher(
             PointCloud2, output_topic, qos_profile_sensor_data
         )
@@ -92,10 +126,23 @@ class PointcloudXyzRelay(Node):
         self._logged_first_message = False
         self.get_logger().info(
             f'Publishing XYZ-only clouds from {input_topic} on {output_topic} '
-            f'with stride {self._point_stride}'
+            f'with point stride {self._point_stride} and frame stride '
+            f'{self._frame_stride}'
         )
 
     def _pointcloud_callback(self, msg):
+        frame_index = self._frame_index
+        self._frame_index += 1
+        if not should_publish_frame(frame_index, self._frame_stride):
+            return
+        missing = missing_pointcloud_fields(msg, self._required_input_fields)
+        if missing:
+            self.get_logger().error(
+                'Refusing to compact source cloud missing required fields: '
+                + ', '.join(missing),
+                throttle_duration_sec=2.0,
+            )
+            return
         try:
             output = compact_xyz_cloud(
                 msg, point_stride=self._point_stride, phase=self._phase
