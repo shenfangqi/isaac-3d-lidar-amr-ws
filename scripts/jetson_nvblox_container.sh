@@ -6,6 +6,7 @@ container_name="carbot-nvblox"
 image_name="carbot-isaac-ros-nvblox:3.2"
 workspace="/home/shenfq/Projects/isaac_ros-dev"
 dds_profile="${workspace}/src/isaac_ros_common/docker/middleware_profiles/rtps_udp_profile.xml"
+time_gate="${workspace}/scripts/wait_for_mapping_time_sync.py"
 
 usage() {
   echo "Usage: $0 {start|recreate|stop|status|logs} [compact|full|mapping]" >&2
@@ -57,6 +58,7 @@ esac
 run_container() {
   test -d "${workspace}/install/nvblox_ros"
   test -f "${dds_profile}"
+  test -f "${time_gate}"
 
   docker run -d \
     --name "${container_name}" \
@@ -78,10 +80,11 @@ run_container() {
     -e NVIDIA_DRIVER_CAPABILITIES=all \
     -v "${dds_profile}:/etc/fastdds/rtps_udp_profile.xml:ro" \
     -v "${workspace}:/workspaces/isaac_ros-dev" \
+    -v /run/systemd/timesync:/run/host-systemd-timesync:ro \
     -v /tmp:/tmp \
     --entrypoint /bin/bash \
     "${image_name}" -lc \
-    "mkdir -p \"\${HOME}\" \"\${ROS_LOG_DIR}\"; source /opt/ros/humble/setup.bash; source /workspaces/isaac_ros-dev/install/setup.bash; exec ros2 launch isaac_3d_lidar_bringup ${launch_command}"
+    "mkdir -p \"\${HOME}\" \"\${ROS_LOG_DIR}\"; python3 /workspaces/isaac_ros-dev/scripts/wait_for_mapping_time_sync.py; source /opt/ros/humble/setup.bash; source /workspaces/isaac_ros-dev/install/setup.bash; exec ros2 launch isaac_3d_lidar_bringup ${launch_command}"
 }
 
 action="${1:-}"
