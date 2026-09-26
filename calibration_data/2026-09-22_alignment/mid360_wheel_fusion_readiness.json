@@ -1,0 +1,36 @@
+{
+  "bag": "calibration_data/2026-09-21_static_mid360/mid360_imu_time_yaw_excitation_01",
+  "checks": {
+    "command_topic_present": false,
+    "mid360_frame_is_imu_link": false,
+    "mid360_imu_present": true,
+    "single_esp_boot": true,
+    "wheel_motion_present": false,
+    "wheel_ticks_present": true
+  },
+  "decision": "not_a_driven_ab_bag_do_not_enable_live_fusion",
+  "dynamic_ab_ready": false,
+  "imu": {
+    "frames": [
+      "livox_frame"
+    ],
+    "median_rate_hz": 202.6135935462055,
+    "samples": 48160
+  },
+  "sensor_policy": {
+    "esp_imu_allowed": false,
+    "esp_imu_topic_seen_but_ignored": false,
+    "esp_role": "wheel_ticks_and_base_control_only",
+    "imu_source": "/mid360/imu/data_raw"
+  },
+  "wheel": {
+    "boot_ids": [
+      3205220906
+    ],
+    "samples": 12075,
+    "tick_delta": {
+      "left": 0,
+      "right": 0
+    }
+  }
+}

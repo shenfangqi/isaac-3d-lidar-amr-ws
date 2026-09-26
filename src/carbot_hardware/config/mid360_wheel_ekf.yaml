@@ -3,7 +3,9 @@ ekf_filter_node:
     frequency: 50.0
     sensor_timeout: 0.1
     two_d_mode: true
-    publish_tf: true
+    # Diagnostic fallback only. The containerized LiDAR-IMU EKF owns the real
+    # /odom stream and odom -> base_footprint TF.
+    publish_tf: false
     publish_acceleration: false
     # Scale process noise with the estimated planar speed. This prevents the
     # default fixed process noise from inflating pose covariance while parked.

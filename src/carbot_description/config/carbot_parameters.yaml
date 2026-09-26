@@ -4,7 +4,7 @@ schema_version: 1
 # reference these values instead of copying them into URDF, USD, or controllers.
 robot:
   drive_type: tracked_differential_skid_steer
-  total_working_mass_kg: 1.8
+  total_working_mass_kg: 3.4
 
 geometry:
   overall_size_m: [0.285, 0.266, 0.240]
@@ -184,14 +184,22 @@ simulation:
   wheel_joint_coordinate_sign: -1.0
 
 dynamics:
+  # Total mass and geometric-center COM are physical values reported for the
+  # assembled vehicle on 2026-09-23. Inertia and contact dynamics remain
+  # estimates pending a pendulum/CAD and surface test.
   calibration_status: TEMP_ESTIMATE_NOT_CALIBRATED
-  base_body_mass_kg: 1.68
+  # Twelve 0.01 kg wheel links leave 3.28 kg on the merged base body.
+  base_body_mass_kg: 3.28
   per_wheel_mass_kg: 0.01
+  # Geometric center in base_link coordinates. The asymmetric footprint puts
+  # its X center at +0.0125 m rather than at the base_link origin.
   center_of_mass_m: [0.0125, 0.0, 0.035]
+  # Provisional constant-radius-of-gyration scaling from the former 1.68 kg
+  # base estimate to 3.28 kg. These are not measured inertias.
   inertia_kg_m2:
-    ixx: 0.01855
-    iyy: 0.02012
-    izz: 0.02280
+    ixx: 0.03621667
+    iyy: 0.03928190
+    izz: 0.04451429
     ixy: 0.0
     ixz: 0.0
     iyz: 0.0
@@ -214,7 +222,9 @@ sensor_frame_assumptions:
 
 domain_randomization:
   calibration_status: PARTIAL_PHYSICAL_EVIDENCE_WITH_UNCALIBRATED_DYNAMICS
-  mass_kg: [1.6, 2.0]
+  # Training assumption centered on the reported 3.4 kg assembled mass; this
+  # +/-0.2 kg span is not a measured payload confidence interval.
+  mass_kg: [3.2, 3.6]
   com_offset_m:
     x: [-0.02, 0.02]
     y: [-0.02, 0.02]
@@ -243,7 +253,6 @@ provenance:
     category: measured_value
     status: confirmed_baseline_with_approximate_wheel_radii
     scope:
-      - robot.total_working_mass_kg
       - geometry.overall_size_m
       - geometry.base_link_height_m
       - geometry.physical_track_separation_m
@@ -314,8 +323,23 @@ provenance:
     status: pending_live_validation
     scope: [geometry.minimum_overhead_clearance_m]
     note: Conservative autonomous clearance selected to leave 0.11 m above the measured 0.24 m vehicle and protect the top-mounted MID-360; requires simulation and physical low-speed acceptance before unattended use.
+  USER_MEASURED_MASS_COM_2026_09_23:
+    category: measured_value
+    status: mass_and_geometric_center_reported
+    scope: [robot.total_working_mass_kg, dynamics.base_body_mass_kg, dynamics.center_of_mass_m]
+    note: The assembled vehicle mass is 3.4 kg and its center of mass is at the vehicle geometric center. In base_link coordinates the existing geometric-center representation is [0.0125, 0.0, 0.035] m. Inertia remains an explicitly provisional mass-scaled estimate.
   TEMP_ESTIMATE_NOT_CALIBRATED:
     category: temporary_estimate
     status: TEMP_ESTIMATE_NOT_CALIBRATED
-    scope: [sensors.mid360.visual_proxy, dynamics, domain_randomization]
-    note: Startup simulation assumptions and training ranges, not calibration confidence intervals.
+    scope:
+      - sensors.mid360.visual_proxy
+      - dynamics.calibration_status
+      - dynamics.per_wheel_mass_kg
+      - dynamics.inertia_kg_m2
+      - dynamics.static_friction
+      - dynamics.dynamic_friction
+      - dynamics.restitution
+      - dynamics.per_side_effort_limit_nm
+      - dynamics.joint_damping_nm_s_rad
+      - domain_randomization
+    note: Inertia, friction, effort/contact parameters and training ranges remain simulation assumptions, not calibration confidence intervals; the mass and geometric-center COM fields have separate physical provenance.

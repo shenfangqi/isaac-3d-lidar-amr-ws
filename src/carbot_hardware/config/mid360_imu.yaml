@@ -2,4 +2,20 @@ mid360_imu_adapter:
   ros__parameters:
     input_topic: /livox/imu
     output_topic: /mid360/imu/data_raw
+    output_frame_id: imu_link
     gravity_mps2: 9.80665
+    # Added to the vendor stamp. Dynamic wall/gyro calibration found that the
+    # IMU stamp trails the effective point time, hence the negative correction.
+    timestamp_correction_s: -0.009782937
+    # Estimate the temperature-dependent yaw-rate bias only while raw wheel
+    # odometry proves that the chassis is stationary. ESP32 IMU is never used.
+    wheel_odom_topic: /wheel/odom
+    stationary_linear_threshold_mps: 0.002
+    stationary_angular_threshold_rad_s: 0.01
+    gyro_z_bias_min_samples: 400
+    gyro_z_bias_window_samples: 2000
+    gyro_z_bias_max_abs_rad_s: 0.03
+    # The 2026-09-22 driven bag measured stationary gyro-z variance near
+    # 1.1e-6 (rad/s)^2. Use a conservative 4e-6 online floor.
+    angular_velocity_covariance_diagonal: [0.0001, 0.0001, 0.000004]
+    gyro_z_uncalibrated_variance: 0.01

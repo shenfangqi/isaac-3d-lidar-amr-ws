@@ -20,6 +20,20 @@ pattern, Livox packet layout and `tag`/`line` fields, per-point timestamps,
 motion distortion, packet loss, vibration, reflectivity behaviour, or the
 extrinsic calibration of the physical installation.
 
+The canonical manufacturer limits and their source URLs live under
+`sensors.mid360.manufacturer_specs` in
+`src/carbot_description/config/carbot_parameters.yaml`. Consistency tests bind
+the RTX profile and nvblox limits to that source. The RTX error review keeps
+`rangeAccuracyM=0.03 m` as a conservative official 1-sigma limit, while
+`rangeResolutionM=0.01 m` and the `0.05 deg` angular standard deviations are
+explicit simulation assumptions rather than claimed MID-360 specifications.
+
+The real driver preserves the complete
+`x/y/z/intensity/tag/line/timestamp` cloud on `/livox/lidar`. The separate
+`/mid360/points_xyz` stream is deliberately compacted and stride-reduced for
+the Jetson-to-workstation Wi-Fi path; it must not replace the raw topic for
+recording, calibration, return-quality analysis or timestamp analysis.
+
 ## Run
 
 The Phase E saved-map full-stack launcher uses Carbot, loads `warehouse_v3`,
@@ -66,6 +80,32 @@ bottom. With the measured housing top at `0.222 m` and the official `0.060 m`
 housing height, the modeled housing bottom is at `0.162 m` and the point-cloud
 origin is at `0.209 m` above ground. An installed floor-plane fit measured
 approximately `0.2066 m`, providing an independent check of the model.
+
+A stationary A-B-A chassis-reversal calibration on 2026-09-21 separated the
+fixed MID-360 installation tilt from the reversing floor/track-support term.
+The accepted sensor rotation is roll `-0.3515327 deg` (`-0.006135404 rad`),
+pitch `-0.2783163 deg` (`-0.004857536 rad`), and yaw `+1.1206755 deg`
+(`+0.019559477 rad`). Roll/pitch come from the A-B-A chassis reversal; yaw
+comes from the subsequent 64-frame parallel-wall capture. The value lives
+only in the canonical parameter source and is imported into both URDF and USD.
+The official MID-360 manual defines identical IMU and point-cloud axes and
+locates the IMU chip at `[0.011, 0.02329, -0.04412] m` in `livox_frame`.
+The robot description therefore models `livox_frame -> imu_link` with that
+translation and identity rotation. A 2026-09-21 dynamic wall/gyro calibration
+also resolved the adapted IMU timestamp correction to `-0.009782937 s` with
+approximately `0.6 ms` retained uncertainty. This timing correction is a ROS
+runtime contract; it does not alter Isaac Sim physics timestamps.
+
+For translation, the measured right-wall-to-near-track gap was `0.289 m` and
+the canonical track outer half-width is `0.133 m`, placing the base centerline
+`0.422 m` from the wall. Comparing that with the fitted LiDAR wall distance
+`0.42185533 m` gives the accepted lateral mount offset `Y=-0.00014467 m`
+(right of centerline). The ruler measurement limits this result to roughly
+`+/-0.0005 m`. For X, rear-wall gaps to the right/left rear-drive-wheel outer
+extrema were `1.153/1.155 m`. Combining the `1.154 m` mean with the fitted
+`1.30078363 m` rear plane, canonical `-0.13225 m` wheel extremum and the wall
+plane's `0.71955 deg` vertical tilt gives `X=+0.01656608 m`. The `0.002 m`
+side-to-side spread is retained as the approximate X uncertainty.
 
 For RViz inspection, run the Carbot description and open the Phase D config:
 

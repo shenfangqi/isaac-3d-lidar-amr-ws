@@ -1,0 +1,59 @@
+{
+  "comparison": [
+    {
+      "absolute_error": 0.04699532651901245,
+      "first_motion_latency_s": 0.26,
+      "id": "forward_0p05_10s",
+      "isaac": 0.48799532651901245,
+      "isaac_minus_real": 0.04699532651901245,
+      "metric": "distance_m",
+      "real": 0.441,
+      "relative_error_fraction": 0.10656536625626406,
+      "stop_tail_s": 0.02
+    },
+    {
+      "absolute_error": 0.06069555878639221,
+      "first_motion_latency_s": 0.1,
+      "id": "reverse_0p05_10s",
+      "isaac": -0.4981955587863922,
+      "isaac_minus_real": -0.06069555878639221,
+      "metric": "distance_m",
+      "real": -0.4375,
+      "relative_error_fraction": 0.1387327057974679,
+      "stop_tail_s": 0.16
+    },
+    {
+      "absolute_error": 0.3057824884333238,
+      "first_motion_latency_s": 0.08,
+      "id": "turn_left_composite_0p20",
+      "isaac": 1.1952006685666763,
+      "isaac_minus_real": -0.3057824884333238,
+      "metric": "yaw_rad",
+      "real": 1.500983157,
+      "relative_error_fraction": -0.2037214654989788,
+      "stop_tail_s": 0.04
+    },
+    {
+      "absolute_error": 0.21049370680055635,
+      "first_motion_latency_s": 0.08,
+      "id": "turn_right_composite_0p20",
+      "isaac": -1.3952092051994436,
+      "isaac_minus_real": 0.21049370680055635,
+      "metric": "yaw_rad",
+      "real": -1.605702912,
+      "relative_error_fraction": -0.13109131535320798,
+      "stop_tail_s": 0.04
+    }
+  ],
+  "summary": {
+    "decision": "navigation_contract_only_not_dynamic_twin",
+    "mean_absolute_linear_relative_error_fraction": 0.12264903602686598,
+    "mean_absolute_yaw_relative_error_fraction": 0.1674063904260934,
+    "real_first_motion_latency_s": 0.073,
+    "real_ground_stop_tail_s": [
+      0.57,
+      0.92
+    ]
+  },
+  "units_note": "yaw values are radians; relative error retains direction"
+}

@@ -48,6 +48,7 @@ class WheelOdometry(Node):
         self.declare_parameter("tick_rate_margin", 1.25)
         self.declare_parameter("publish_tf", True)
         self.declare_parameter("require_time_synchronized", True)
+        self.declare_parameter("stamp_with_arrival_time", False)
         self.declare_parameter("pose_x_variance", 0.0025)
         self.declare_parameter("pose_y_variance", 0.01)
         self.declare_parameter("pose_yaw_variance", 0.01)
@@ -80,6 +81,9 @@ class WheelOdometry(Node):
         self._publish_tf = bool(self.get_parameter("publish_tf").value)
         self._require_time_synchronized = bool(
             self.get_parameter("require_time_synchronized").value
+        )
+        self._stamp_with_arrival_time = bool(
+            self.get_parameter("stamp_with_arrival_time").value
         )
 
         self._pose_covariance = _covariance(
@@ -192,7 +196,17 @@ class WheelOdometry(Node):
     def _publish(self, ticks, linear_mps, angular_rps):
         quaternion = _yaw_quaternion(self._pose.yaw)
         odom = Odometry()
-        odom.header.stamp = ticks.header.stamp
+        # The ESP32 clock can remain synchronized to the Jetson's pre-NTP
+        # epoch when the Jetson wall clock steps after boot.  Tick deltas and
+        # device_stamp_us are still valid, but mixing that old ROS stamp with
+        # freshly stamped MID-360 IMU data makes robot_localization fuse two
+        # different time axes.  For the on-Jetson estimator, arrival time is a
+        # bounded and monotonic approximation of the encoder sample time.
+        odom.header.stamp = (
+            self.get_clock().now().to_msg()
+            if self._stamp_with_arrival_time
+            else ticks.header.stamp
+        )
         odom.header.frame_id = self._odom_frame
         odom.child_frame_id = self._base_frame
         odom.pose.pose.position.x = self._pose.x

@@ -95,6 +95,21 @@ def build_navigation_actions(
         output="screen",
     )
 
+    overhead_clearance_markers = Node(
+        package="isaac_3d_lidar_bringup",
+        executable="overhead_clearance_marker_publisher",
+        name="overhead_clearance_marker_publisher",
+        parameters=[
+            {
+                "use_sim_time": use_sim_time,
+                "config_path": str(CONFIG_ROOT / "carbot/common.yaml"),
+                "frame_id": frames["map"],
+                "topic": topics["overhead_clearance_markers"],
+            }
+        ],
+        output="screen",
+    )
+
     # Keep the local controller on the raw scan so emergency collision
     # reactions do not wait for filtering.  The global branch first removes
     # returns already explained by the static map, then requires temporal
@@ -220,6 +235,7 @@ def build_navigation_actions(
         pointcloud_to_laserscan,
     ]
     if runtime == "sim":
+        actions.append(overhead_clearance_markers)
         actions.append(static_map_scan_filter)
         actions.append(global_scan_filter)
     actions.extend([

@@ -556,6 +556,33 @@ frame_id = base_footprint
 
 高度切片只保留机器人会碰到的障碍带，避免把地面和高处货架全部投影进二维 Costmap。Carbot 实测总高为 `0.24 m`；当前 `0.35 m` 上限为顶置 MID-360 保留 `0.11 m` 的地面起伏、姿态和重建误差余量。低于 `0.35 m` 的净空必须视为不可通行，不能为了钻入床底而降低此值。`range_min=0.5` 用于过滤约 `0.34 m` 的车体自身回波。
 
+### 9.1 Isaac Sim 永久净空测试横梁
+
+Carbot 的默认 headless 与 WebRTC 启动都会在场景中建立两个静态碰撞横梁；它们不会写回或覆盖 `warehouse_v3` 地图文件：
+
+| Prim | map 坐标 | 横梁尺寸 | 底面净空 | 预期行为 |
+|---|---:|---:|---:|---|
+| `/World/CarbotOverheadPassClearance40cm` | `(2.0, 0.0)` | `0.40 × 1.00 × 0.10 m` | `0.40 m` | 高于 `0.35 m` 安全阈值，可从下方通过 |
+| `/World/CarbotOverheadBlockedClearance28cm` | `(-2.0, 0.0)` | `0.40 × 1.00 × 0.10 m` | `0.28 m` | 低于安全阈值，必须进入 `/scan` 并绕行或停车 |
+
+在 Isaac Stage 的 `/World` 下可以找到这两个 Prim。绿色横梁是 `0.40 m` 通行测试，红色横梁是 `0.28 m` 阻挡测试。横梁每次启动都会重新建立，因此不能用隐藏 Prim 的方式永久绕过验收。
+
+RViz 默认订阅 `/overhead_clearance_markers`，以半透明实体和文字标签显示同一组横梁：绿色标签为 `PASS: 0.40 m clearance`，红色标签为 `BLOCKED: 0.28 m clearance`。Marker 与 Isaac 碰撞体读取同一份 `configs/carbot/common.yaml` 配置，但 Marker 只负责显示；真实碰撞和导航判断仍来自 Isaac 物理场景、点云、`/scan` 与 Costmap。特别是绿色 `0.40 m` 横梁不会因为可视化而被错误加入二维障碍层。
+
+如果 RViz 中看不到横梁，在 Displays 面板确认 `Overhead Clearance Beams` 已启用，并检查：
+
+```bash
+ros2 topic info /overhead_clearance_markers -v --no-daemon
+```
+
+启动完整仿真后可在 `ros2-dev-humble` 容器中重复自动验收：
+
+```bash
+python3 scripts/validate_overhead_clearance.py
+```
+
+脚本依次验证绿色横梁下方直行、返回原点、红色横梁绕行，并检查两处 Scan 命中、规划路径和最终零速度。
+
 如果 `/scan` 看不到：
 
 1. 先检查 `ros2 topic info /scan -v`。

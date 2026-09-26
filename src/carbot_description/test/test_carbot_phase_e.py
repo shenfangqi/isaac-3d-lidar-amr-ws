@@ -1,4 +1,5 @@
 from pathlib import Path
+import importlib.util
 import xml.etree.ElementTree as ET
 
 import yaml
@@ -8,6 +9,16 @@ DESCRIPTION_ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE = DESCRIPTION_ROOT.parents[1]
 CONFIG_ROOT = WORKSPACE / "configs"
 LAUNCH_ROOT = WORKSPACE / "launch"
+
+
+def load_overhead_obstacle_module():
+    path = WORKSPACE / "isaac_sim/overhead_clearance_obstacles.py"
+    spec = importlib.util.spec_from_file_location(
+        "overhead_clearance_obstacles", path
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def load_yaml(relative_path):
@@ -54,7 +65,7 @@ def test_nav2_footprints_match_the_canonical_carbot_polygon():
 def test_nav2_time_and_velocity_limits_are_runtime_specific():
     expected = {
         "sim": (True, 0.30, 0.35),
-        "real": (False, 0.10, 0.30),
+        "real": (False, 0.10, 0.50),
     }
     for runtime, (use_sim_time, linear, angular) in expected.items():
         parameters = nav_parameters(runtime)
@@ -68,6 +79,14 @@ def test_nav2_time_and_velocity_limits_are_runtime_specific():
         assert controller["rotate_to_heading_angular_vel"] == angular
         smoother = parameters["velocity_smoother"]["ros__parameters"]
         assert smoother["max_velocity"] == [linear, 0.0, angular]
+        if runtime == "real":
+            goal_checker = parameters["controller_server"]["ros__parameters"][
+                "general_goal_checker"
+            ]
+            assert goal_checker["yaw_goal_tolerance"] == 0.03
+            behavior = parameters["behavior_server"]["ros__parameters"]
+            assert behavior["min_rotational_vel"] == 0.40
+            assert behavior["max_rotational_vel"] == 0.50
 
 
 def test_amcl_uses_base_footprint_and_runtime_time_source():
@@ -122,7 +141,8 @@ def test_sim_global_planning_uses_stable_scan_and_conditional_replanning():
         "tolerance"
     ] == 0.0
 
-    tree = ET.parse(behavior_tree).getroot()
+    tree_path = WORKSPACE / "configs/behavior_trees" / Path(behavior_tree).name
+    tree = ET.parse(tree_path).getroot()
     assert tree.find(".//RecoveryNode[@name='NavigateRecovery']") is None
     assert tree.find(".//ReactiveFallback[@name='RecoveryFallback']") is None
     assert len(tree.findall(".//ComputePathToPose")) == 2
@@ -190,18 +210,80 @@ def test_all_scan_and_esdf_paths_share_overhead_clearance():
         source = (WORKSPACE / path).read_text(encoding="utf-8")
         assert f"'max_height': {clearance}" in source
 
-    nvblox_paths = (
+    nvblox_paths = {
         "src/isaac_3d_lidar_bringup/config/nvblox/"
-        "mid360_nvblox_real.yaml",
+        "mid360_nvblox_real.yaml": 0.185209546,
         "src/isaac_3d_lidar_bringup/config/nvblox/"
-        "mid360_nvblox_sim.yaml",
-    )
-    for path in nvblox_paths:
+        "mid360_nvblox_sim.yaml": clearance,
+    }
+    for path, expected_max_height in nvblox_paths.items():
         parameters = load_yaml(path)["/**"]["ros__parameters"]
         assert parameters["static_mapper"][
             "esdf_slice_max_height"
-        ] == clearance
+        ] == expected_max_height
         if "dynamic_mapper" in parameters:
             assert parameters["dynamic_mapper"][
                 "esdf_slice_max_height"
             ] == clearance
+
+
+def test_persistent_overhead_obstacles_bracket_safe_clearance():
+    module = load_overhead_obstacle_module()
+    common = load_yaml("configs/carbot/common.yaml")
+    geometry = load_yaml(
+        "src/carbot_description/config/carbot_parameters.yaml"
+    )["geometry"]
+    clearance = common["scan_projection"]["max_height_m"]
+    obstacles = module.OVERHEAD_OBSTACLES
+    configured = common["simulation_overhead_obstacles"]
+
+    assert len(obstacles) == 2
+    assert len(configured) == len(obstacles)
+    assert {item.clearance_m for item in obstacles} == {0.28, 0.40}
+    assert [item.name for item in obstacles] == [
+        item["name"] for item in configured
+    ]
+    assert any(item.clearance_m < clearance for item in obstacles)
+    assert any(item.clearance_m > clearance for item in obstacles)
+    assert all(
+        item.clearance_m > geometry["overall_size_m"][2]
+        for item in obstacles
+    )
+    assert len({item.prim_path for item in obstacles}) == len(obstacles)
+    assert all(item.size_y_m >= 1.0 for item in obstacles)
+
+    for path in (
+        WORKSPACE / "isaac_sim/auto_play_carbot.py",
+        WORKSPACE / "isaac_sim/streaming_carbot.py",
+    ):
+        source = path.read_text(encoding="utf-8")
+        assert "create_overhead_clearance_obstacles" in source
+
+
+def test_rviz_displays_simulation_overhead_obstacle_markers():
+    common = load_yaml("configs/carbot/common.yaml")
+    topic = common["topics"]["overhead_clearance_markers"]
+    launch_source = (LAUNCH_ROOT / "carbot_navigation.py").read_text(
+        encoding="utf-8"
+    )
+    setup_source = (
+        WORKSPACE / "src/isaac_3d_lidar_bringup/setup.py"
+    ).read_text(encoding="utf-8")
+    marker_source = (
+        WORKSPACE
+        / "src/isaac_3d_lidar_bringup/isaac_3d_lidar_bringup/"
+        "overhead_clearance_marker_publisher.py"
+    ).read_text(encoding="utf-8")
+    rviz_source = (
+        WORKSPACE / "configs/rviz/carbot_navigation.rviz"
+    ).read_text(encoding="utf-8")
+
+    assert topic == "/overhead_clearance_markers"
+    assert 'executable="overhead_clearance_marker_publisher"' in (
+        launch_source
+    )
+    assert "overhead_clearance_marker_publisher:main" in setup_source
+    assert "Marker.CUBE" in marker_source
+    assert "Marker.TEXT_VIEW_FACING" in marker_source
+    assert "rviz_default_plugins/MarkerArray" in rviz_source
+    assert f"Value: {topic}" in rviz_source

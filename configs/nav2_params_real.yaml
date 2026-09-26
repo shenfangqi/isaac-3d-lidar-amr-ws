@@ -12,7 +12,7 @@ controller_server:
     general_goal_checker:
       plugin: nav2_controller::SimpleGoalChecker
       xy_goal_tolerance: 0.10
-      yaw_goal_tolerance: 0.25
+      yaw_goal_tolerance: 0.03
       stateful: true
     FollowPath:
       plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
@@ -23,8 +23,8 @@ controller_server:
       use_velocity_scaled_lookahead_dist: false
       use_collision_detection: true
       use_rotate_to_heading: true
-      rotate_to_heading_angular_vel: 0.30
-      max_angular_accel: 0.30
+      rotate_to_heading_angular_vel: 0.50
+      max_angular_accel: 10.00
 
 local_costmap:
   local_costmap:
@@ -107,9 +107,9 @@ behavior_server:
     use_sim_time: false
     global_frame: odom
     robot_base_frame: base_footprint
-    max_rotational_vel: 0.30
-    min_rotational_vel: 0.05
-    rotational_acc_lim: 0.30
+    max_rotational_vel: 0.50
+    min_rotational_vel: 0.40
+    rotational_acc_lim: 0.50
     behavior_plugins: [spin, backup, wait]
     spin:
       plugin: nav2_behaviors/Spin
@@ -128,10 +128,10 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: OPEN_LOOP
-    max_velocity: [0.10, 0.0, 0.30]
-    min_velocity: [-0.10, 0.0, -0.30]
-    max_accel: [0.20, 0.0, 0.30]
-    max_decel: [-0.20, 0.0, -0.30]
+    max_velocity: [0.10, 0.0, 0.50]
+    min_velocity: [-0.10, 0.0, -0.50]
+    max_accel: [0.20, 0.0, 2.00]
+    max_decel: [-0.20, 0.0, -2.00]
     odom_topic: /odom
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]

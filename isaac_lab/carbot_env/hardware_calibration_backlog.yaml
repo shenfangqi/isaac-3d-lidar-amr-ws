@@ -41,9 +41,10 @@ items:
     evidence_required: Timestamped command/RPM/PWM/voltage step and stop trials.
     evidence_observed: Lifted watchdog and directional deadband bags/ESP32 telemetry captured; forward M3/left track failed to sustain motion at 0.01-0.03 m/s and became stable at 0.05 m/s, while reverse became sustainable near 0.02 m/s. Ground stop tails varied from about 0.57 s to 0.92 s. A combined 12 s command at +0.20 rad/s integrated to 137.51 degrees but physically produced about 86 degrees, showing approximately 62.5% low-speed angular command tracking. During Jetson moving-map acceptance, +0.20 rad/s for 3 s produced only 0-0.8 degrees, +0.30 for 2 s produced 3.9 degrees, +0.40 for 2 s produced 13.6 degrees, and +0.50 for 2 s produced 21.0 degrees; -0.50 for 2 s produced 24.9 degrees. With a 0.254 m effective track separation, 0.40 rad/s corresponds to about 0.0508 m/s per track and matches the measured sustainable forward threshold. Five paired turns resolved the uncompensated right/left response, and a host-side right-turn command scale of 0.896 was then physically accepted with forward/reverse and left/right return tests. The evidence-degraded Isaac mode now represents 73 ms command delay, directional finite-duration gains and 0.57-0.92 s stop tails. Combined PWM/RPM/voltage trials and multi-surface braking remain pending, so this item stays blocking.
   - id: mass_com_inertia
-    state: pending
+    state: mass_and_geometric_center_reported_inertia_pending
     blocking_calibration: true
-    evidence_required: Measured mass, support-point center of mass, and CAD or pendulum inertia estimate.
+    evidence_required: Retain the reported 3.4 kg assembled mass and geometric-center COM; obtain a CAD or pendulum inertia estimate to close this combined item.
+    evidence_observed: The operator reported an assembled vehicle mass of 3.4 kg and the center of mass at the vehicle geometric center on 2026-09-23. The canonical base_link representation retains [0.0125, 0.0, 0.035] m because the asymmetric footprint center is +0.0125 m from the base_link origin. The previous inertias were scaled with base-body mass only to keep a consistent provisional radius of gyration; they are not physical inertia measurements.
   - id: track_friction
     state: pending
     blocking_calibration: true

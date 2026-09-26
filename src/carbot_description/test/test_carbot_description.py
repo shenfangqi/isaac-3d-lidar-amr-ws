@@ -46,6 +46,21 @@ def test_required_frame_tree_exists(description):
     assert parents["imu_link"] == "livox_frame"
 
 
+def test_imu_link_uses_calibrated_mid360_chip_transform(
+    description, parameters
+):
+    imu_joint = next(
+        joint for joint in description.findall("joint")
+        if joint.attrib["name"] == "lidar_link_to_imu_link"
+    )
+    origin = imu_joint.find("origin")
+    xyz = [float(value) for value in origin.attrib["xyz"].split()]
+    rpy = [float(value) for value in origin.attrib["rpy"].split()]
+    calibration = parameters["sensor_frame_assumptions"]
+    assert xyz == pytest.approx(calibration["imu_translation_m"])
+    assert rpy == pytest.approx(calibration["imu_rotation_rpy_rad"])
+
+
 def test_twelve_wheel_joints_are_continuous_and_never_steering(description):
     joints = description.findall("joint")
     wheel_joints = [joint for joint in joints if joint.attrib["name"].endswith("_wheel_joint")]
@@ -89,6 +104,12 @@ def test_body_visual_does_not_cover_tracks(description, parameters):
 def test_lidar_housing_top_matches_measured_height(description, parameters):
     geometry = parameters["geometry"]
     lidar = parameters["sensors"]["mid360"]
+    assert lidar["mount_translation_xy_from_base_link_m"] == pytest.approx(
+        [0.01656608, -0.00014467]
+    )
+    assert lidar["rotation_rpy_rad"] == pytest.approx(
+        [-0.006135404, -0.004857536, 0.019559477]
+    )
     expected_mount_z = (
         lidar["housing_top_height_from_ground_m"]
         - lidar["housing_height_m"]
@@ -107,6 +128,11 @@ def test_lidar_housing_top_matches_measured_height(description, parameters):
         lidar["mount_translation_xy_from_base_link_m"]
     )
     assert joint_xyz[2] == pytest.approx(expected_mount_z)
+    joint_rpy = [
+        float(value)
+        for value in lidar_joint.find("origin").attrib["rpy"].split()
+    ]
+    assert joint_rpy == pytest.approx(lidar["rotation_rpy_rad"])
 
     lidar_link = next(
         link for link in description.findall("link")

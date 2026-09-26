@@ -1,5 +1,8 @@
 # Carbot 会话交接记录（2026-09-19）
 
+> 2026-09-21 起请优先使用 `docs/carbot_2026-09-21_handoff.md`。本文保留历史
+> 测量与实施过程；若状态冲突，以新交接文档和 `current-state.md` 为准。
+
 本文用于在新会话中继续 Carbot 的 Isaac Sim、Jetson、MID-360、nvblox 与
 Nav2 工作。它汇总本会话已经解决的问题、仍有效的参数和证据、当前工作区状态，
 以及下一步的优先顺序。
@@ -276,6 +279,42 @@ FollowPath 因持续障碍失败 -> 清两级 costmap -> 等 2 秒 -> 重规划�
 生成的文件误纳入提交。
 
 ## 9. 下一步优先顺序
+
+### MID-360 离线配置补全（2026-09-21）
+
+- 官方参数已经统一进入 `carbot_parameters.yaml`；RTX 量程、视场、点率及误差字段
+  已增加一致性检查。`rangeResolutionM=0.01 m` 与角度标准差 `0.05 deg` 是明确的
+  仿真假设，不再表述为厂家标称值。
+- 仓库现在自带并安装 `carbot_hardware/config/MID360_config.json`，使用现有记录中的
+  Jetson `192.168.2.100` 与雷达 `192.168.2.202`；启动文件不再引用驱动包中的通用
+  示例配置。
+- `/livox/lidar` 的完整字段契约固定为
+  `x/y/z/intensity/tag/line/timestamp`；`/mid360/points_xyz` 仍只是 Wi-Fi/nvblox 的
+  XYZ 降采样派生流。缺少完整输入字段时 relay 会拒绝发布派生流并报错。
+- 离线定向测试 `25/25` 通过，隔离后的 `carbot_description` 包测试 `52/52` 通过，
+  `carbot_description` 与 `carbot_hardware` 构建和安装内容检查通过。
+- 本项没有连接 Jetson 或 MID-360。恢复设备后仍须核对 Jetson 上已部署 JSON 的
+  checksum，并实测字段、帧、频率、时间戳、PTP 与网络端口；当前结果不能作为这些
+  在线项目已经验收的证据。
+
+### MID-360 在线部署与验收（2026-09-21）
+
+- 已确认 Jetson Wi-Fi `192.168.1.109`、雷达专网 `192.168.2.100` 和 MID-360
+  `192.168.2.202`；雷达 ping 零丢包，有线接口收发错误和丢包计数均为零。
+- 仓库配置、启动文件、完整字段 relay 和只读验收脚本已经部署到
+  `/home/shenfq/Projects/carbot-ros2`。Jetson 源码、安装文件和工作站 checksum
+  一致，驱动确认加载项目安装目录中的 JSON，`xfer_format=0`、`10 Hz`。
+- 在线确认 `/livox/lidar` 为 `livox_frame`，完整包含
+  `x/y/z/intensity/tag/line/timestamp`；原始及 XYZ 派生点云约 `10 Hz`，适配后 IMU
+  约 `200 Hz`，样本约 `19968` 点/帧。
+- 逐点时间戳单位为 epoch 纳秒。样本首点与 ROS header 相差约 `0.24 us`，一帧跨度
+  约 `100.01 ms`，header 到验收节点接收约 `120.75 ms`。
+- 在线部署发现并修复 ROS 2 Humble 把字符串数组中的 `y` 解析成布尔值的问题；字段
+  门禁现改用 CSV 参数。工作站相关测试 `10/10`、Jetson relay 测试 `3/3` 通过，
+  驱动、IMU adapter 和 relay 重启后均存在，日志无 warning/error。
+- 系统级 `ptp4l` 正在运行，但管理 socket 为 `root:root 0660`，精确 PTP offset 仍需
+  有 sudo 权限时补测。`Linger=no` 未修改，用户服务仍依赖登录会话。本次没有启动
+  Nav2、没有发送速度，也没有重启底盘服务。
 
 ### P0：当前仿真改动（已完成）
 

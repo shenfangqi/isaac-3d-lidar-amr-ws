@@ -178,8 +178,23 @@ def test_temporary_values_are_explicitly_unvalidated(parameters):
     assert temporary_source["status"] == marker
     assert set(temporary_source["scope"]) == {
         "sensors.mid360.visual_proxy",
-        "dynamics",
+        "dynamics.calibration_status",
+        "dynamics.per_wheel_mass_kg",
+        "dynamics.inertia_kg_m2",
+        "dynamics.static_friction",
+        "dynamics.dynamic_friction",
+        "dynamics.restitution",
+        "dynamics.per_side_effort_limit_nm",
+        "dynamics.joint_damping_nm_s_rad",
         "domain_randomization",
+    }
+    physical_source = parameters["provenance"][
+        "USER_MEASURED_MASS_COM_2026_09_23"
+    ]
+    assert set(physical_source["scope"]) == {
+        "robot.total_working_mass_kg",
+        "dynamics.base_body_mass_kg",
+        "dynamics.center_of_mass_m",
     }
 
 

@@ -1,6 +1,14 @@
 {
     "_comment": "Isaac Sim coverage proxy for Livox Mid-360. This is not a model of Livox's non-repetitive scan pattern.",
-    "_source": "FOV/range/point-rate values are based on the Livox Mid-360 product specifications.",
+    "_source": "Canonical manufacturer values: src/carbot_description/config/carbot_parameters.yaml sensors.mid360.manufacturer_specs (Livox product specifications and Ethernet protocol).",
+    "_error_model_review": {
+        "reviewedOn": "2026-09-21",
+        "rangeAccuracyM": "0.03 is the conservative official 1-sigma limit at 0.2 m and 80% reflectivity; the official 10 m limit is 0.02 m.",
+        "rangeResolutionM": "0.01 is an RTX simulation assumption for discretization, not a Livox range-resolution specification. Livox Cartesian packet coordinates use 1 mm units, which is a different concept.",
+        "azimuthErrorStd": "0.05 deg is an RTX simulation assumption constrained below the official angular-precision upper bound of 0.15 deg (1 sigma).",
+        "elevationErrorStd": "0.05 deg is an RTX simulation assumption constrained below the official angular-precision upper bound of 0.15 deg (1 sigma).",
+        "validation": "Coverage and configuration consistency only; physical noise, bias, reflectivity, motion distortion, timing and installation errors require online measurements."
+    },
     "class": "sensor",
     "type": "lidar",
     "name": "Livox Mid-360 approximate coverage proxy",

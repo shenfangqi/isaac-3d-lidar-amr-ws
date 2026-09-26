@@ -38,7 +38,8 @@ class RouteNode:
         self.node = rclpy.create_node('carbot_supervised_mapping_route')
         self.odom = None
         self.last_odom_monotonic = 0.0
-        self.publisher = self.node.create_publisher(Twist, '/cmd_vel', 10)
+        self.publisher = self.node.create_publisher(
+            Twist, '/cmd_vel_command', 10)
         self.subscription = self.node.create_subscription(
             Odometry, '/odom', self._odom_callback, 10)
 
@@ -55,11 +56,14 @@ class RouteNode:
             self.spin_once(0.1)
             if (self.odom is not None
                     and self.publisher.get_subscription_count() == 1
-                    and self.node.count_publishers('/cmd_vel') == 1):
+                    and self.node.count_publishers('/cmd_vel_command') == 1
+                    and self.node.count_publishers('/cmd_vel') == 1
+                    and self.node.count_subscribers('/cmd_vel') >= 1):
                 return
         raise RuntimeError(
-            'route preflight failed: require fresh odom, one cmd_vel '
-            'publisher (this node), and one subscriber')
+            'route preflight failed: require fresh odom, this node as the '
+            'only /cmd_vel_command publisher, one compensator publisher, '
+            'and the ESP /cmd_vel subscriber')
 
     def require_fresh_odom(self):
         if (self.odom is None
@@ -102,25 +106,42 @@ class RouteNode:
     def turn(self, degrees):
         self.require_fresh_odom()
         start_yaw = yaw_from_quaternion(self.odom.pose.pose.orientation)
-        target = math.radians(degrees)
-        direction = 1.0 if target > 0.0 else -1.0
-        deadline = time.monotonic() + 15.0
-        turned = 0.0
-        while True:
-            self.spin_once(0.05)
-            self.require_fresh_odom()
-            current_yaw = yaw_from_quaternion(self.odom.pose.pose.orientation)
-            turned = angle_delta(current_yaw, start_yaw)
-            if direction * turned >= abs(target):
-                break
-            if time.monotonic() >= deadline:
+        target_yaw = start_yaw + math.radians(degrees)
+        tolerance = math.radians(1.5)
+        remaining = math.radians(degrees)
+        for _attempt in range(3):
+            deadline = time.monotonic() + 12.0
+            while time.monotonic() < deadline:
+                self.spin_once(0.05)
+                self.require_fresh_odom()
+                current_yaw = yaw_from_quaternion(
+                    self.odom.pose.pose.orientation)
+                remaining = angle_delta(target_yaw, current_yaw)
+                yaw_rate = self.odom.twist.twist.angular.z
+                braking_angle = max(tolerance, abs(yaw_rate) * 0.35)
+                if abs(remaining) <= braking_angle:
+                    break
+                self.send(angular=math.copysign(0.40, remaining))
+            else:
                 raise RuntimeError(
-                    f'turn phase timed out at {math.degrees(turned):.1f} deg')
-            self.send(angular=direction * 0.50)
-        self.stop()
+                    'turn phase timed out with '
+                    f'{math.degrees(remaining):.1f} deg remaining')
+            self.stop(duration=1.5)
+            current_yaw = yaw_from_quaternion(
+                self.odom.pose.pose.orientation)
+            remaining = angle_delta(target_yaw, current_yaw)
+            if abs(remaining) <= tolerance:
+                break
+        if abs(remaining) > tolerance:
+            raise RuntimeError(
+                'turn correction failed with '
+                f'{math.degrees(remaining):.1f} deg remaining')
+        turned = angle_delta(
+            yaw_from_quaternion(self.odom.pose.pose.orientation), start_yaw)
         print(
             f'TURN_DONE target={degrees:.1f} '
-            f'actual={math.degrees(turned):.1f}',
+            f'actual={math.degrees(turned):.1f} '
+            f'error={math.degrees(remaining):.1f}',
             flush=True,
         )
 

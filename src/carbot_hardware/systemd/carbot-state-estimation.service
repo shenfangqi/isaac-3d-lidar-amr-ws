@@ -1,5 +1,5 @@
 [Unit]
-Description=Carbot MID-360 and wheel odometry EKF
+Description=Carbot legacy wheel-IMU EKF diagnostic (no TF)
 Wants=carbot-wheel-odometry.service carbot-mid360.service
 After=carbot-wheel-odometry.service carbot-mid360.service
 
@@ -8,7 +8,7 @@ Type=simple
 Environment=ROS_DOMAIN_ID=0
 Environment=PYTHONUNBUFFERED=1
 WorkingDirectory=/home/shenfq/Projects/carbot-ros2
-ExecStart=/bin/bash -lc 'source /opt/ros/humble/setup.bash && source /home/shenfq/Projects/carbot-ros2/install/local_setup.bash && exec ros2 run robot_localization ekf_node --ros-args --params-file /home/shenfq/Projects/carbot-ros2/install/carbot_hardware/share/carbot_hardware/config/mid360_wheel_ekf.yaml -r odometry/filtered:=/odom'
+ExecStart=/bin/bash -lc 'source /opt/ros/humble/setup.bash && source /home/shenfq/Projects/carbot-ros2/install/local_setup.bash && exec ros2 run robot_localization ekf_node --ros-args --params-file /home/shenfq/Projects/carbot-ros2/install/carbot_hardware/share/carbot_hardware/config/mid360_wheel_ekf.yaml -r odometry/filtered:=/wheel_imu/odom'
 Restart=on-failure
 RestartSec=2
 KillSignal=SIGINT
