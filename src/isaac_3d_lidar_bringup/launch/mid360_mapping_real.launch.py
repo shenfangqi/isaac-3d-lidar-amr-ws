@@ -1,4 +1,4 @@
-"""Build aligned 2D SLAM Toolbox and 3D nvblox maps on the real Carbot."""
+"""Build the real Carbot's 2.5D nvblox map from FAST-LIO2 odometry."""
 
 import os
 
@@ -13,34 +13,50 @@ def generate_launch_description():
     bringup_dir = get_package_share_directory('isaac_3d_lidar_bringup')
     nvblox_launch = os.path.join(
         bringup_dir, 'launch', 'mid360_nvblox_real.launch.py')
-    slam_config = os.path.join(
-        bringup_dir,
-        'config',
-        'slam_toolbox',
-        'carbot_mid360_mapping.yaml',
+    lio_launch = os.path.join(
+        bringup_dir, 'launch', 'mid360_fast_lio_odometry.launch.py')
+    lio_odometry = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(lio_launch),
     )
 
-    slam_toolbox = Node(
-        package='slam_toolbox',
-        executable='async_slam_toolbox_node',
-        name='slam_toolbox',
-        parameters=[slam_config],
+    mesh_voxel_relay = Node(
+        package='isaac_3d_lidar_bringup',
+        executable='mesh_voxel_relay',
+        name='nvblox_mesh_voxel_relay',
+        parameters=[{
+            'publish_period_sec': 2.0,
+            'max_points': 6000,
+            'cube_size_m': 0.05,
+            'cloud_fallback_topic': '/fast_lio/cloud_registered',
+            'fixed_frame': 'odom',
+            # Full nvblox Mesh messages exceed the UDP DDS transport budget.
+            # Use the aligned accumulated-cloud fallback for remote RViz and
+            # avoid making nvblox serialize layers that cannot be delivered.
+            'enable_nvblox_inputs': False,
+        }],
         output='screen',
     )
 
     nvblox = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(nvblox_launch),
         launch_arguments={
-            'global_frame': 'map',
-            'pose_frame': 'livox_frame',
-            'pointcloud_topic': '/mid360/points_xyz',
+            # FAST-LIO2 is the pose source.  nvblox builds its 2.5D map
+            # directly in odom; no second scan matcher may rewrite the pose.
+            'global_frame': 'odom',
+            'pose_frame': 'fast_lio_imu',
+            # FAST-LIO2 publishes this cloud after tightly coupled IMU deskew.
+            'pointcloud_topic': '/fast_lio/cloud_registered_body',
             'enable_scan': 'true',
-            'scan_pointcloud_topic': '/livox/lidar',
+            'scan_pointcloud_topic': '/fast_lio/cloud_registered_body',
+            'enable_lio': 'false',
         }.items(),
     )
 
     return LaunchDescription([
-        slam_toolbox,
-        # Give SLAM Toolbox time to publish map -> odom before nvblox starts.
+        lio_odometry,
+        # Subscribe before nvblox starts so its first Mesh message is a full
+        # snapshot; later incremental block updates are cached by the relay.
+        mesh_voxel_relay,
+        # Let FAST-LIO finish stationary IMU initialization before integration.
         TimerAction(period=3.0, actions=[nvblox]),
     ])

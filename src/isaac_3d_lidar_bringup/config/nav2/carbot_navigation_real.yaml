@@ -12,7 +12,10 @@ controller_server:
     general_goal_checker:
       plugin: nav2_controller::SimpleGoalChecker
       xy_goal_tolerance: 0.10
-      yaw_goal_tolerance: 0.25
+      # Closed-loop MID-360/wheel-EKF acceptance repeatedly returned within
+      # one degree.  Keep a small margin above that measured result instead
+      # of accepting the former 14.3-degree heading error.
+      yaw_goal_tolerance: 0.03
       stateful: true
     FollowPath:
       plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController

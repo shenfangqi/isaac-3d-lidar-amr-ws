@@ -6,7 +6,7 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     livox_config = PathJoinSubstitution(
-        [FindPackageShare("livox_ros_driver2"), "config", "MID360_config.json"]
+        [FindPackageShare("carbot_hardware"), "config", "MID360_config.json"]
     )
     imu_config = PathJoinSubstitution(
         [FindPackageShare("carbot_hardware"), "config", "mid360_imu.yaml"]
@@ -21,10 +21,9 @@ def generate_launch_description():
                 output="screen",
                 parameters=[
                     {
-                        # Keep the real robot interface identical to simulation
-                        # and to the mapping/localization consumers. Livox's
-                        # native PointCloud2 includes per-point timestamps.
-                        "xfer_format": 0,
+                        # FAST-LIO2 requires Livox CustomMsg because offset_time
+                        # is used for tightly coupled IMU scan deskewing.
+                        "xfer_format": 1,
                         "multi_topic": 0,
                         "data_src": 0,
                         "publish_freq": 10.0,
@@ -42,19 +41,6 @@ def generate_launch_description():
                 name="mid360_imu_adapter",
                 output="screen",
                 parameters=[imu_config],
-            ),
-            Node(
-                package="carbot_hardware",
-                executable="pointcloud_xyz_relay",
-                name="mid360_pointcloud_xyz_relay",
-                output="screen",
-                parameters=[
-                    {
-                        "input_topic": "/livox/lidar",
-                        "output_topic": "/mid360/points_xyz",
-                        "point_stride": 4,
-                    }
-                ],
             ),
         ]
     )

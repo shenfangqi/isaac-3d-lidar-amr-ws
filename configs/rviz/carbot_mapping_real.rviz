@@ -1,0 +1,202 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Selection
+    Name: Selection
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.5
+      Cell Size: 1
+      Class: rviz_default_plugins/Grid
+      Color: 120; 120; 120
+      Enabled: true
+      Name: Grid
+      Plane: XY
+      Plane Cell Count: 30
+      Reference Frame: <Fixed Frame>
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/RobotModel
+      Description Source: Topic
+      Description Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /carbot_workstation/robot_description
+      Enabled: true
+      Name: Carbot
+      Visual Enabled: true
+      Collision Enabled: false
+      Value: true
+    - Alpha: 0.8
+      Class: rviz_default_plugins/Map
+      Color Scheme: map
+      Draw Behind: true
+      Enabled: true
+      Name: Nvblox 2.5D occupancy map
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        Filter size: 2
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /nvblox_node/static_occupancy_grid
+      Update Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /nvblox_node/static_occupancy_grid_updates
+      Use Timestamp: false
+      Value: true
+    - Alpha: 0.45
+      Class: rviz_default_plugins/Map
+      Color Scheme: map
+      Draw Behind: true
+      Enabled: false
+      Name: Saved map diagnostic
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        Filter size: 2
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /map
+      Update Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /map_updates
+      Use Timestamp: false
+      Value: false
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 3
+        Min Value: -1
+        Value: true
+      Axis: Z
+      Class: rviz_default_plugins/PointCloud2
+      Color Transformer: AxisColor
+      Decay Time: 0.75
+      Enabled: true
+      Name: Mid360 low-bandwidth 3D cloud
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.015
+      Style: Flat Squares
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        Filter size: 20
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /fast_lio/cloud_registered
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Namespaces: {}
+      Queue Size: 2
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        Filter size: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /carbot_workstation/tsdf_layer_marker
+      Value: true
+      Name: Nvblox 3D voxel map (0.5 Hz)
+    - Alpha: 1
+      Class: rviz_default_plugins/LaserScan
+      Color: 255; 80; 40
+      Decay Time: 0
+      Enabled: false
+      Name: Mapping scan (enable only for diagnostics)
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 4
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        Filter size: 100
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /scan
+      Use Fixed Frame: true
+      Value: false
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 2
+        Min Value: -1
+        Value: true
+      Axis: Z
+      Class: rviz_default_plugins/PointCloud2
+      Color Transformer: AxisColor
+      Decay Time: 0
+      Enabled: false
+      Name: Nvblox ESDF
+      Position Transformer: XYZ
+      Selectable: false
+      Size (Pixels): 2
+      Size (m): 0.03
+      Style: Flat Squares
+      Topic:
+        Depth: 2
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /nvblox_node/static_esdf_pointcloud
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: false
+    - Class: rviz_default_plugins/TF
+      Enabled: false
+      Frame Timeout: 15
+      Frames:
+        All Enabled: true
+      Marker Scale: 0.15
+      Name: TF
+      Show Arrows: true
+      Show Axes: false
+      Show Names: false
+      Tree: {}
+      Update Interval: 0
+      Value: false
+  Enabled: true
+  Global Options:
+    Background Color: 32; 34; 38
+    Fixed Frame: odom
+    Frame Rate: 15
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 7
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0
+      Name: Orbit
+      Pitch: 0.85
+      Target Frame: odom
+      Yaw: 0.75
+Window Geometry:
+  Height: 900
+  Width: 1440

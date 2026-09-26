@@ -11,6 +11,7 @@
   <depend>launch_ros</depend>
   <depend>geometry_msgs</depend>
   <depend>laser_filters</depend>
+  <depend>fast_lio</depend>
   <depend>lifecycle_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>nav2_amcl</depend>
@@ -22,9 +23,11 @@
   <depend>nav2_planner</depend>
   <depend>nav2_velocity_smoother</depend>
   <depend>nav2_waypoint_follower</depend>
+  <depend>nvblox_msgs</depend>
   <depend>nvblox_ros</depend>
   <depend>pointcloud_to_laserscan</depend>
   <depend>rclpy</depend>
+  <depend>robot_localization</depend>
   <depend>sensor_msgs</depend>
   <depend>slam_toolbox</depend>
   <depend>tf2_ros</depend>

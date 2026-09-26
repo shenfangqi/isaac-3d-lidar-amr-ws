@@ -22,8 +22,11 @@
 
     static_mapper:
       lidar_projective_integrator_max_integration_distance_m: 10.0
-      esdf_slice_height: 0.09
-      esdf_slice_min_height: 0.09
-      # Match the 0.35 m autonomous overhead-clearance threshold.
-      esdf_slice_max_height: 0.35
+      # FAST-LIO's odom Z origin is the MID-360 IMU, 0.164790454 m above
+      # base_footprint. Subtract that calibrated height so this slice still
+      # represents 0.09..0.35 m above the floor. Without the compensation,
+      # traversable table aprons around 0.26..0.52 m are marked occupied.
+      esdf_slice_height: -0.074790454
+      esdf_slice_min_height: -0.074790454
+      esdf_slice_max_height: 0.185209546
       layer_streamer_exclusion_radius_m: 0.5

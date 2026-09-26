@@ -38,7 +38,13 @@ slam_toolbox:
     link_match_minimum_response_fine: 0.1
     link_scan_maximum_distance: 1.5
     loop_search_maximum_distance: 3.0
-    do_loop_closing: true
+    # The first mapping pass is driven with a phone and may continue briefly
+    # after the phone/RViz loses Wi-Fi.  In small, repetitive rooms an
+    # automatic loop closure can then accept the wrong wall alignment and
+    # rotate the complete pose graph by tens of degrees.  Keep sequential scan
+    # matching (and the fused odometry prior) active, but do not accept global
+    # loop closures while acquiring the navigation map.
+    do_loop_closing: false
     loop_match_minimum_chain_size: 10
     loop_match_maximum_variance_coarse: 3.0
     loop_match_minimum_response_coarse: 0.35

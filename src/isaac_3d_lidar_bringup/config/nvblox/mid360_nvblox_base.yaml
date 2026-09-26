@@ -54,7 +54,12 @@
     layer_visualization_undo_gamma_correction: false
     max_back_projection_distance: 7.0
     back_projection_subsampling: 1
-    layer_streamer_bandwidth_limit_mbps: -1.0
+    # Keep serialized Mesh updates below the local Fast DDS datagram burst
+    # limit. The relay caches these chunks and publishes one bounded 0.5 Hz
+    # snapshot for remote RViz; nvblox's internal TSDF/mesh is unaffected.
+    # At 5 Hz this allows roughly 200 kB per chunk, enough for at least one
+    # mesh block while still avoiding the former multi-megabyte burst.
+    layer_streamer_bandwidth_limit_mbps: 8.0
 
     multi_mapper:
       connected_mask_component_size_threshold: 2000

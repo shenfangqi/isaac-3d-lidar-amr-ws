@@ -22,7 +22,10 @@ def test_real_nav_limits_are_conservative():
         PACKAGE_DIR / 'config/nav2/carbot_navigation_real.yaml')
 
     controller = nav['controller_server']['ros__parameters']['FollowPath']
+    goal_checker = nav['controller_server']['ros__parameters'][
+        'general_goal_checker']
     assert controller['desired_linear_vel'] <= 0.10
+    assert goal_checker['yaw_goal_tolerance'] == 0.03
     assert controller['rotate_to_heading_angular_vel'] == 0.50
     # At 20 Hz the requested turn must cross the measured 0.40 rad/s track
     # deadband in one RPP cycle.  The final smoother, not RPP's odometry-based
@@ -73,6 +76,60 @@ def test_real_navigation_launch_is_inactive_and_has_one_final_velocity_path():
     assert "default_value='/cmd_vel_command'" in launch_source
     assert 'Use /cmd_vel_diagnostic' in launch_source
     assert "'autostart': autostart" in launch_source
+
+
+def test_real_mapping_uses_fast_lio_pose_and_nvblox_map_only():
+    launch_source = (
+        PACKAGE_DIR / 'launch/mid360_mapping_real.launch.py'
+    ).read_text(encoding='utf-8')
+    assert launch_source.count("'/fast_lio/cloud_registered_body'") == 2
+    assert "'global_frame': 'odom'" in launch_source
+    assert 'slam_toolbox' not in launch_source
+
+
+def test_real_nvblox_slice_is_floor_referenced_with_fast_lio():
+    nvblox = _load_yaml(
+        PACKAGE_DIR / 'config/nvblox/mid360_nvblox_real.yaml')
+    mapper = nvblox['/**']['ros__parameters']['static_mapper']
+    imu_height = 0.164790453526
+    assert mapper['esdf_slice_height'] == pytest.approx(0.09 - imu_height)
+    assert mapper['esdf_slice_min_height'] == pytest.approx(0.09 - imu_height)
+    assert mapper['esdf_slice_max_height'] == pytest.approx(0.35 - imu_height)
+
+
+def test_real_lio_is_tightly_coupled_and_has_one_tf_owner():
+    lio = _load_yaml(
+        PACKAGE_DIR / 'config/state_estimation/fast_lio_mid360.yaml')
+    params = lio['/**']['ros__parameters']
+    assert params['common']['lid_topic'] == '/livox/lidar'
+    assert params['common']['imu_topic'] == '/mid360/imu/data_raw'
+    assert params['common']['world_frame'] == 'odom'
+    assert params['common']['body_frame'] == 'fast_lio_imu'
+    assert params['mapping']['extrinsic_est_en'] is False
+    assert params['publish']['tf_en'] is False
+    assert params['preprocess']['lidar_type'] == 1
+
+    launch_source = (
+        PACKAGE_DIR / 'launch/mid360_fast_lio_odometry.launch.py'
+    ).read_text(encoding='utf-8')
+    assert "package='fast_lio'" in launch_source
+    assert "'/fast_lio/imu_odom'" in launch_source
+    assert "executable='fast_lio_base_adapter'" in launch_source
+
+    nvblox_source = (
+        PACKAGE_DIR / 'launch/mid360_nvblox_real.launch.py'
+    ).read_text(encoding='utf-8')
+    assert "executable='pointcloud_padder'" in nvblox_source
+    assert "('pointcloud', nvblox_pointcloud_topic)" in nvblox_source
+
+    mapping_source = (
+        PACKAGE_DIR / 'launch/mid360_mapping_real.launch.py'
+    ).read_text(encoding='utf-8')
+    navigation_source = (
+        PACKAGE_DIR / 'launch/carbot_navigation_real.launch.py'
+    ).read_text(encoding='utf-8')
+    assert 'mid360_fast_lio_odometry.launch.py' in mapping_source
+    assert 'mid360_fast_lio_odometry.launch.py' in navigation_source
 
 
 def test_jetson_startup_orders_localization_pose_then_navigation():

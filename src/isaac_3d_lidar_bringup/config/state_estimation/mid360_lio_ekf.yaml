@@ -1,0 +1,56 @@
+ekf_filter_node:
+  ros__parameters:
+    use_sim_time: false
+    # Twice the 10 Hz LiDAR odometry rate is sufficient for mapping/Nav2 and
+    # leaves deterministic CPU headroom for nvblox and KISS-ICP on Jetson.
+    frequency: 20.0
+    sensor_timeout: 0.3
+    two_d_mode: true
+    publish_tf: true
+    publish_acceleration: false
+    dynamic_process_noise_covariance: true
+    reset_on_time_jump: true
+
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: base_footprint
+    world_frame: odom
+
+    # KISS-ICP is the position and heading authority. It registers the full
+    # local MID-360 cloud in 3D, then reports the base_footprint pose in odom.
+    odom0: /kiss/odometry
+    odom0_config: [true,  true,  false,
+                   false, false, true,
+                   false, false, false,
+                   false, false, false,
+                   false, false, false]
+    odom0_differential: false
+    odom0_relative: false
+    odom0_queue_size: 10
+
+    # MID-360 gyro-z provides the independent high-rate inertial turn signal.
+    # The device does not publish a trusted absolute orientation.
+    imu0: /mid360/imu/data_raw
+    imu0_config: [false, false, false,
+                  false, false, false,
+                  false, false, false,
+                  false, false, true,
+                  false, false, false]
+    imu0_differential: false
+    imu0_relative: false
+    imu0_remove_gravitational_acceleration: false
+    imu0_queue_size: 40
+
+    # Encoders are deliberately velocity-only. Track slip must never directly
+    # move or rotate the localization pose.
+    odom1: /wheel/odom
+    odom1_config: [false, false, false,
+                   false, false, false,
+                   true,  true,  false,
+                   false, false, false,
+                   false, false, false]
+    odom1_differential: false
+    odom1_relative: false
+    odom1_queue_size: 10
+
+    print_diagnostics: true

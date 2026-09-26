@@ -23,10 +23,13 @@ class PointCloudPadder(Node):
         if self._target_points <= 0:
             raise ValueError('target_width * target_height must be positive')
 
+        # MID-360's compact XYZ relay uses sensor-data QoS (best effort).
+        # A reliable subscription is incompatible with that publisher and
+        # silently receives no clouds, leaving nvblox with an empty map.
         qos = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             depth=10,
-            reliability=ReliabilityPolicy.RELIABLE,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.VOLATILE,
         )
         output_topic = self.get_parameter('output_topic').value

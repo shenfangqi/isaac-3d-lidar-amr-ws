@@ -1,0 +1,13 @@
+FROM carbot-isaac-ros-nvblox:3.2
+
+USER root
+
+RUN rm -f /etc/apt/sources.list.d/yarn.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        robin-map-dev \
+        ros-humble-diagnostic-updater \
+        ros-humble-pcl-conversions \
+        ros-humble-pcl-ros \
+        ros-humble-sophus \
+    && rm -rf /var/lib/apt/lists/*

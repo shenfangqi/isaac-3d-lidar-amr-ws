@@ -3,8 +3,9 @@
 set -euo pipefail
 
 container_name="carbot-nvblox"
-image_name="carbot-isaac-ros-nvblox:3.2"
+image_name="carbot-isaac-ros-nvblox:3.3-lio"
 workspace="/home/shenfq/Projects/isaac_ros-dev"
+livox_workspace="/home/shenfq/Projects/lidar-mid360/ws_livox"
 dds_profile="${workspace}/src/isaac_ros_common/docker/middleware_profiles/rtps_udp_profile.xml"
 time_gate="${workspace}/scripts/wait_for_mapping_time_sync.py"
 
@@ -17,10 +18,10 @@ usage() {
 mode="${2:-compact}"
 case "${mode}" in
   compact)
-    launch_command="mid360_nvblox_real.launch.py pointcloud_topic:=/mid360/points_xyz"
+    launch_command="mid360_nvblox_real.launch.py pointcloud_topic:=/fast_lio/cloud_registered_body"
     ;;
   full)
-    launch_command="mid360_nvblox_real.launch.py pointcloud_topic:=/livox/lidar"
+    launch_command="mid360_nvblox_real.launch.py pointcloud_topic:=/fast_lio/cloud_registered_body"
     ;;
   mapping)
     launch_command="mid360_mapping_real.launch.py"
@@ -57,6 +58,7 @@ esac
 
 run_container() {
   test -d "${workspace}/install/nvblox_ros"
+  test -f "${livox_workspace}/install/setup.bash"
   test -f "${dds_profile}"
   test -f "${time_gate}"
 
@@ -80,11 +82,12 @@ run_container() {
     -e NVIDIA_DRIVER_CAPABILITIES=all \
     -v "${dds_profile}:/etc/fastdds/rtps_udp_profile.xml:ro" \
     -v "${workspace}:/workspaces/isaac_ros-dev" \
+    -v "${livox_workspace}:${livox_workspace}:ro" \
     -v /run/systemd/timesync:/run/host-systemd-timesync:ro \
     -v /tmp:/tmp \
     --entrypoint /bin/bash \
     "${image_name}" -lc \
-    "mkdir -p \"\${HOME}\" \"\${ROS_LOG_DIR}\"; python3 /workspaces/isaac_ros-dev/scripts/wait_for_mapping_time_sync.py; source /opt/ros/humble/setup.bash; source /workspaces/isaac_ros-dev/install/setup.bash; exec ros2 launch isaac_3d_lidar_bringup ${launch_command}"
+    "mkdir -p \"\${HOME}\" \"\${ROS_LOG_DIR}\"; python3 /workspaces/isaac_ros-dev/scripts/wait_for_mapping_time_sync.py; source /opt/ros/humble/setup.bash; source ${livox_workspace}/install/setup.bash; source /workspaces/isaac_ros-dev/install/setup.bash; exec ros2 launch isaac_3d_lidar_bringup ${launch_command}"
 }
 
 action="${1:-}"

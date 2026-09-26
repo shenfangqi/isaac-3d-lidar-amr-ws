@@ -3,7 +3,60 @@
 Session handoff and next-step procedure:
 [`docs/carbot_2026-09-21_handoff.md`](../../../docs/carbot_2026-09-21_handoff.md).
 
-Newest checkpoint: [offline evidence-constrained twin: 2026-09-23](#offline-evidence-constrained-twin-2026-09-23).
+Newest checkpoint: [real MID-360 FAST-LIO2 mapping: 2026-09-26](#real-mid-360-fast-lio2-mapping-2026-09-26).
+
+## Real MID-360 FAST-LIO2 mapping: 2026-09-26
+
+- Real mapping now runs the official FAST-LIO2 ROS 2 implementation, vendored
+  from `hku-mars/FAST_LIO` ROS2 commit
+  `a4743b095409588842a5b30ddfa27e29d2f99164` with ikd-Tree commit
+  `e2e3f4e9d3b95a9e66b1ba83dc98d4a05ed8a3c4`. The Jetson image installs the
+  required ROS PCL packages and the runtime mounts/sources the Livox workspace.
+- The MID-360 driver publishes `livox_ros_driver2/msg/CustomMsg` directly on
+  `/livox/lidar` at about 10 Hz. A live frame contained 19,968 points whose
+  `offset_time` span was 99.830 ms, preserving the per-point timing needed for
+  tightly coupled IMU deskew. FAST-LIO2 also consumes the corrected SI-unit
+  `/mid360/imu/data_raw`; its configured LiDAR-to-IMU translation is
+  `[-0.011, -0.02329, 0.04412] m`, time offset is zero because the adapter
+  already applies the measured `-9.782937 ms`, and online extrinsic estimation
+  is disabled.
+- FAST-LIO2 publishes raw full 3D odometry on `/fast_lio/imu_odom` and
+  deskewed clouds under `/fast_lio/*`, but publishes no TF. The
+  `fast_lio_base_adapter` is the single `/odom` publisher and owns only
+  `odom -> base_footprint` plus the auxiliary full-attitude
+  `odom -> fast_lio_imu`; robot_state_publisher owns the body/joint edges.
+  The legacy host `carbot-state-estimation.service` is disabled and inactive,
+  and no KISS-ICP, robot_localization, or SLAM Toolbox node runs in mapping.
+- The authoritative real mapping chain is FAST-LIO2 pose plus nvblox:
+  nvblox integrates a fixed `1000 x 40` NaN-padded body cloud directly in
+  `odom`, publishes its `0.05 m` 2.5D occupancy grid, and supplies the 3D
+  voxel display. RViz mapping uses Fixed Frame `odom`; no second scan matcher
+  or `map -> odom` correction is present. The low-bandwidth accumulated-cloud
+  voxel marker is published in `odom` at up to 0.5 Hz and 6,000 points.
+- Static live acceptance found one raw and one adapted odometry publisher at
+  about 10 Hz, body cloud and `/scan` near 9-10 Hz, and no continuing pointcloud
+  queue drops after increasing transform-filter headroom. One stationary
+  20-second sample moved about `0.2 mm` in X, `3.25 mm` in Y and `0.066 deg`
+  in yaw. A stationary nvblox grid was `200 x 144` at `0.05 m`, with 1,716
+  occupied, 6,384 free and 20,700 unknown cells. Container load was about two
+  CPU cores and 602 MiB.
+- The mapping container uses `carbot-isaac-ros-nvblox:3.3-lio`. Static
+  acceptance did not move the vehicle and did not save this disposable map;
+  Web remained `armed=false`. A supervised low-speed motion test is still
+  required to validate direction, collision/slip recovery and map consistency
+  under motion before this estimator is accepted for map production.
+
+## Physical mass and center-of-mass baseline: 2026-09-23
+
+- The operator reported the assembled vehicle mass as `3.4 kg` and its center
+  of mass at the vehicle geometric center. The canonical model now uses
+  `3.28 kg` for the merged base body plus twelve `0.01 kg` wheel links.
+- The geometric center remains `[0.0125, 0.0, 0.035] m` in `base_link`
+  coordinates; the `+0.0125 m` X value reflects the asymmetric footprint and
+  is not a forward COM offset relative to the vehicle geometry.
+- Inertias were scaled with base-body mass only to preserve the previous
+  provisional radii of gyration. They remain estimates, so the combined
+  mass/COM/inertia release item stays blocked pending CAD or pendulum evidence.
 
 ## Offline evidence-constrained twin: 2026-09-23
 

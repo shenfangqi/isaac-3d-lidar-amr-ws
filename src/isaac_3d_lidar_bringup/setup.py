@@ -31,6 +31,10 @@ setup(
             glob('config/slam_toolbox/*.yaml')
         ),
         (
+            os.path.join('share', package_name, 'config/state_estimation'),
+            glob('config/state_estimation/*.yaml')
+        ),
+        (
             os.path.join('share', package_name, 'config/nav2'),
             glob('config/nav2/*.yaml')
         ),
@@ -57,6 +61,10 @@ setup(
             'overhead_clearance_marker_publisher:main',
             'static_map_scan_filter = '
             'isaac_3d_lidar_bringup.static_map_scan_filter:main',
+            'mesh_voxel_relay = '
+            'isaac_3d_lidar_bringup.mesh_voxel_relay:main',
+            'fast_lio_base_adapter = '
+            'isaac_3d_lidar_bringup.fast_lio_base_adapter:main',
         ],
     },
 )

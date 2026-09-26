@@ -4,7 +4,8 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -15,20 +16,30 @@ def generate_launch_description():
         bringup_dir, 'config', 'nav2', 'carbot_amcl_real.yaml')
     navigation_config = os.path.join(
         bringup_dir, 'config', 'nav2', 'carbot_navigation_real.yaml')
+    lio_launch = os.path.join(
+        bringup_dir, 'launch', 'mid360_fast_lio_odometry.launch.py')
 
     map_yaml = LaunchConfiguration('map')
     autostart = LaunchConfiguration('autostart')
     cmd_vel_output = LaunchConfiguration('cmd_vel_output')
 
+    lio_odometry = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(lio_launch),
+    )
+
     scan_projection = Node(
         package='pointcloud_to_laserscan',
         executable='pointcloud_to_laserscan_node',
         name='mid360_pointcloud_to_laserscan',
-        remappings=[('cloud_in', '/livox/lidar'), ('scan', '/scan')],
+        remappings=[
+            ('cloud_in', '/fast_lio/cloud_registered_body'),
+            ('scan', '/scan'),
+        ],
         parameters=[{
             'use_sim_time': False,
             'target_frame': 'base_footprint',
             'transform_tolerance': 0.05,
+            'queue_size': 30,
             'min_height': 0.10,
             # Preserve 0.11 m above the top-mounted MID-360.
             'max_height': 0.35,
@@ -158,6 +169,7 @@ def generate_launch_description():
                 'non-actuating control-pipeline diagnostic.'
             ),
         ),
+        lio_odometry,
         scan_projection,
         map_server,
         amcl,

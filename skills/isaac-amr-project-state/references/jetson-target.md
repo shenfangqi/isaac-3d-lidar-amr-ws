@@ -4,7 +4,7 @@ This is the durable project runbook for the real Jetson used by `isaac_3d_lidar_
 
 ## Connection
 
-Last verified: 2026-09-06 (Asia/Tokyo).
+Last verified: 2026-09-25 (Asia/Tokyo).
 
 | Field | Value |
 |---|---|
@@ -20,6 +20,7 @@ Last verified: 2026-09-06 (Asia/Tokyo).
 | Physical robot ROS domain | `0` (matches completed ESP32 firmware) |
 | micro-ROS Agent | User service `micro-ros-agent.service`, UDP 8888 |
 | Wheel odometry | User service `carbot-wheel-odometry.service` |
+| Phone Web teleop | User service `carbot-web-teleop.service`, TCP 8080 |
 
 The local host configuration is in `~/.ssh/config`. The project-specific private key is `~/.ssh/id_ed25519_isaac_jetson`; its public key is installed in the Jetson user's `~/.ssh/authorized_keys`. The private-key fingerprint is:
 
@@ -93,9 +94,37 @@ The following ROS-related directories existed under `/home/shenfq/Projects` when
 /home/shenfq/Projects/lidar-mid360/ws_livox
 ```
 
-The complete `isaac_3d_lidar_amr_ws` was not identified during the initial shallow inventory. Do not assume that this workstation checkout already exists on the Jetson. Before deployment, inspect the destination, storage, Git state, ROS overlays, running processes, Docker objects, and attached hardware. Preserve existing files and ask before overwriting or replacing a deployment.
+The deployed Isaac ROS workspace is
+`/home/shenfq/Projects/isaac_ros-dev`; its project package is
+`/home/shenfq/Projects/isaac_ros-dev/src/isaac_3d_lidar_bringup`, and the
+official ROS 2 FAST-LIO2 source is
+`/home/shenfq/Projects/isaac_ros-dev/src/FAST_LIO`. Inspect the live source,
+install overlay, container and hardware before replacing a deployment.
 
-The tracked-base host integration is maintained in `/home/shenfq/Projects/carbot-ros2`. Its Agent and the completed ESP32 firmware use `ROS_DOMAIN_ID=0`. Isaac simulation also uses Domain 0 but remains isolated by the workstation's loopback-only DDS profile; physical operation requires explicitly loading the LAN DDS profile. The ESP32 performs the differential-track conversion and subscribes to standard `/cmd_vel`. The deployed `carbot_msgs` and `carbot_hardware` packages support the enabled `carbot-wheel-odometry.service`, which is the sole `/odom` and `odom -> base_footprint` owner. Do not start the legacy `carbot_driver` alongside Nav2 because it publishes its own nonzero `/cmd_vel` stream.
+The tracked-base host integration is maintained in `/home/shenfq/Projects/carbot-ros2`. Its Agent and the completed ESP32 firmware use `ROS_DOMAIN_ID=0`. Isaac simulation also uses Domain 0 but remains isolated by the workstation's loopback-only DDS profile; physical operation requires explicitly loading the LAN DDS profile. The ESP32 performs the differential-track conversion and subscribes to standard `/cmd_vel`. The deployed `carbot_msgs` and `carbot_hardware` packages support `carbot-wheel-odometry.service`, which publishes raw `/wheel/odom` without TF. During mapping/navigation, the `carbot-nvblox` container's FAST-LIO base adapter is the sole `/odom` and `odom -> base_footprint` owner; the legacy `carbot-state-estimation.service` must remain disabled and inactive. Do not start the legacy `carbot_driver` alongside Nav2 because it publishes its own nonzero `/cmd_vel` stream.
+
+The real mapping container uses image `carbot-isaac-ros-nvblox:3.3-lio` and is
+managed with:
+
+```bash
+cd /home/shenfq/Projects/isaac_ros-dev
+scripts/jetson_nvblox_container.sh {start|recreate|stop|status|logs} mapping
+```
+
+In real mapping mode its authoritative TF ownership is the FAST-LIO base
+adapter for `odom -> base_footprint` and `odom -> fast_lio_imu`, and
+robot_state_publisher for the body/joint tree. nvblox builds directly in
+`odom`; FAST-LIO2 itself publishes no TF, and no SLAM Toolbox, KISS-ICP, EKF,
+or `map -> odom` publisher is present.
+
+The enabled `carbot-web-teleop.service` serves the phone controller on TCP
+8080 and publishes only to `/cmd_vel_command`. It starts disarmed, requires the
+calibrated command compensator to be its unique subscriber, refuses to arm if
+another upstream command publisher exists, and uses a 300 ms browser-command
+lease. The 2026-09-24 deployment was verified from the workstation and on the
+Jetson with only zero Twist messages; no nonzero physical command was sent.
+Use it only for supervised mapping, and do not enable Nav2 or another teleop
+publisher at the same time.
 
 ## Remote-operation rules
 
