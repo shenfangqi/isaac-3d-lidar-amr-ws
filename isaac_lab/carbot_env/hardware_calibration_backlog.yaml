@@ -1,0 +1,252 @@
+schema_version: 1
+status: BLOCKING_SIM_TO_REAL_CALIBRATION
+policy_release_blocked: true
+updated: 2026-09-23
+
+items:
+  - id: jetson_wheel_ticks_decode
+    state: physical_verified
+    blocking_calibration: false
+    evidence_required: Decode live carbot_msgs WheelTicks at 50 Hz on Jetson/workstation.
+    evidence_observed: Live decode at approximately 50 Hz; 15 s lifted static trial had zero tick drift and stable boot_id 549633487.
+  - id: jetson_odometry_owner
+    state: physical_verified
+    blocking_calibration: false
+    evidence_required: Verify exactly one /wheel_ticks -> /odom and odom -> base_footprint owner.
+    evidence_observed: Enabled Jetson wheel odometry and EKF services. The wheel node owns /wheel/odom without TF; robot_localization is the sole /odom and odom -> base_footprint owner. Static and controlled dynamic fusion acceptance passed on 2026-09-22.
+  - id: effective_radius
+    state: baseline_confirmed
+    blocking_calibration: false
+    baseline_value_m: 0.02175
+    release_verification: wood_floor_no_payload_complete
+    verification_progress: bidirectional_0p05_and_0p10mps_three_repeats_complete_forward_0p10_external_discrepancy_open
+    evidence_required: Confirm the accepted baseline with forward and reverse measured 1 m trials; use the result as acceptance evidence, not as a missing calibration gate.
+    evidence_observed: On wood flooring with zero added payload, three valid 0.05 m/s forward 1 m trials accumulated 3.050 m external versus 3.02726 m encoder distance, while three valid reverse trials accumulated 3.1025 m external versus 3.08521 m encoder distance. Across those six trials the apparent slip was -0.65% and the candidate effective radius was 0.02189 m. At 0.10 m/s, three forward trials had stable encoder distances of 0.93655/1.00939/1.01172 m but external measurements of 0.94/1.10/1.13 m; the latter two differ by 9-12%. Three valid reverse trials instead accumulated 3.010 m external versus 2.95276 m encoder distance, a -1.94% difference and 0.02217 m candidate radius. The forward discrepancy is not a uniform speed-dependent radius effect. Retain the 0.02175 m baseline pending precise external trajectory truth.
+  - id: effective_track_separation
+    state: baseline_confirmed
+    blocking_calibration: false
+    baseline_value_m: 0.254
+    release_verification: wood_floor_no_payload_complete
+    verification_progress: bidirectional_90deg_and_360deg_ground_complete
+    evidence_required: Confirm the accepted baseline with left/right 90 and 360 degree trials; use the result as acceptance evidence, not as a missing calibration gate.
+    evidence_observed: On wood flooring, earlier two-segment left/right turns gave effective-track estimates of 0.247985/0.253144 m. After the IMU firmware fix, valid closed-loop full turns measured left 353 external, 356.29 IMU, and 361.50 wheel-derived degrees, then right 363 external, 358.10 IMU, and 362.85 wheel-derived degrees using the 0.254 m baseline. The right full-turn wheel estimate differed from external by only 0.04%; retain the 0.254 m baseline pending precise external trajectory truth on additional surfaces and payloads.
+  - id: track_slip_surface_variation
+    state: partial_physical_evidence
+    blocking_calibration: true
+    evidence_required: Measure longitudinal and turning slip on representative floors and under representative payloads.
+    evidence_observed: On wood flooring with zero added payload, two forward trials measured -0.61% and -1.30% apparent longitudinal slip and two reverse trials measured -2.06% and -0.36%. Both asymmetric repeats matched the observed yaw direction. Earlier left/right approximately 90-degree composite turns gave yaw gains 1.0243 and 1.0034. Valid full turns measured left approximately 353 external versus 361.50 wheel-derived degrees and right 363 external versus 362.85 wheel-derived degrees. Other surfaces, payload variation, and precise external trajectory truth remain pending.
+  - id: actuator_latency_deadband_braking
+    state: partial_physical_evidence
+    blocking_calibration: true
+    evidence_required: Timestamped command/RPM/PWM/voltage step and stop trials.
+    evidence_observed: Lifted watchdog and directional deadband bags/ESP32 telemetry captured; forward M3/left track failed to sustain motion at 0.01-0.03 m/s and became stable at 0.05 m/s, while reverse became sustainable near 0.02 m/s. Ground stop tails varied from about 0.57 s to 0.92 s. A combined 12 s command at +0.20 rad/s integrated to 137.51 degrees but physically produced about 86 degrees, showing approximately 62.5% low-speed angular command tracking. During Jetson moving-map acceptance, +0.20 rad/s for 3 s produced only 0-0.8 degrees, +0.30 for 2 s produced 3.9 degrees, +0.40 for 2 s produced 13.6 degrees, and +0.50 for 2 s produced 21.0 degrees; -0.50 for 2 s produced 24.9 degrees. With a 0.254 m effective track separation, 0.40 rad/s corresponds to about 0.0508 m/s per track and matches the measured sustainable forward threshold. Five paired turns resolved the uncompensated right/left response, and a host-side right-turn command scale of 0.896 was then physically accepted with forward/reverse and left/right return tests. The evidence-degraded Isaac mode now represents 73 ms command delay, directional finite-duration gains and 0.57-0.92 s stop tails. Combined PWM/RPM/voltage trials and multi-surface braking remain pending, so this item stays blocking.
+  - id: mass_com_inertia
+    state: mass_and_geometric_center_reported_inertia_pending
+    blocking_calibration: true
+    evidence_required: Retain the reported 3.4 kg assembled mass and geometric-center COM; obtain a CAD or pendulum inertia estimate to close this combined item.
+    evidence_observed: The operator reported an assembled vehicle mass of 3.4 kg and the center of mass at the vehicle geometric center on 2026-09-23. The canonical base_link representation retains [0.0125, 0.0, 0.035] m because the asymmetric footprint center is +0.0125 m from the base_link origin. The previous inertias were scaled with base-body mass only to keep a consistent provisional radius of gyration; they are not physical inertia measurements.
+  - id: track_friction
+    state: pending
+    blocking_calibration: true
+    evidence_required: Controlled pull or incline tests including longitudinal/lateral slip.
+  - id: imu_extrinsics_and_time
+    state: mid360_calibrated_esp32_resync_flashed_validation_pending
+    blocking_calibration: true
+    evidence_required: Measured imu_link transform and synchronized IMU/wheel timestamps.
+    evidence_observed: >-
+      Firmware commit 068071e removed the duplicate acceleration and gyro unit
+      conversions. After reflashing, stationary acceleration norm had median
+      9.803739 m/s^2. During an externally measured approximately 80-degree left
+      turn, motion-preceding bias-corrected gyro.z integrated to 80.41 degrees and
+      peaked at 0.2205 rad/s. A second externally measured 95-degree left turn
+      integrated to 95.63 degrees. The respective 0.51% and 0.66% differences
+      confirm the corrected dynamic scale and units. Two right-turn repeats showed
+      104.11 versus approximately 110 external degrees and 69.09 versus
+      approximately 65 external degrees; wheel-derived angles were 105.17 and
+      69.87 degrees, closely matching the IMU but exposing large open-loop turning
+      variability. Closed-loop full turns then gave 356.29 IMU versus approximately
+      353 external degrees on the left and 358.10 IMU versus 363 external degrees on
+      the right. Dynamic firmware validation is complete; final MID-360
+      extrinsic/time validation remained required before enabling IMU fusion. On
+      2026-09-18 the MID-360 at 192.168.2.202 streamed approximately 10 Hz point
+      clouds and 200 Hz IMU data to Jetson 192.168.2.100 with no Ethernet errors.
+      The Livox driver forwards acceleration in g despite using sensor_msgs/Imu;
+      a tested adapter now publishes SI acceleration on /mid360/imu/data_raw and
+      marks orientation unavailable. A stationary 1849-sample capture had mean
+      acceleration (0.00964, -0.00944, 0.99177) g and monotonic approximately 5 ms
+      ROS header intervals. A separate 1000-sample check found mean host receive
+      minus header latency around 0.81 ms, but source inspection confirmed that
+      unsynchronized Livox packets are re-stamped with host time. No ptp4l or
+      phc2sys process is active and the Jetson LiDAR NIC has no hardware PTP
+      clock, although the NIC does advertise software TX/RX timestamp support.
+      Linuxptp 3.1.1 is now installed and the enabled system service
+      carbot-mid360-ptp.service runs Jetson as the only software-timestamp PTP
+      master on enP8p1s0. A raw UDP probe after lock observed time_type=1 in
+      200/200 point-cloud packets and 200/200 IMU packets. A following 1000-sample
+      IMU capture had no reversed timestamps; steady receive-minus-device-stamp
+      latency had median 0.965 ms and p95 1.335 ms. MID-360-to-Jetson time sync
+      passes. ESP32 firmware commit 068071e synchronizes the micro-ROS epoch only
+      once when a session is created, then applies one fixed offset to monotonic
+      device timestamps. A live 403-sample wheel capture reported
+      time_synchronized=true and exact agreement between header and device-time
+      increments, but receive-minus-header latency had median 64.84 ms and p95
+      74.96 ms. Reanalysis of the earlier 30-minute bag found per-minute median
+      latency moving from 8.76 ms through 1.98 ms to 19.01 ms. Periodic resync
+      with monotonic output timestamps is therefore required to track ESP clock
+      drift and Jetson wall-clock corrections. Fusion remains gated on that
+      firmware change and a controlled localization test. On 2026-09-21 a
+      243.046-s manual yaw-excitation bag aligned 3595 20-ms wall poses with
+      48160 MID-360 IMU samples. The fitted lag was +9.782937 ms under the
+      convention lidar_yaw(t) versus integrated_gyro_z(t+lag), so the adapter
+      now adds -9.782937 ms to outgoing IMU stamps. Three independent chunks
+      spanned 9.1673-10.2468 ms; approximately 0.6 ms is retained as
+      uncertainty. Full-fit R-squared was 0.9999084 with 0.119-degree RMS yaw
+      residual. The official manual supplies identical point-cloud/IMU axes
+      and the [11.0, 23.29, -44.12] mm LiDAR-to-IMU-chip lever arm. MID-360
+      extrinsics and LiDAR-relative timing are complete; the remaining blocker
+      in this combined item is ESP32/wheel-clock periodic resynchronization.
+      On 2026-09-22 the firmware source gained 60-second periodic epoch
+      resampling, last-good-offset retention on failure, and a 2 ms maximum
+      correction step; host tests and an ESP-IDF 5.4.4 full build pass at commit
+      ce613ed. The operator subsequently confirmed that this firmware was
+      flashed and the live Jetson interface was checked. A fresh 30-minute
+      no-reconnect drift validation of that flashed build remains pending.
+      The final estimator policy permits only /mid360/imu/data_raw as its IMU;
+      ESP32 provides wheel ticks and base control only.
+  - id: mid360_origin_and_extrinsics
+    state: lidar_and_imu_extrinsics_calibrated
+    blocking_calibration: false
+    evidence_required: Independently repeat the accepted LiDAR XYZ/RPY on a surveyed fixture, then calibrate the internal IMU rotation and lever arm.
+    evidence_observed: >-
+      The official Mid-360 mechanical drawing specifies a 60 mm housing height
+      and coordinate origin O 47 mm above the housing bottom. Combined with the
+      measured 222 mm housing-top height, O is 209 mm above ground and 119 mm
+      above base_link. A 12-frame installed point-cloud fit to the wood floor
+      independently estimated 206.58 mm with approximately 5.65 mm inlier
+      residual standard deviation. The Z baseline is accepted and the URDF,
+      livox_frame, front_3d_lidar, and RTX origin now share the 47 mm offset.
+      On the final assembly the M12 connector faces the vehicle rear. The
+      manufacturer top-view coordinate drawing places the connector on the
+      sensor -X side, so sensor +X faces the vehicle front, resolving the
+      90- or 180-degree mounting ambiguity before fine yaw calibration.
+      A 2026-09-21 stationary A-B-A chassis-reversal calibration separated the
+      reversing floor/support component from the fixed installation angle.
+      Pose C reproduced Pose A within 0.49 mm height, 0.127 degree roll and
+      0.019 degree pitch. The accepted fixed LiDAR rotation is roll -0.35153
+      degrees and pitch -0.27832 degrees. A 64-frame stationary capture with
+      the chassis centerline placed parallel to the near wall then measured
+      that wall at 0.42187 m and resolved yaw to +1.12068 degrees. Per-frame
+      wall-normal standard deviation was 0.01011 degree; the opposite wall
+      independently implied +1.32187 degrees, exposing about 0.20 degree of
+      wall/placement systematic uncertainty. The measured right-wall-to-track
+      outer-edge gap was 289 mm. Adding the canonical 133 mm track outer
+      half-width gives a 422 mm centerline distance; comparison with the
+      421.85533 mm LiDAR wall distance resolves mount Y to -0.14467 mm, with
+      about 0.5 mm ruler uncertainty. Rear-wall gaps to the right/left
+      rear-drive-wheel outer extrema were 1153/1155 mm. Combining their 1154 mm
+      mean with the fitted 1300.78363 mm rear plane, canonical -132.25 mm wheel
+      extremum and the wall plane's 0.71955 degree vertical tilt resolves mount
+      X to +16.56608 mm. The 2 mm side-to-side spread is retained as about 2 mm
+      X uncertainty. The official MID-360 manual gives identical IMU and
+      point-cloud axes and locates the IMU chip at [11.0, 23.29, -44.12] mm in
+      point-cloud coordinates. The dynamic yaw experiment independently
+      confirmed the axis polarity and scale (0.996542), with 0.119-degree RMS
+      wall-yaw residual. The canonical livox_frame-to-imu_link transform is
+      therefore translation [0.011, 0.02329, -0.04412] m and identity rotation.
+  - id: real_mid360_nvblox_transport
+    state: onboard_mapping_and_localization_verified_geometry_pending
+    blocking_calibration: false
+    evidence_required: Verify sustained TF and nonempty nvblox output with real MID-360 data, then repeat while moving and on the final Jetson-only runtime.
+    evidence_observed: >-
+      On 2026-09-19 the real-robot workstation environment was aligned with the
+      Jetson on Fast DDS. Raw approximately 20k-point, 26-byte PointCloud2 scans
+      crossed the 2.4 GHz Wi-Fi link at only about 3.8 Hz and starved TF. A tested
+      Jetson relay now publishes rotating stride-4 XYZ-only Sensor Data clouds on
+      /mid360/points_xyz: a representative frame was 4992 points, 12 bytes per
+      point, 59904 bytes total, at 10.03 Hz. The physical nvblox launch uses
+      system time, odom as global frame, livox_frame as pose frame, and measured
+      -10 to +55 degree elevation bounds. It produced a nonempty 152 by 56 map at
+      0.05 m resolution and approximately 9.83 Hz while odom-to-livox_frame
+      remained available. Thirty concurrent pings had zero loss and 36.6 ms mean
+      latency. A later Jetson-only moving-map run completed a roughly 0.29 by
+      0.30 m closed rectangle. Wheel odometry and LiDAR SLAM agreed on individual
+      motion increments, while the final map-to-odom correction of approximately
+      -4.6 cm, +1.6 cm, and -14.4 degrees matched the operator-observed accumulated
+      track-turning error. The final SLAM pose closed to approximately -6.0 cm,
+      -0.9 cm, and -0.8 degrees. PGM/YAML, pose graph, nvblox, and PLY artifacts
+      saved successfully and the YAML reloaded through map_server. This validates
+      onboard motion transport and first-candidate mapping. The same candidate
+      subsequently passed AMCL initialization and guarded Nav2 straight/Spin
+      closed-loop tests, followed by a supervised 1.435 m mapping/return route
+      with successful saved-map navigation. Precise geometric map truth remains.
+  - id: command_watchdog_and_estop
+    state: watchdog_and_temporary_manual_cutoff_verified
+    blocking_calibration: true
+    evidence_required: Physical 500 ms timeout and independent emergency-stop tests.
+    evidence_observed: With tracks lifted, first motion occurred about 73 ms after a one-shot 0.05 m/s command and the final tick change occurred about 586 ms after command publication; tracks then remained stopped and explicit zero commands were sent. The vehicle has no standard physical e-stop. During a continuous 0.05 m/s ROS command, the phone web UI red stop did not produce an encoder-observed intermediate stop and motion_blocked remained false. A later trial manually cut ESP32 power about 1.3 s after motion began; ROS telemetry stopped and the operator visually confirmed the tracks stopped. Repowering did not move the tracks; ROS returned with new boot_id 2491872445, active_command_source 0, and zero ticks. This cutoff is accepted only for supervised low-speed calibration with a dedicated operator able to reach it immediately. Final autonomous-navigation acceptance still requires a standard stop that directly interrupts drive power or hardware enable.
+  - id: observation_parity
+    state: evidence_mode_implemented_30min_receive_jitter_validation_pending
+    blocking_calibration: true
+    evidence_required: Compare real observation units, rate, latency, dropout and normalization with training.
+    evidence_observed: >-
+      Before firmware commit 068071e, runtime Agent checks repeatedly destroyed
+      the XRCE session; motion bags contained 3.09-3.46 s gaps and
+      reconnect_count increases. After reflashing, Agent cleanup, and disabling
+      Jetson Wi-Fi power save, all post-flash motion trials kept reconnect_count
+      unchanged. A 1799.39 s static bag then held reconnect_count at 0 with zero
+      ping failures: wheel/IMU rates were 49.9919/49.9908 Hz, device-time gaps
+      stayed below 61/81 ms, and only about 0.022% of wheel sequence numbers were
+      skipped. ROS receive-side gaps nevertheless peaked near 345 ms, with 12
+      gaps over 300 ms on each 50 Hz topic, plus six exact duplicate
+      samples/timestamps. Firmware session stability passes; receive latency
+      jitter and duplicate filtering remain pending. The generated
+      evidence-degraded Isaac profile now reproduces 50 Hz encoder quantization,
+      measured sparse drops/duplicates, 200 Hz MID-360 gyro bias/noise, and
+      point-cloud noise/dropout/transport delay through the same wheel-odometry
+      and EKF topic contract. This is simulation coverage only and does not
+      close the required 30-minute physical validation.
+  - id: real_navigation_acceptance
+    state: supervised_1p4m_route_verified_hardware_estop_pending
+    blocking_calibration: true
+    evidence_required: Manual AMCL initialization and guarded 0.10 m/s short-goal validation.
+    evidence_observed: >-
+      On 2026-09-19 AMCL initialized at approximately -5.7 cm, -1.1 cm, and
+      -1.0 degrees on the first candidate map. A guarded 0.20 m NavigateToPose
+      goal completed after approximately 0.106 m because of the configured
+      0.10 m goal tolerance; the operator confirmed straight travel and a full
+      stop. Dedicated 30 degree Spin goals completed in both directions. Raising
+      the final velocity smoother angular follow/brake limits to symmetric
+      +/-2.0 rad/s^2 reduced measured stop overshoot from 5--8 degrees to approximately
+      2.8/3.9 degrees. All final commands became silent and the Nav2 container
+      was stopped. A later integrated mapping route completed 0.501 m, a 90
+      degree turn, and 0.300 m and produced a complete larger map bundle. AMCL
+      and a roughly 0.55 m return plan succeeded, but NavigateToPose produced no
+      observable base motion; controller_server reported Failed to make progress
+      after 15 seconds and the bounded client canceled at 30 seconds. An isolated
+      diagnostic remapped final output away from the real base and showed both
+      controller and smoother stuck at 0.025 rad/s: the former RPP 0.5 rad/s^2
+      limit allowed only that increment at 20 Hz, which remained below the
+      measured 0.4 rad/s track deadband while zero odometry reset the clamp every
+      cycle. Raising RPP's internal max angular acceleration to 10.0 rad/s^2 lets
+      it request 0.5 rad/s immediately; the final smoother still ramps at
+      +/-2.0 rad/s^2. A second isolated bag showed 0.5 rad/s upstream and a
+      0.1-to-0.5 rad/s smoothed ramp, crossing the deadband in about 0.2 seconds.
+      Regression tests pass. After a manual relocation, one new integrated route
+      mapped 0.501 m, a 90.1 degree turn, and 0.301 m. The corrected controller
+      then completed a 0.633 m planned return with SUCCEEDED status; final map
+      position and yaw errors were approximately 5.7 cm and 9.6 degrees, within
+      configured tolerances, but that goal used the path approach heading rather
+      than the approximately 99.0 degree route-start heading. A final dedicated
+      82 degree left Spin restored the heading to approximately 99.2 degrees,
+      with about 3.4 cm of tracked-turn position drift. The mapping and return
+      paths totaled approximately 1.435 m. The container was stopped and cmd_vel
+      returned to zero publishers.
+      No longer or tiered-distance trial is required. Final release acceptance
+      with a standard hardware emergency stop remains pending.
+
+rules:
+  - Never replace a pending state with a simulation-only result.
+  - Confirmed effective radius and track-separation baselines require real-vehicle acceptance evidence but are not missing-calibration blockers.
+  - Feed measured ranges back to the canonical parameter source and domain randomization.
+  - Do not tune Nav2 to conceal odometry, TF, actuator, or sensor-calibration errors.
+  - Do not freeze or deploy a policy while policy_release_blocked is true.

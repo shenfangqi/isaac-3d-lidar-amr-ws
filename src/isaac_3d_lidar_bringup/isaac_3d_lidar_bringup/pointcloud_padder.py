@@ -12,12 +12,10 @@ class PointCloudPadder(Node):
     def __init__(self):
         super().__init__('pointcloud_padder')
 
-        self.declare_parameter('input_topic', '/front_3d_lidar/lidar_points')
-        self.declare_parameter(
-            'output_topic', '/front_3d_lidar/lidar_points_nvblox'
-        )
-        self.declare_parameter('target_width', 1800)
-        self.declare_parameter('target_height', 31)
+        self.declare_parameter('input_topic', '/livox/lidar')
+        self.declare_parameter('output_topic', '/livox/lidar_nvblox')
+        self.declare_parameter('target_width', 1000)
+        self.declare_parameter('target_height', 40)
 
         self._target_width = self.get_parameter('target_width').value
         self._target_height = self.get_parameter('target_height').value
@@ -25,10 +23,13 @@ class PointCloudPadder(Node):
         if self._target_points <= 0:
             raise ValueError('target_width * target_height must be positive')
 
+        # MID-360's compact XYZ relay uses sensor-data QoS (best effort).
+        # A reliable subscription is incompatible with that publisher and
+        # silently receives no clouds, leaving nvblox with an empty map.
         qos = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             depth=10,
-            reliability=ReliabilityPolicy.RELIABLE,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.VOLATILE,
         )
         output_topic = self.get_parameter('output_topic').value

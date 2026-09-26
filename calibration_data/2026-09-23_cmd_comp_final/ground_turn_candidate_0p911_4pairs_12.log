@@ -1,0 +1,19 @@
+stdin is not a terminal device. Keyboard handling disabled.[INFO] [1790150615.733564553] [rosbag2_recorder]: Press SPACE for pausing/resuming
+[INFO] [1790150615.737916983] [rosbag2_storage]: Opened database '/home/shenfq/Projects/carbot-ros2/calibration_data/2026-09-23_cmd_comp_final/ground_turn_candidate_0p911_4pairs_12/ground_turn_candidate_0p911_4pairs_12_0.db3' for READ_WRITE.
+[INFO] [1790150615.741406057] [rosbag2_recorder]: Listening for topics...
+[INFO] [1790150615.741418665] [rosbag2_recorder]: Event publisher thread: Starting
+[INFO] [1790150615.748439695] [rosbag2_recorder]: Subscribed to topic '/wheel/odom'
+[INFO] [1790150615.752777757] [rosbag2_recorder]: Subscribed to topic '/tf'
+[INFO] [1790150615.757656732] [rosbag2_recorder]: Subscribed to topic '/odom'
+[INFO] [1790150615.758327314] [rosbag2_recorder]: Recording...
+[INFO] [1790150615.768135827] [rosbag2_recorder]: Subscribed to topic '/carbot/status'
+[INFO] [1790150615.775283965] [rosbag2_recorder]: Subscribed to topic '/mid360/imu/data_raw'
+[INFO] [1790150615.778834193] [rosbag2_recorder]: Subscribed to topic '/wheel_ticks'
+[INFO] [1790150615.891347504] [rosbag2_recorder]: Subscribed to topic '/cmd_vel'
+[INFO] [1790150615.893475925] [rosbag2_recorder]: Subscribed to topic '/tf_static'
+[INFO] [1790150619.382916615] [rosbag2_recorder]: Subscribed to topic '/calibration/segment'
+[INFO] [1790150619.386477947] [rosbag2_recorder]: Subscribed to topic '/cmd_vel_command'
+[INFO] [1790150619.386602975] [rosbag2_recorder]: All requested topics are subscribed. Stopping discovery...
+[INFO] [1790150670.322491042] [rosbag2_cpp]: Writing remaining messages from cache to the bag. It may take a while
+[INFO] [1790150670.333103037] [rosbag2_recorder]: Event publisher thread: Exiting
+[INFO] [1790150670.333546763] [rosbag2_recorder]: Recording stopped

@@ -1,0 +1,64 @@
+{
+  "boot_id": 4005221903,
+  "boot_ids": [
+    4005221903
+  ],
+  "final_ticks_stationary": true,
+  "rows": [
+    {
+      "actuator_median_mps": 0.04,
+      "actuator_samples": 2476,
+      "direction": "forward",
+      "left_ticks": 557,
+      "repeat": 1,
+      "right_ticks": 513,
+      "speed_mps": 0.04
+    },
+    {
+      "actuator_median_mps": -0.04,
+      "actuator_samples": 2091,
+      "direction": "reverse",
+      "left_ticks": -547,
+      "repeat": 1,
+      "right_ticks": -530,
+      "speed_mps": 0.04
+    },
+    {
+      "actuator_median_mps": 0.04,
+      "actuator_samples": 1914,
+      "direction": "forward",
+      "left_ticks": 519,
+      "repeat": 2,
+      "right_ticks": 498,
+      "speed_mps": 0.04
+    },
+    {
+      "actuator_median_mps": -0.04,
+      "actuator_samples": 2271,
+      "direction": "reverse",
+      "left_ticks": -531,
+      "repeat": 2,
+      "right_ticks": -514,
+      "speed_mps": 0.04
+    },
+    {
+      "actuator_median_mps": 0.04,
+      "actuator_samples": 2306,
+      "direction": "forward",
+      "left_ticks": 541,
+      "repeat": 3,
+      "right_ticks": 522,
+      "speed_mps": 0.04
+    },
+    {
+      "actuator_median_mps": -0.04,
+      "actuator_samples": 2505,
+      "direction": "reverse",
+      "left_ticks": -530,
+      "repeat": 3,
+      "right_ticks": -515,
+      "speed_mps": 0.04
+    }
+  ],
+  "state": "ground"
+}

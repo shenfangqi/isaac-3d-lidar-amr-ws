@@ -7,7 +7,7 @@ def generate_launch_description():
         cmd=[
             "ros2", "launch",
             "isaac_3d_lidar_bringup",
-            "xt32_nvblox.launch.py",
+            "mid360_nvblox.launch.py",
         ],
         output="screen",
     )

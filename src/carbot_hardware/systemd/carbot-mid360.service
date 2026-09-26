@@ -1,0 +1,21 @@
+[Unit]
+Description=Carbot Livox MID-360 driver and SI-unit IMU adapter
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/home/shenfq/Projects/lidar-mid360/ws_livox/install/setup.bash
+
+[Service]
+Type=simple
+Environment=ROS_DOMAIN_ID=0
+Environment=PYTHONUNBUFFERED=1
+Environment=LD_LIBRARY_PATH=/home/shenfq/Projects/lidar-mid360/local/lib
+WorkingDirectory=/home/shenfq/Projects/carbot-ros2
+ExecStartPre=/bin/bash -c 'for attempt in {1..60}; do ip -4 -o addr show dev enP8p1s0 2>/dev/null | grep -q "192.168.2.100/24" && exit 0; sleep 1; done; echo "enP8p1s0 did not acquire 192.168.2.100/24" >&2; exit 1'
+ExecStart=/bin/bash -lc 'source /opt/ros/humble/setup.bash && source /home/shenfq/Projects/lidar-mid360/ws_livox/install/local_setup.bash && source /home/shenfq/Projects/carbot-ros2/install/local_setup.bash && exec ros2 launch carbot_hardware mid360_stack.launch.py'
+Restart=on-failure
+RestartSec=2
+KillSignal=SIGINT
+TimeoutStopSec=10
+
+[Install]
+WantedBy=default.target

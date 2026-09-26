@@ -1,0 +1,23 @@
+schema_version: 1
+name: goal_navigation
+goal_sampling:
+  x_m: [-3.0, 3.0]
+  y_m: [-3.0, 3.0]
+  heading_rad: [-3.141592653589793, 3.141592653589793]
+  resampling_time_s: 20.0
+success:
+  position_tolerance_m: 0.15
+  heading_tolerance_rad: 0.25
+rewards:
+  position_tracking: 1.0
+  heading_error: -0.15
+  planar_speed: -0.01
+  action_rate: -0.02
+  goal_reached: 5.0
+curriculum:
+  enabled: false
+  enable_after: straight and turning motion pass Phase G validation
+  stages:
+    - radius_m: 1.0
+    - radius_m: 2.0
+    - radius_m: 3.0

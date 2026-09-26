@@ -1,0 +1,139 @@
+{
+  "boot_id": 4005221903,
+  "boot_ids": [
+    4005221903
+  ],
+  "candidate_effective_right_turn_scale": 0.94,
+  "final_ekf_position_error_m": 0.005749523507715164,
+  "final_ekf_yaw_error_deg": -7.970662035686162,
+  "final_ticks_stationary": true,
+  "final_wheel_yaw_error_deg": -8.240233192004833,
+  "pairs": [
+    {
+      "ekf_position_drift_m": 0.0017243365837700394,
+      "ekf_residual_deg": -1.0459867631619235,
+      "order": [
+        "left",
+        "right"
+      ],
+      "pair": 1,
+      "segments": [
+        {
+          "actuator_command_mean_rad_s": 0.4000000000000188,
+          "actuator_nonzero_samples": 3796,
+          "direction": "left",
+          "ekf_angle_deg": 32.01348505610756,
+          "wheel_angle_deg": 31.69624470018172
+        },
+        {
+          "actuator_command_mean_rad_s": -0.3759999999999816,
+          "actuator_nonzero_samples": 3484,
+          "direction": "right",
+          "ekf_angle_deg": -33.05947181926949,
+          "wheel_angle_deg": -33.039975772259254
+        }
+      ],
+      "tick_delta": [
+        58,
+        -10
+      ],
+      "wheel_position_drift_m": 0.002095026140502583,
+      "wheel_residual_deg": -1.3437310720775397
+    },
+    {
+      "ekf_position_drift_m": 0.001090865110233821,
+      "ekf_residual_deg": -2.693624850330927,
+      "order": [
+        "right",
+        "left"
+      ],
+      "pair": 2,
+      "segments": [
+        {
+          "actuator_command_mean_rad_s": -0.3759999999999817,
+          "actuator_nonzero_samples": 3440,
+          "direction": "right",
+          "ekf_angle_deg": -32.912743806726446,
+          "wheel_angle_deg": -32.9016505148395
+        },
+        {
+          "actuator_command_mean_rad_s": 0.4000000000000097,
+          "actuator_nonzero_samples": 3371,
+          "direction": "left",
+          "ekf_angle_deg": 30.219118956395516,
+          "wheel_angle_deg": 30.174666868564525
+        }
+      ],
+      "tick_delta": [
+        80,
+        -58
+      ],
+      "wheel_position_drift_m": 0.0010361301492455071,
+      "wheel_residual_deg": -2.726983646274981
+    },
+    {
+      "ekf_position_drift_m": 0.003068330576930201,
+      "ekf_residual_deg": -1.0220568423670824,
+      "order": [
+        "left",
+        "right"
+      ],
+      "pair": 3,
+      "segments": [
+        {
+          "actuator_command_mean_rad_s": 0.4000000000000133,
+          "actuator_nonzero_samples": 3527,
+          "direction": "left",
+          "ekf_angle_deg": 32.09955318927114,
+          "wheel_angle_deg": 32.11122047244096
+        },
+        {
+          "actuator_command_mean_rad_s": -0.37599999999998107,
+          "actuator_nonzero_samples": 3903,
+          "direction": "right",
+          "ekf_angle_deg": -33.12161003163823,
+          "wheel_angle_deg": -33.09925802543916
+        }
+      ],
+      "tick_delta": [
+        57,
+        7
+      ],
+      "wheel_position_drift_m": 0.0028102436579912704,
+      "wheel_residual_deg": -0.9880375529982067
+    },
+    {
+      "ekf_position_drift_m": 0.0001703237357969611,
+      "ekf_residual_deg": -3.162434533975986,
+      "order": [
+        "right",
+        "left"
+      ],
+      "pair": 4,
+      "segments": [
+        {
+          "actuator_command_mean_rad_s": -0.37599999999998135,
+          "actuator_nonzero_samples": 3681,
+          "direction": "right",
+          "ekf_angle_deg": -33.61007001946611,
+          "wheel_angle_deg": -33.613037552998186
+        },
+        {
+          "actuator_command_mean_rad_s": 0.4000000000000163,
+          "actuator_nonzero_samples": 3669,
+          "direction": "left",
+          "ekf_angle_deg": 30.44763548549012,
+          "wheel_angle_deg": 30.431556632344083
+        }
+      ],
+      "tick_delta": [
+        81,
+        -80
+      ],
+      "wheel_position_drift_m": 2.7951622301736967e-05,
+      "wheel_residual_deg": -3.1814809206541073
+    }
+  ],
+  "right_turn_command_scale": 0.896,
+  "state": "warm"
+}

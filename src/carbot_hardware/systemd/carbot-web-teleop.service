@@ -1,0 +1,18 @@
+[Unit]
+Description=Carbot phone web teleop to ROS 2
+Wants=network-online.target carbot-command-compensation.service
+After=network-online.target carbot-command-compensation.service
+
+[Service]
+Type=simple
+Environment=ROS_DOMAIN_ID=0
+Environment=PYTHONUNBUFFERED=1
+WorkingDirectory=/home/shenfq/Projects/carbot-ros2
+ExecStart=/bin/bash -lc 'source /opt/ros/humble/setup.bash && source /home/shenfq/Projects/carbot-ros2/install/local_setup.bash && exec ros2 run carbot_hardware web_teleop'
+Restart=on-failure
+RestartSec=2
+KillSignal=SIGINT
+TimeoutStopSec=5
+
+[Install]
+WantedBy=default.target

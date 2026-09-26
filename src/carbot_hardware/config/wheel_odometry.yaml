@@ -1,0 +1,20 @@
+carbot_wheel_odometry:
+  ros__parameters:
+    wheel_ticks_topic: /wheel_ticks
+    status_topic: /carbot/status
+    odom_topic: /odom
+    odom_frame: odom
+    base_frame: base_footprint
+    counts_per_revolution: 1560.0
+    effective_sprocket_radius_m: 0.02175
+    effective_track_separation_m: 0.254
+    max_wheel_rpm: 250.0
+    tick_rate_margin: 1.25
+    publish_tf: true
+    require_time_synchronized: true
+    pose_x_variance: 0.0025
+    pose_y_variance: 0.01
+    pose_yaw_variance: 0.01
+    twist_x_variance: 0.01
+    twist_y_variance: 0.04
+    twist_yaw_variance: 0.04

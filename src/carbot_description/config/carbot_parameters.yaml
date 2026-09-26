@@ -1,0 +1,345 @@
+schema_version: 1
+
+# This is the canonical parameter source for the Carbot model. Consumers should
+# reference these values instead of copying them into URDF, USD, or controllers.
+robot:
+  drive_type: tracked_differential_skid_steer
+  total_working_mass_kg: 3.4
+
+geometry:
+  overall_size_m: [0.285, 0.266, 0.240]
+  # Minimum overhead clearance accepted for autonomous navigation. This leaves
+  # 0.11 m above the 0.24 m vehicle to protect the top-mounted MID-360.
+  minimum_overhead_clearance_m: 0.350
+  base_link_height_m: 0.090
+  physical_track_separation_m: 0.225
+  track_width_m: 0.041
+  track_thickness_m: 0.004
+  effective_track_contact_length_m: 0.145
+  footprint_m:
+    - [0.155, 0.133]
+    - [0.155, -0.133]
+    - [-0.130, -0.133]
+    - [-0.130, 0.133]
+  body_collision:
+    size_m: [0.285, 0.266, 0.230]
+    position_from_base_link_m: [0.0125, 0.0, 0.035]
+  body_visual:
+    size_m: [0.220, 0.170, 0.100]
+    position_from_base_link_m: [0.0, 0.0, 0.020]
+  wheel_groups:
+    front_idler:
+      x_m: 0.111250
+      abs_y_m: 0.112500
+      z_m: -0.0419
+      radius_m: 0.0210
+    front_road_1:
+      x_m: 0.067929
+      abs_y_m: 0.112500
+      z_m: -0.0687
+      radius_m: 0.0195
+    front_road_2:
+      x_m: 0.022929
+      abs_y_m: 0.112500
+      z_m: -0.0687
+      radius_m: 0.0195
+    rear_road_1:
+      x_m: -0.022071
+      abs_y_m: 0.112500
+      z_m: -0.0687
+      radius_m: 0.0195
+    rear_road_2:
+      x_m: -0.067071
+      abs_y_m: 0.112500
+      z_m: -0.0687
+      radius_m: 0.0195
+    rear_drive:
+      x_m: -0.111250
+      abs_y_m: 0.112500
+      z_m: -0.0419
+      radius_m: 0.0210
+
+kinematics:
+  effective_track_separation_m: 0.254
+  effective_sprocket_radius_m: 0.02175
+  encoder_counts_per_revolution: 1560
+
+control:
+  max_wheel_rpm: 250.0
+  max_wheel_velocity_rad_s: 26.18
+  max_linear_velocity_mps: 0.50
+  max_angular_velocity_rad_s: 3.50
+  max_linear_acceleration_mps2: 0.50
+  max_angular_acceleration_rad_s2: 2.50
+  cmd_vel_timeout_s: 0.50
+  # Formal host-side calibration: a requested right turn (negative angular.z)
+  # is scaled before it reaches the ESP32. Derived from the 2026-09-22 test.
+  right_turn_command_scale: 0.896
+  ideal_sim_right_straight_trim: 1.0
+  high_fidelity_right_straight_trim: 1.0005
+  wheel_pid:
+    kp: 0.8
+    ki: 0.15
+    kd: 0.0
+    period_s: 0.01
+  differential_period_s: 0.02
+  coupled_wheel_limit:
+    policy: scale_both_sides_equally
+    expression: abs(v) + abs(omega) * effective_track_separation_m / 2 <= effective_sprocket_radius_m * max_wheel_velocity_rad_s
+
+# Physical response evidence from the supervised wood-floor acceptance runs.
+# These values describe the present vehicle, not universal safety limits.
+hardware_response:
+  calibration_status: PARTIAL_PHYSICAL_EVIDENCE
+  surface: wood_floor
+  added_payload_kg: 0.0
+  track_deadband:
+    forward_min_sustainable_mps: 0.05
+    reverse_min_sustainable_mps: 0.02
+    reliable_in_place_angular_command_rad_s: [0.40, 0.50]
+  timing:
+    first_motion_latency_s: 0.073
+    ground_stop_tail_s: [0.57, 0.92]
+  observed_motion:
+    longitudinal_external_minus_encoder_fraction: [0.0036, 0.0206]
+    yaw_external_over_wheel_gain: [0.976, 1.025]
+    # Uncompensated right/left yaw response represented in Isaac Sim. The
+    # formal command scale above cancels this measured directional gain.
+    right_turn_response_gain_vs_left: 1.1160714285714286
+  navigation:
+    max_linear_velocity_mps: 0.10
+    max_angular_velocity_rad_s: 0.50
+    rpp_max_angular_acceleration_rad_s2: 10.0
+    smoother_angular_acceleration_rad_s2: 2.0
+
+sensors:
+  mid360:
+    parent_frame: lidar_link
+    real_frame: livox_frame
+    simulation_compatibility_frame: front_3d_lidar
+    simulation_profile_name: Livox_Mid360_Approx
+    coordinate_origin_height_from_housing_bottom_m: 0.047
+    simulation_rtx_origin_from_housing_bottom_m: [0.0, 0.0, 0.047]
+    mount_translation_xy_from_base_link_m: [0.01656608, -0.00014467]
+    housing_top_height_from_ground_m: 0.222
+    housing_height_m: 0.060
+    rotation_rpy_rad: [-0.006135404, -0.004857536, 0.019559477]
+    pointcloud_topic: /livox/lidar
+    pointcloud_type: sensor_msgs/msg/PointCloud2
+    pointcloud_rate_hz: 10
+    full_pointcloud_fields: [x, y, z, intensity, tag, line, timestamp]
+    compact_pointcloud_topic: /mid360/points_xyz
+    compact_pointcloud_fields: [x, y, z]
+    vendor_imu_topic: /livox/imu
+    imu_topic: /mid360/imu/data_raw
+    acceleration_input_unit: g
+    acceleration_output_unit: m/s^2
+    imu_rate_hz: 200
+    observed_points_per_frame: [19584, 20448]
+    z_origin_requires_final_assembly_verification: false
+    manufacturer_specs:
+      product_source: https://www.livoxtech.com/cn/mid-360/specs
+      protocol_source: https://github.com/Livox-SDK/livox_wiki_en/blob/master/source/tutorials/new_product/mid360/livox_eth_protocol_mid360.md
+      model: MID-360
+      wavelength_nm: 905
+      minimum_detection_range_m: 0.1
+      detection_range_m_at_10_percent_reflectivity: 40.0
+      detection_range_m_at_80_percent_reflectivity: 70.0
+      horizontal_fov_deg: 360.0
+      vertical_fov_deg: [-7.0, 52.0]
+      range_precision_1sigma_m_at_10m_80_percent_reflectivity: 0.02
+      range_precision_1sigma_m_at_0p2m_80_percent_reflectivity: 0.03
+      angular_precision_1sigma_upper_bound_deg: 0.15
+      first_return_point_rate_hz: 200000
+      typical_frame_rate_hz: 10
+      equivalent_lines: 40
+      maximum_returns: 1
+      false_alarm_rate_upper_bound_fraction_at_100klx: 0.0001
+      imu_model: ICM40609
+      imu_default_rate_hz: 200
+      synchronization: [IEEE_1588_2008_PTPv2, GPS]
+      dimensions_m: [0.065, 0.065, 0.060]
+      weight_kg: 0.265
+      average_power_w: 6.5
+      supply_voltage_v: [9.0, 27.0]
+      operating_temperature_c: [-20.0, 55.0]
+      ingress_protection: IP67
+    visual_proxy:
+      radius_m: 0.025
+
+interfaces:
+  wheel_ticks:
+    topic: /wheel_ticks
+    type: carbot_msgs/msg/WheelTicks
+    rate_hz: 50
+    qos_reliability: best_effort
+    forward_tick_sign: positive_both_sides
+
+simulation:
+  control_mode: ideal_kinematic_tracked_differential
+  response_mode_default: ideal_navigation
+  response_modes: [ideal_navigation, evidence_degraded]
+  evidence_profile: configs/carbot/evidence_degraded.yaml
+  articulation_root_prim: /World/Carbot/base_footprint
+  wheel_joint_coordinate_sign: -1.0
+
+dynamics:
+  # Total mass and geometric-center COM are physical values reported for the
+  # assembled vehicle on 2026-09-23. Inertia and contact dynamics remain
+  # estimates pending a pendulum/CAD and surface test.
+  calibration_status: TEMP_ESTIMATE_NOT_CALIBRATED
+  # Twelve 0.01 kg wheel links leave 3.28 kg on the merged base body.
+  base_body_mass_kg: 3.28
+  per_wheel_mass_kg: 0.01
+  # Geometric center in base_link coordinates. The asymmetric footprint puts
+  # its X center at +0.0125 m rather than at the base_link origin.
+  center_of_mass_m: [0.0125, 0.0, 0.035]
+  # Provisional constant-radius-of-gyration scaling from the former 1.68 kg
+  # base estimate to 3.28 kg. These are not measured inertias.
+  inertia_kg_m2:
+    ixx: 0.03621667
+    iyy: 0.03928190
+    izz: 0.04451429
+    ixy: 0.0
+    ixz: 0.0
+    iyz: 0.0
+  static_friction: 0.8
+  dynamic_friction: 0.6
+  restitution: 0.0
+  per_side_effort_limit_nm: 0.5
+  joint_damping_nm_s_rad: 0.02
+
+sensor_frame_assumptions:
+  calibration_status: MANUFACTURER_EXTRINSICS_AND_DYNAMIC_TIME_CALIBRATED
+  imu_parent_frame: livox_frame
+  # Official MID-360 user manual: IMU chip position in point-cloud coordinates.
+  imu_translation_m: [0.011, 0.02329, -0.04412]
+  imu_rotation_rpy_rad: [0.0, 0.0, 0.0]
+  # This signed value is added to the vendor IMU stamp by the adapter.
+  imu_timestamp_correction_s: -0.009782937
+  imu_time_offset_uncertainty_s: 0.0006
+  note: Official axes are identical to the point-cloud axes. Dynamic wall/gyro alignment independently confirmed yaw polarity and resolved the IMU stamp correction; gyro bias remains temperature-dependent and is not hard-coded.
+
+domain_randomization:
+  calibration_status: PARTIAL_PHYSICAL_EVIDENCE_WITH_UNCALIBRATED_DYNAMICS
+  # Training assumption centered on the reported 3.4 kg assembled mass; this
+  # +/-0.2 kg span is not a measured payload confidence interval.
+  mass_kg: [3.2, 3.6]
+  com_offset_m:
+    x: [-0.02, 0.02]
+    y: [-0.02, 0.02]
+    z: [-0.02, 0.02]
+  effective_track_separation_m: [0.24, 0.28]
+  effective_radius_m: [0.0205, 0.0230]
+  friction_scale: [0.6, 1.4]
+  actuator_strength_scale: [0.75, 1.25]
+  command_latency_s: [0.06, 0.10]
+  forward_track_deadband_mps: [0.04, 0.06]
+  reverse_track_deadband_mps: [0.015, 0.03]
+  # Include both the evidence-degraded vehicle and the unit-gain ideal
+  # navigation contract used for curriculum and A/B regression.
+  longitudinal_gain: [0.85, 1.03]
+  yaw_gain: [0.52, 1.03]
+  stop_tail_s: [0.57, 0.92]
+  point_dropout_fraction: [0.0, 0.05]
+  encoder_drop_fraction: [0.0, 0.00044]
+  encoder_duplicate_fraction: [0.0, 0.000134]
+  imu_gyro_z_noise_stddev_rad_s: [0.0007, 0.0014]
+
+# Provenance IDs make measured, source-derived, ground-calibrated, observed,
+# design, and temporary values machine-checkable without duplicating values.
+provenance:
+  MEASURED_VALUE_CARBOT_2026_09_13:
+    category: measured_value
+    status: confirmed_baseline_with_approximate_wheel_radii
+    scope:
+      - geometry.overall_size_m
+      - geometry.base_link_height_m
+      - geometry.physical_track_separation_m
+      - geometry.track_width_m
+      - geometry.track_thickness_m
+      - geometry.effective_track_contact_length_m
+      - geometry.footprint_m
+      - geometry.body_collision
+      - geometry.wheel_groups
+    note: Physical dimensions and installed geometry supplied for this adaptation; listed wheel radii are approximate.
+  GROUND_CALIBRATED_VALUE_CARBOT_2026_09_13:
+    category: ground_calibrated_value
+    status: confirmed_baseline
+    scope: [kinematics.effective_track_separation_m, kinematics.effective_sprocket_radius_m]
+    note: Effective skid-steer values; intentionally distinct from visual geometry.
+  SOURCE_CODE_VALUE_CARBOT_CONTROL_2026_09_13:
+    category: source_code_value
+    status: confirmed_baseline
+    scope: [robot.drive_type, kinematics.encoder_counts_per_revolution, control, interfaces.wheel_ticks]
+    note: Firmware and controller interface values supplied for this adaptation.
+  PHYSICAL_EVIDENCE_CARBOT_2026_09_19:
+    category: measured_value
+    status: partial_physical_evidence
+    scope: [hardware_response]
+    note: Supervised wood-floor, zero-added-payload evidence. It constrains the current deployment profile and domain-randomization envelope but does not replace multi-surface or payload calibration.
+  MEASURED_VALUE_MID360_MOUNT_2026_09_13:
+    category: measured_value
+    status: lidar_xyz_rpy_calibrated
+    scope: [sensors.mid360.parent_frame, sensors.mid360.real_frame, sensors.mid360.simulation_compatibility_frame, sensors.mid360.mount_translation_xy_from_base_link_m, sensors.mid360.housing_top_height_from_ground_m, sensors.mid360.rotation_rpy_rad]
+    note: Housing top is 0.222 m above ground. On the final assembly the M12 connector faces the vehicle rear; the manufacturer top-view coordinate drawing places the connector on the sensor -X side, resolving the 90/180-degree mounting ambiguity. A stationary A-B-A chassis-reversal calibration on 2026-09-21 produced repeatable Pose A/C floor normals and resolved the fixed LiDAR mount to roll -0.35153 deg and pitch -0.27832 deg. A subsequent 64-frame parallel-wall capture resolved yaw to +1.12068 deg; its per-frame fitted wall-normal standard deviation was 0.01011 deg. The measured 289 mm right-wall-to-track-outer-edge gap plus the canonical 133 mm track outer half-width gives a 422 mm base-centerline wall distance; against the fitted 421.85533 mm LiDAR wall distance this resolves mount Y to -0.14467 mm, with approximately 0.5 mm measurement uncertainty. Rear-wall gaps of 1153/1155 mm to the right/left rear-drive-wheel outer extrema, combined with the fitted 1300.78363 mm rear plane and its 0.71955 degree vertical tilt, resolve mount X to +16.56608 mm. The 2 mm left/right spread is retained as approximately 2 mm X uncertainty.
+  MANUFACTURER_AND_POINTCLOUD_VALUE_MID360_2026_09_18:
+    category: manufacturer_specification
+    status: confirmed_baseline
+    scope: [sensors.mid360.coordinate_origin_height_from_housing_bottom_m, sensors.mid360.simulation_rtx_origin_from_housing_bottom_m, sensors.mid360.housing_height_m, sensors.mid360.z_origin_requires_final_assembly_verification]
+    note: The official mechanical drawing gives a 0.060 m housing height and origin O at 0.047 m above the bottom. Together with the measured 0.222 m housing top this predicts O at 0.209 m above ground; an installed point-cloud floor fit measured 0.2066 m, confirming the baseline within about 2.4 mm.
+  MANUFACTURER_SPEC_MID360_2026_09_21:
+    category: manufacturer_specification
+    status: source_derived_value
+    scope: [sensors.mid360.manufacturer_specs]
+    note: Canonical project copy of official MID-360 product and Ethernet-protocol limits. Upper bounds are not claims about the error distribution of this individual sensor.
+  OBSERVED_VALUE_MID360_2026_09_13:
+    category: observed_value
+    status: confirmed_baseline
+    scope: [sensors.mid360.pointcloud_topic, sensors.mid360.pointcloud_type, sensors.mid360.pointcloud_rate_hz, sensors.mid360.imu_rate_hz, sensors.mid360.observed_points_per_frame]
+    note: Topics, rates, and observed real-sensor points-per-frame range.
+  SOURCE_CODE_VALUE_MID360_IMU_ADAPTER_2026_09_18:
+    category: source_code_value
+    status: implemented_design
+    scope: [sensors.mid360.vendor_imu_topic, sensors.mid360.imu_topic, sensors.mid360.acceleration_input_unit, sensors.mid360.acceleration_output_unit]
+    note: Livox ROS Driver 2 forwards accelerometer values in g; the adapter publishes ROS-compliant acceleration in m/s^2 and marks orientation unavailable.
+  MANUFACTURER_AND_DYNAMIC_CALIBRATION_MID360_IMU_2026_09_21:
+    category: measured_value
+    status: calibrated_baseline
+    scope: [sensor_frame_assumptions]
+    note: The official MID-360 manual gives identical IMU/point-cloud axes and the IMU-chip lever arm [11.0, 23.29, -44.12] mm. A 62 s manual yaw excitation aligned 3595 wall poses with integrated gyro, resolving an added IMU timestamp correction of -9.782937 ms; three independent chunks spanned 9.167-10.247 ms, retained as approximately 0.6 ms uncertainty.
+  SOURCE_CODE_VALUE_MID360_POINTCLOUD_2026_09_21:
+    category: source_code_value
+    status: implemented_and_online_verified
+    scope: [sensors.mid360.full_pointcloud_fields, sensors.mid360.compact_pointcloud_topic, sensors.mid360.compact_pointcloud_fields]
+    note: Livox ROS Driver 2 xfer_format=0 publishes the full PointXYZRTLT field set on /livox/lidar. The XYZ-only topic is a separate bandwidth-optimized derivative. Online inspection on 2026-09-21 verified all seven raw fields and only XYZ on the derivative stream.
+  DESIGN_VALUE_CARBOT_SIMULATION_2026_09_13:
+    category: design_value
+    status: implemented_design
+    scope: [geometry.body_visual, sensors.mid360.simulation_profile_name, simulation]
+    note: Reviewable body proxy, Isaac articulation paths, and coordinate conventions; not hardware calibration values.
+  DESIGN_VALUE_CARBOT_OVERHEAD_CLEARANCE_2026_09_20:
+    category: design_value
+    status: pending_live_validation
+    scope: [geometry.minimum_overhead_clearance_m]
+    note: Conservative autonomous clearance selected to leave 0.11 m above the measured 0.24 m vehicle and protect the top-mounted MID-360; requires simulation and physical low-speed acceptance before unattended use.
+  USER_MEASURED_MASS_COM_2026_09_23:
+    category: measured_value
+    status: mass_and_geometric_center_reported
+    scope: [robot.total_working_mass_kg, dynamics.base_body_mass_kg, dynamics.center_of_mass_m]
+    note: The assembled vehicle mass is 3.4 kg and its center of mass is at the vehicle geometric center. In base_link coordinates the existing geometric-center representation is [0.0125, 0.0, 0.035] m. Inertia remains an explicitly provisional mass-scaled estimate.
+  TEMP_ESTIMATE_NOT_CALIBRATED:
+    category: temporary_estimate
+    status: TEMP_ESTIMATE_NOT_CALIBRATED
+    scope:
+      - sensors.mid360.visual_proxy
+      - dynamics.calibration_status
+      - dynamics.per_wheel_mass_kg
+      - dynamics.inertia_kg_m2
+      - dynamics.static_friction
+      - dynamics.dynamic_friction
+      - dynamics.restitution
+      - dynamics.per_side_effort_limit_nm
+      - dynamics.joint_damping_nm_s_rad
+      - domain_randomization
+    note: Inertia, friction, effort/contact parameters and training ranges remain simulation assumptions, not calibration confidence intervals; the mass and geometric-center COM fields have separate physical provenance.

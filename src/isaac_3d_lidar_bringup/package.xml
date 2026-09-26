@@ -10,16 +10,34 @@
   <depend>launch</depend>
   <depend>launch_ros</depend>
   <depend>geometry_msgs</depend>
+  <depend>laser_filters</depend>
+  <depend>fast_lio</depend>
   <depend>lifecycle_msgs</depend>
   <depend>nav_msgs</depend>
+  <depend>nav2_amcl</depend>
+  <depend>nav2_behaviors</depend>
+  <depend>nav2_bt_navigator</depend>
+  <depend>nav2_controller</depend>
+  <depend>nav2_lifecycle_manager</depend>
+  <depend>nav2_map_server</depend>
+  <depend>nav2_planner</depend>
+  <depend>nav2_velocity_smoother</depend>
+  <depend>nav2_waypoint_follower</depend>
+  <depend>nvblox_msgs</depend>
   <depend>nvblox_ros</depend>
+  <depend>pointcloud_to_laserscan</depend>
   <depend>rclpy</depend>
+  <depend>robot_localization</depend>
   <depend>sensor_msgs</depend>
+  <depend>slam_toolbox</depend>
+  <depend>tf2_ros</depend>
+  <depend>visualization_msgs</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>
   <test_depend>python3-pytest</test_depend>
+  <test_depend>python3-yaml</test_depend>
 
   <export>
     <build_type>ament_python</build_type>

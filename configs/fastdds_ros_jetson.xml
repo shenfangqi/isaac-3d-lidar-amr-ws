@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <participant profile_name="participant_profile_ros2" is_default_profile="true">
+    <rtps>
+      <!-- Keep the workstation participant on discovery port 7410 so the
+           reciprocal Jetson anchor has a stable unicast target. -->
+      <participantID>0</participantID>
+      <builtin>
+        <!-- The room access point does not reliably forward DDS multicast. -->
+          <initialPeersList>
+            <!-- Fast DDS discovery-unicast ports currently used by the
+                 Jetson ROS 2 participants.  The Wi-Fi AP does not reliably
+                 forward multicast discovery, so seed each participant
+                 explicitly. -->
+            <locator><udpv4><address>192.168.1.109</address><port>7410</port></udpv4></locator>
+            <locator><udpv4><address>192.168.1.109</address><port>7412</port></udpv4></locator>
+            <locator><udpv4><address>192.168.1.109</address><port>7414</port></udpv4></locator>
+            <locator><udpv4><address>192.168.1.109</address><port>7416</port></udpv4></locator>
+            <locator><udpv4><address>192.168.1.109</address><port>7418</port></udpv4></locator>
+            <locator><udpv4><address>192.168.1.109</address><port>7420</port></udpv4></locator>
+            <locator><udpv4><address>192.168.1.109</address><port>7422</port></udpv4></locator>
+            <locator><udpv4><address>192.168.1.109</address><port>7424</port></udpv4></locator>
+            <locator><udpv4><address>192.168.1.109</address><port>7426</port></udpv4></locator>
+          </initialPeersList>
+      </builtin>
+    </rtps>
+  </participant>
+</profiles>

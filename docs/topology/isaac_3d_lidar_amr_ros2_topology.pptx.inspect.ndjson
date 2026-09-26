@@ -1,0 +1,51 @@
+{"kind":"deck","id":"pr/4k9c9a","name":"Deck"}
+{"kind":"layout","layoutId":"8eaa4ef8-6231-44f6-a7e0-2eb98b56dd01","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"c9bd4946-c5b9-4068-b64e-b5e7ccd1fef7","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/0ulu05","slide":1,"title":"ROS 2 / ISAAC SIM / NVBLOX / NAV2","textShapes":5}
+{"kind":"textbox","id":"sh/32dg329c","slide":1,"name":"cover-kicker","text":"ROS 2 / ISAAC SIM / NVBLOX / NAV2","textPreview":"ROS 2 / ISAAC SIM / NVBLOX / NAV2","textChars":33,"textLines":1,"bbox":[41,41,700,50]}
+{"kind":"textbox","id":"sh/o3mhc7ah","slide":1,"name":"cover-title","text":"Isaac 3D LiDAR AMR\n节点与 Topic 拓扑图","textPreview":"Isaac 3D LiDAR AMR | 节点与 Topic 拓扑图","textChars":32,"textLines":2,"bbox":[41,180,1050,240]}
+{"kind":"textbox","id":"sh/p4fy5cr2","slide":1,"name":"cover-subtitle","text":"按运行模式拆分：保存地图导航 · 实时前沿探索 · 可选 KISS-ICP","textPreview":"按运行模式拆分：保存地图导航 · 实时前沿探索 · 可选 KISS-ICP","textChars":37,"textLines":1,"bbox":[41,500,1000,65]}
+{"kind":"textbox","id":"sh/ux4z6xsf","slide":1,"name":"cover-date","text":"warehouse_v3 · ROS 2 Humble · 2026-08-29","textPreview":"warehouse_v3 · ROS 2 Humble · 2026-08-29","textChars":40,"textLines":1,"bbox":[41,610,800,40]}
+{"kind":"textbox","id":"sh/fydgz290","slide":1,"name":"footer-1","text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[1184,659,54,25]}
+{"kind":"notes","id":"nt/0ulu05","slide":1,"text":"[Sources]\n- Local workspace launch files and node sources under /home/shenfq/projects/ros-humble/isaac_3d_lidar_amr_ws\n[/Sources]"}
+{"kind":"slide","id":"sl/ua8wat","slide":2,"title":"默认保存地图导航：传感器、定位、规划与控制形成一条闭环","textShapes":3}
+{"kind":"textbox","id":"sh/8ve9szat","slide":2,"name":"title-2","text":"默认保存地图导航：传感器、定位、规划与控制形成一条闭环","textPreview":"默认保存地图导航：传感器、定位、规划与控制形成一条闭环","textChars":27,"textLines":1,"bbox":[41,28,1197,62]}
+{"kind":"textbox","id":"sh/7u58zu98","slide":2,"name":"subtitle-2","text":"默认 localization_mode=ground_truth；AMCL 是可替换分支。nvblox 地图用于 3D/2.5D 可视化，Nav2 静态规划使用 /map。","textPreview":"默认 localization_mode=ground_truth；AMCL 是可替换分支。nvblox 地图用于 3D/2.5D 可视化，Nav2 静态规划使用 /map。","textChars":87,"textLines":1,"bbox":[42,92,1197,42]}
+{"kind":"shape","id":"sh/6twrqpsn","slide":2,"name":"rule-2","bbox":[41,137,1197,2]}
+{"kind":"textbox","id":"sh/gzy9wzap","slide":2,"name":"footer-2","text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[1184,659,54,25]}
+{"kind":"image","id":"im/0belcnqd","slide":2,"name":"","alt":"默认保存地图导航：传感器、定位、规划与控制形成一条闭环：节点、Topic、Action、Service 与 TF 的关系图","bbox":[35,146,1210,500]}
+{"kind":"notes","id":"nt/ua8wat","slide":2,"text":"[Sources]\n- launch/nav_stack.launch.py\n- launch/nvblox_with_map.launch.py\n- src/isaac_3d_lidar_bringup/launch/xt32_nvblox.launch.py\n- configs/nav2_params.yaml\n- configs/amcl_params.yaml\n[/Sources]"}
+{"kind":"slide","id":"sl/jeynum","slide":3,"title":"实时建图与前沿探索：OccupancyGrid 驱动目标选择，Nav2 负责运动","textShapes":3}
+{"kind":"textbox","id":"sh/69onqtc7","slide":3,"name":"title-3","text":"实时建图与前沿探索：OccupancyGrid 驱动目标选择，Nav2 负责运动","textPreview":"实时建图与前沿探索：OccupancyGrid 驱动目标选择，Nav2 负责运动","textChars":40,"textLines":1,"bbox":[41,28,1197,62]}
+{"kind":"textbox","id":"sh/dcz6l8by","slide":3,"name":"subtitle-3","text":"frontier_explorer 默认禁用；启用后只发送 NavigateToPose，不直接发布 /cmd_vel，并检查控制话题是否存在未授权发布者。","textPreview":"frontier_explorer 默认禁用；启用后只发送 NavigateToPose，不直接发布 /cmd_vel，并检查控制话题是否存在未授权发布者。","textChars":78,"textLines":1,"bbox":[42,92,1197,42]}
+{"kind":"shape","id":"sh/sbq5s3ud","slide":3,"name":"rule-3","bbox":[41,137,1197,2]}
+{"kind":"textbox","id":"sh/ed8nudc3","slide":3,"name":"footer-3","text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[1184,659,54,25]}
+{"kind":"image","id":"im/2dw7elk7","slide":3,"name":"","alt":"实时建图与前沿探索：OccupancyGrid 驱动目标选择，Nav2 负责运动：节点、Topic、Action、Service 与 TF 的关系图","bbox":[35,146,1210,500]}
+{"kind":"notes","id":"nt/jeynum","slide":3,"text":"[Sources]\n- src/isaac_3d_lidar_exploration/launch/explore_nvblox.launch.py\n- src/isaac_3d_lidar_exploration/isaac_3d_lidar_exploration/frontier_explorer_node.py\n- src/isaac_3d_lidar_exploration/config/nav2_live_mapping.yaml\n- src/isaac_3d_lidar_exploration/config/frontier_explorer.yaml\n[/Sources]"}
+{"kind":"slide","id":"sl/aq20ax","slide":4,"title":"可选里程计与接口契约：Action、Service 和 TF 把子系统连接起来","textShapes":3}
+{"kind":"textbox","id":"sh/1w7i9wn6","slide":4,"name":"title-4","text":"可选里程计与接口契约：Action、Service 和 TF 把子系统连接起来","textPreview":"可选里程计与接口契约：Action、Service 和 TF 把子系统连接起来","textChars":39,"textLines":1,"bbox":[41,28,1197,62]}
+{"kind":"textbox","id":"sh/etgjy1of","slide":4,"name":"subtitle-4","text":"KISS-ICP 当前是独立可选链路；接入主栈时必须明确 odom 来源和 TF 所有权，避免重复发布 map→odom 或 odom→base_link。","textPreview":"KISS-ICP 当前是独立可选链路；接入主栈时必须明确 odom 来源和 TF 所有权，避免重复发布 map→odom 或 odom→base_link。","textChars":78,"textLines":1,"bbox":[42,92,1197,42]}
+{"kind":"shape","id":"sh/zup076p0","slide":4,"name":"rule-4","bbox":[41,137,1197,2]}
+{"kind":"textbox","id":"sh/9kr2dgn2","slide":4,"name":"footer-4","text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[1184,659,54,25]}
+{"kind":"image","id":"im/9kje58jm","slide":4,"name":"","alt":"可选里程计与接口契约：Action、Service 和 TF 把子系统连接起来：节点、Topic、Action、Service 与 TF 的关系图","bbox":[35,146,1210,500]}
+{"kind":"notes","id":"nt/aq20ax","slide":4,"text":"[Sources]\n- src/kiss-icp/ros/launch/odometry.launch.py\n- src/kiss-icp/ros/src/OdometryServer.cpp\n- src/isaac_3d_lidar_bringup/isaac_3d_lidar_bringup/amcl_pose_initializer.py\n- docs/map_gen/README.md\n- docs/map_nav/README.md\n[/Sources]"}
+{"kind":"slide","id":"sl/e5fhm0","slide":5,"title":"读图时先确认运行模式，再核对四个单一所有权","textShapes":14}
+{"kind":"textbox","id":"sh/1w7mlcn2","slide":5,"name":"summary-title","text":"读图时先确认运行模式，再核对四个单一所有权","textPreview":"读图时先确认运行模式，再核对四个单一所有权","textChars":21,"textLines":1,"bbox":[41,36,1197,85]}
+{"kind":"textbox","id":"sh/etgnax4b","slide":5,"name":"num-01","text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[42,155,90,70]}
+{"kind":"textbox","id":"sh/fup4j25w","slide":5,"name":"heading-01","text":"地图来源","textPreview":"地图来源","textChars":4,"textLines":1,"bbox":[150,155,240,42]}
+{"kind":"textbox","id":"sh/ozi5g7md","slide":5,"name":"body-01","text":"保存地图导航：/map 来自 map_server；实时探索：全局代价地图来自 nvblox OccupancyGrid。","textPreview":"保存地图导航：/map 来自 map_server；实时探索：全局代价地图来自 nvblox OccupancyGrid。","textChars":61,"textLines":1,"bbox":[390,155,820,70]}
+{"kind":"shape","id":"sh/p0rmpcny","slide":5,"name":"line-01","bbox":[42,237,1168,1]}
+{"kind":"textbox","id":"sh/2xgneh4n","slide":5,"name":"num-02","text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[42,267,90,70]}
+{"kind":"textbox","id":"sh/3yp4nm58","slide":5,"name":"heading-02","text":"map→odom","textPreview":"map→odom","textChars":8,"textLines":1,"bbox":[150,267,240,42]}
+{"kind":"textbox","id":"sh/c3i5krmp","slide":5,"name":"body-02","text":"ground_truth static TF 与 AMCL 二选一；不要同时发布。","textPreview":"ground_truth static TF 与 AMCL 二选一；不要同时发布。","textChars":41,"textLines":1,"bbox":[390,267,820,70]}
+{"kind":"shape","id":"sh/dormtwna","slide":5,"name":"line-02","bbox":[42,349,1168,1]}
+{"kind":"textbox","id":"sh/t832dkj6","slide":5,"name":"num-03","text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[42,379,90,70]}
+{"kind":"textbox","id":"sh/s7u1kfil","slide":5,"name":"heading-03","text":"odom→base_link","textPreview":"odom→base_link","textChars":14,"textLines":1,"bbox":[150,379,240,42]}
+{"kind":"textbox","id":"sh/r6l0ba10","slide":5,"name":"body-03","text":"Isaac、真机里程计或 KISS-ICP 只能有一个权威来源。","textPreview":"Isaac、真机里程计或 KISS-ICP 只能有一个权威来源。","textChars":32,"textLines":1,"bbox":[390,379,820,70]}
+{"kind":"shape","id":"sh/65cji50f","slide":5,"name":"line-03","bbox":[42,461,1168,1]}
+{"kind":"textbox","id":"sh/1cn2hkz2","slide":5,"name":"num-04","text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[42,491,90,70]}
+{"kind":"textbox","id":"sh/gbe1ofih","slide":5,"name":"heading-04","text":"/cmd_vel","textPreview":"/cmd_vel","textChars":8,"textLines":1,"bbox":[150,491,240,42]}
+{"kind":"textbox","id":"sh/falkfa1w","slide":5,"name":"body-04","text":"velocity_smoother / behavior_server 是允许的控制来源；teleop 与探索并用时需要 twist_mux。","textPreview":"velocity_smoother / behavior_server 是允许的控制来源；teleop 与探索并用时需要 twist_mux。","textChars":71,"textLines":1,"bbox":[390,491,820,70]}
+{"kind":"shape","id":"sh/e9cjm50b","slide":5,"name":"line-04","bbox":[42,573,1168,1]}
+{"kind":"textbox","id":"sh/hgji50jy","slide":5,"name":"footer-5","text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[1184,659,54,25]}
+{"kind":"notes","id":"nt/e5fhm0","slide":5,"text":"[Sources]\n- Project launch files, configs, node sources, and operational documentation listed in slides 2–4\n[/Sources]"}

@@ -1,0 +1,16 @@
+ARG BASE_IMAGE=isaac_ros_dev-aarch64
+FROM ${BASE_IMAGE}
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Keep the on-robot nvblox version aligned with the Isaac ROS 3.2
+# environment used for workstation validation.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ros-humble-isaac-ros-nvblox=3.2.5-0jammy \
+        ros-humble-navigation2 \
+        ros-humble-nav2-bringup \
+        ros-humble-pointcloud-to-laserscan \
+        ros-humble-robot-localization \
+        ros-humble-slam-toolbox \
+    && rm -rf /var/lib/apt/lists/*

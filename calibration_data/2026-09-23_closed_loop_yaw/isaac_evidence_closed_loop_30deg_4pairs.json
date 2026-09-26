@@ -1,0 +1,90 @@
+{
+  "controller": {
+    "angular_command_rad_s": 0.4,
+    "brake_horizon_s": 0.35,
+    "target_deg": 30.0,
+    "tolerance_deg": 1.5
+  },
+  "cumulative_yaw_error_deg": -0.08986725716968703,
+  "maximum_pair_return_error_deg": 0.6706956099729535,
+  "mode": "isaac_evidence_degraded_closed_loop_yaw_regression",
+  "pairs": [
+    {
+      "away_attempts": [
+        {
+          "attempt": 1,
+          "motion_deg": 29.295619300056508,
+          "remaining_error_deg": 0.7043806999434902
+        }
+      ],
+      "direction": "left_then_right",
+      "pair": 1,
+      "return_attempts": [
+        {
+          "attempt": 1,
+          "motion_deg": -28.669857318668416,
+          "remaining_error_deg": -0.6257619813880876
+        }
+      ],
+      "return_yaw_error_deg": 0.6257619813880876
+    },
+    {
+      "away_attempts": [
+        {
+          "attempt": 1,
+          "motion_deg": -29.432652915062697,
+          "remaining_error_deg": -0.5673470849373001
+        }
+      ],
+      "direction": "right_then_left",
+      "pair": 2,
+      "return_attempts": [
+        {
+          "attempt": 1,
+          "motion_deg": 28.76195730508979,
+          "remaining_error_deg": 0.6706956099729101
+        }
+      ],
+      "return_yaw_error_deg": -0.6706956099729101
+    },
+    {
+      "away_attempts": [
+        {
+          "attempt": 1,
+          "motion_deg": 29.295619300056515,
+          "remaining_error_deg": 0.7043806999434838
+        }
+      ],
+      "direction": "left_then_right",
+      "pair": 3,
+      "return_attempts": [
+        {
+          "attempt": 1,
+          "motion_deg": -28.66985731866843,
+          "remaining_error_deg": -0.625761981388089
+        }
+      ],
+      "return_yaw_error_deg": 0.625761981388089
+    },
+    {
+      "away_attempts": [
+        {
+          "attempt": 1,
+          "motion_deg": -29.43265291506273,
+          "remaining_error_deg": -0.5673470849372683
+        }
+      ],
+      "direction": "right_then_left",
+      "pair": 4,
+      "return_attempts": [
+        {
+          "attempt": 1,
+          "motion_deg": 28.76195730508978,
+          "remaining_error_deg": 0.6706956099729535
+        }
+      ],
+      "return_yaw_error_deg": -0.6706956099729535
+    }
+  ],
+  "passed": true
+}

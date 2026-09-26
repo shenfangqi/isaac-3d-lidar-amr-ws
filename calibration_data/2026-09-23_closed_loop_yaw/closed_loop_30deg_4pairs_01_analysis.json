@@ -1,0 +1,169 @@
+{
+  "boot_id": 4005221903,
+  "boot_ids": [
+    4005221903
+  ],
+  "controller": {
+    "angular_command_rad_s": 0.4,
+    "brake_horizon_s": 0.35,
+    "feedback_topic": "/odom",
+    "max_correction_attempts": 3,
+    "target_deg": 30.0,
+    "tolerance_deg": 1.5
+  },
+  "cumulative_position_error_m": 0.0032845014676205386,
+  "cumulative_yaw_error_deg": 1.2250019799359735,
+  "final_ticks_stationary": true,
+  "pairs": [
+    {
+      "away_attempts": [
+        {
+          "actuator_command_mean_rad_s": 0.39999999999999053,
+          "attempt": 1,
+          "motion_deg": 28.040754254715605,
+          "remaining_error_deg": 1.9592457452843923,
+          "tick_delta": [
+            -789,
+            665
+          ]
+        },
+        {
+          "actuator_command_mean_rad_s": 0.40000000000000363,
+          "attempt": 2,
+          "motion_deg": 3.187801587003712,
+          "remaining_error_deg": -1.2285558417193203,
+          "tick_delta": [
+            -83,
+            80
+          ]
+        }
+      ],
+      "direction": "left_then_right",
+      "pair": 1,
+      "return_attempts": [
+        {
+          "actuator_command_mean_rad_s": -0.35840000000000105,
+          "attempt": 1,
+          "motion_deg": -30.461821698365657,
+          "remaining_error_deg": -0.7667341433536672,
+          "tick_delta": [
+            840,
+            -701
+          ]
+        }
+      ],
+      "return_position_error_m": 0.0008132254295055868,
+      "return_yaw_error_deg": 0.7667341433536672
+    },
+    {
+      "away_attempts": [
+        {
+          "actuator_command_mean_rad_s": -0.358399999999992,
+          "attempt": 1,
+          "motion_deg": -28.829885139234186,
+          "remaining_error_deg": -1.1701148607658123,
+          "tick_delta": [
+            777,
+            -682
+          ]
+        }
+      ],
+      "direction": "right_then_left",
+      "pair": 2,
+      "return_attempts": [
+        {
+          "actuator_command_mean_rad_s": 0.399999999999995,
+          "attempt": 1,
+          "motion_deg": 27.83610158774001,
+          "remaining_error_deg": 0.9937835514941717,
+          "tick_delta": [
+            -742,
+            665
+          ]
+        }
+      ],
+      "return_position_error_m": 0.0013252682857534327,
+      "return_yaw_error_deg": -0.9937835514941717
+    },
+    {
+      "away_attempts": [
+        {
+          "actuator_command_mean_rad_s": 0.40000000000000946,
+          "attempt": 1,
+          "motion_deg": 28.469860634424084,
+          "remaining_error_deg": 1.5301393655759095,
+          "tick_delta": [
+            -765,
+            675
+          ]
+        },
+        {
+          "actuator_command_mean_rad_s": 0.4000000000000035,
+          "attempt": 2,
+          "motion_deg": 2.4580635943113482,
+          "remaining_error_deg": -0.9279242287354389,
+          "tick_delta": [
+            -52,
+            72
+          ]
+        }
+      ],
+      "direction": "left_then_right",
+      "pair": 3,
+      "return_attempts": [
+        {
+          "actuator_command_mean_rad_s": -0.3584000000000025,
+          "attempt": 1,
+          "motion_deg": -30.205664277546482,
+          "remaining_error_deg": -0.722259951188956,
+          "tick_delta": [
+            829,
+            -696
+          ]
+        }
+      ],
+      "return_position_error_m": 0.003285728737322615,
+      "return_yaw_error_deg": 0.722259951188956
+    },
+    {
+      "away_attempts": [
+        {
+          "actuator_command_mean_rad_s": -0.35839999999999156,
+          "attempt": 1,
+          "motion_deg": -28.60197338062931,
+          "remaining_error_deg": -1.3980266193706865,
+          "tick_delta": [
+            755,
+            -692
+          ]
+        }
+      ],
+      "direction": "right_then_left",
+      "pair": 4,
+      "return_attempts": [
+        {
+          "actuator_command_mean_rad_s": 0.39999999999998687,
+          "attempt": 1,
+          "motion_deg": 26.421260893236777,
+          "remaining_error_deg": 2.1807124873925328,
+          "tick_delta": [
+            -699,
+            634
+          ]
+        },
+        {
+          "actuator_command_mean_rad_s": 0.4000000000000033,
+          "attempt": 2,
+          "motion_deg": 2.8831441864694956,
+          "remaining_error_deg": -0.7024316990769625,
+          "tick_delta": [
+            -95,
+            51
+          ]
+        }
+      ],
+      "return_position_error_m": 0.0020023139505835957,
+      "return_yaw_error_deg": 0.7024316990769625
+    }
+  ]
+}

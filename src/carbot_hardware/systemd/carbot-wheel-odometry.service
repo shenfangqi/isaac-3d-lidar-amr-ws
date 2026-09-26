@@ -1,0 +1,16 @@
+[Unit]
+Description=Carbot wheel-tick odometry owner
+Wants=network-online.target
+After=network-online.target micro-ros-agent.service
+
+[Service]
+Type=simple
+Environment=ROS_DOMAIN_ID=0
+Environment=PYTHONUNBUFFERED=1
+WorkingDirectory=/home/shenfq/Projects/carbot-ros2
+ExecStart=/bin/bash -lc 'source /opt/ros/humble/setup.bash && source /home/shenfq/Projects/carbot-ros2/install/local_setup.bash && exec /home/shenfq/Projects/carbot-ros2/install/carbot_hardware/lib/carbot_hardware/wheel_odometry --ros-args --params-file /home/shenfq/Projects/carbot-ros2/install/carbot_hardware/share/carbot_hardware/config/wheel_odometry_fused.yaml'
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

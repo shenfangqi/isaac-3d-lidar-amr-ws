@@ -8,13 +8,14 @@
 
 ## 功能
 
-- Isaac Sim 仓库场景与 Carter AMR 仿真
-- Hesai XT32 风格 3D LiDAR 点云接入
+- Isaac Sim 仓库场景与 Carbot 履带式底盘仿真
+- Livox Mid-360 风格 3D LiDAR 点云接入
 - 点云固定尺寸填充，适配 nvblox 球面 LiDAR range image
 - nvblox TSDF/ESDF 与 2.5D OccupancyGrid 建图
 - `.nvblx`、`.ply`、`.pgm`、`.yaml` 地图产物
 - Nav2 全局规划、局部避障与速度平滑
 - `ground_truth` 与 AMCL 两种定位模式
+- Isaac Lab Carbot 高层 `[linear.x, angular.z]` goal-navigation 基础环境
 - 默认带运动互锁的 Frontier Exploration
 - RViz 配置和已验证的 `warehouse_v3` 地图
 
@@ -22,7 +23,7 @@
 
 ```mermaid
 flowchart LR
-    A[Isaac Sim<br/>Carter + 3D LiDAR] -->|PointCloud2| B[PointCloud Padder<br/>1800 x 31]
+    A[Isaac Sim<br/>Carbot + Mid-360] -->|PointCloud2| B[PointCloud Padder<br/>1000 x 40]
     A -->|Odometry + TF + Clock| C[nvblox]
     B --> C
     C -->|TSDF / ESDF| D[3D/2.5D 地图]
@@ -40,14 +41,14 @@ flowchart LR
 
 | 类型 | 话题 / 坐标系 |
 | --- | --- |
-| 原始 3D 点云 | `/front_3d_lidar/lidar_points` |
-| nvblox 输入点云 | `/front_3d_lidar/lidar_points_nvblox` |
-| 仿真里程计 | `/chassis/odom` |
+| 原始 3D 点云 | `/livox/lidar` |
+| nvblox 输入点云 | `/livox/lidar_nvblox`（`1000 x 40`） |
+| 仿真里程计 | `/odom`（Isaac 直接发布） |
 | Nav2 里程计 | `/odom` |
 | 实时二维地图 | `/nvblox_node/static_occupancy_grid` |
 | 导航激光扫描 | `/scan` |
 | 速度控制 | `/cmd_vel` |
-| TF 链 | `map -> odom -> base_link -> front_3d_lidar` |
+| TF 链 | `map -> odom -> base_footprint -> base_link -> front_3d_lidar` |
 
 ## 环境要求
 
@@ -116,7 +117,7 @@ export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$isaac_sim_package_path/exts/isaacsim.r
 export ROS_DOMAIN_ID=0
 
 ./python.sh \
-  /workspace/ros-humble/isaac_3d_lidar_amr_ws/isaac_sim/auto_play_warehouse.py
+  /workspace/ros-humble/isaac_3d_lidar_amr_ws/isaac_sim/auto_play_carbot.py
 ```
 
 ### 2. 启动 nvblox 并加载 `warehouse_v3`
@@ -144,7 +145,7 @@ export CYCLONEDDS_URI=file:///workspace/ros-humble/cyclonedds_ros_local.xml
 source /workspace/ros-humble/isaac_3d_lidar_amr_ws/install/setup.bash
 
 ros2 launch \
-  /workspace/ros-humble/isaac_3d_lidar_amr_ws/launch/nav_stack.launch.py \
+  /workspace/ros-humble/isaac_3d_lidar_amr_ws/launch/carbot_sim.launch.py \
   localization_mode:=ground_truth
 ```
 
@@ -152,7 +153,7 @@ ros2 launch \
 
 ```bash
 ros2 launch \
-  /workspace/ros-humble/isaac_3d_lidar_amr_ws/launch/nav_stack.launch.py \
+  /workspace/ros-humble/isaac_3d_lidar_amr_ws/launch/carbot_sim.launch.py \
   localization_mode:=amcl \
   amcl_initial_pose_mode:=odom_identity
 ```
@@ -161,13 +162,31 @@ ros2 launch \
 
 ```bash
 rviz2 -d \
-  /workspace/ros-humble/isaac_3d_lidar_amr_ws/configs/rviz/3d_lidar_amr_ws_3.rviz \
+  /workspace/ros-humble/isaac_3d_lidar_amr_ws/configs/rviz/carbot_navigation.rviz \
   --ros-args -p use_sim_time:=true
 ```
 
-确认地图、点云、Scan、TF 和 Costmap 对齐后，再使用 **2D Goal Pose** 发送导航目标。仓库中的 RViz 配置文件为 [`configs/rviz/3d_lidar_amr_ws_3.rviz`](configs/rviz/3d_lidar_amr_ws_3.rviz)。
+确认地图、点云、Scan、TF 和 Costmap 对齐后，再使用 **2D Goal Pose** 发送导航目标。仓库中的 Carbot RViz 配置文件为 [`configs/rviz/carbot_navigation.rviz`](configs/rviz/carbot_navigation.rviz)。
+
+阶段 E 将仿真与实机配置明确分开：仿真使用 `configs/carbot/sim.yaml`、`configs/nav2_params_sim.yaml` 和 `configs/amcl_params_sim.yaml`；实机入口为 `launch/carbot_real.launch.py`，使用系统时间、保守限速及 manual AMCL 初始位姿。实机启动前仍须满足 [Jetson 履带底盘通信链路](docs/jetson_tracked_base.md)中的硬门槛。
 
 完整的启动、验收和故障排查步骤见[保存地图与 Nav2 导航教程](docs/map_nav/README.md)。
+
+## Isaac Lab 基础环境
+
+阶段 F 环境位于 [`isaac_lab/carbot_env`](isaac_lab/carbot_env)。它直接加载
+Carbot USD，但策略只接触与 Nav2/真机一致的高层 Twist 和可迁移观察量。当前
+动力学与随机化仍标记为 `TEMP_ESTIMATE_NOT_CALIBRATED`，且
+[`hardware_calibration_backlog.yaml`](isaac_lab/carbot_env/hardware_calibration_backlog.yaml)
+会在 Jetson 里程计、履带侧滑、执行器动态、摩擦和传感器外参完成实测前阻止策略发布。
+有效半径 `0.02175 m` 和有效轮距 `0.254 m` 已是确认基线，只保留真车验收复核，
+不再作为缺失标定阻塞项。
+运行方法和验证边界见该目录的 README。
+
+需要通过桌面 AppImage 检查 Isaac Lab 场景时，必须使用该 README 中记录的
+`--livestream 1` 持续会话启动流程；等待服务端完全就绪后，双击
+`isaacsim-webrtc-client.AppImage` 并连接 `127.0.0.1`。Simulation Output 的
+USD/Fabric 选项只影响视口同步，不负责建立 WebRTC 连接。
 
 ## 新建地图与自动探索
 
@@ -259,7 +278,7 @@ occupied: 6,620
 
 - `launch/` 与 Isaac Sim 脚本当前使用固定工作区路径 `/workspace/ros-humble/isaac_3d_lidar_amr_ws`；若挂载路径不同，需要同步修改相关文件。
 - `docker/` 和 `scripts/` 目录当前是预留占位，尚未提供可复现的镜像构建与一键启动实现。
-- 部分 USD 场景文件是占位文件；当前导航示例使用 `isaac_sim/usd/warehouse_3d_nav_origin_carter.usd`。
+- 部分 USD 场景文件是占位文件；当前导航示例生成并使用 `isaac_sim/usd/warehouse_3d_nav_origin_carbot.usd`，旧 Carter prim 和 ROS graph 在组合中禁用。
 - 仓库根目录尚未提供统一的许可证文件；复用前请分别核对各组件许可证。
 
 ## 文档

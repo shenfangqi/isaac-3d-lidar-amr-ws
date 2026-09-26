@@ -1,0 +1,26 @@
+carbot_wheel_odometry:
+  ros__parameters:
+    wheel_ticks_topic: /wheel_ticks
+    status_topic: /carbot/status
+    # Keep the encoder solution private to the estimator. The EKF owns the
+    # standard /odom topic and odom -> base_footprint transform.
+    odom_topic: /wheel/odom
+    odom_frame: odom
+    base_frame: base_footprint
+    counts_per_revolution: 1560.0
+    effective_sprocket_radius_m: 0.02175
+    effective_track_separation_m: 0.254
+    max_wheel_rpm: 250.0
+    tick_rate_margin: 1.25
+    publish_tf: false
+    require_time_synchronized: true
+    # ESP32 can keep the pre-NTP Jetson epoch after a late wall-clock step.
+    # Use the local receipt time so wheel odometry and MID-360 IMU share the
+    # same Jetson ROS time axis; device_stamp_us still supplies delta time.
+    stamp_with_arrival_time: true
+    pose_x_variance: 0.0025
+    pose_y_variance: 0.01
+    pose_yaw_variance: 0.01
+    twist_x_variance: 0.01
+    twist_y_variance: 0.04
+    twist_yaw_variance: 0.04

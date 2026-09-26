@@ -1,0 +1,17 @@
+stdin is not a terminal device. Keyboard handling disabled.[INFO] [1790138820.748404961] [rosbag2_recorder]: Press SPACE for pausing/resuming
+[INFO] [1790138820.760002149] [rosbag2_storage]: Opened database '/home/shenfq/Projects/carbot-ros2/calibration_data/2026-09-23_cmd_comp_final/physical_final_01/physical_final_01_0.db3' for READ_WRITE.
+[INFO] [1790138820.763596389] [rosbag2_recorder]: Listening for topics...
+[INFO] [1790138820.763755052] [rosbag2_recorder]: Event publisher thread: Starting
+[INFO] [1790138820.769947808] [rosbag2_recorder]: Subscribed to topic '/wheel_ticks'
+[INFO] [1790138820.773925777] [rosbag2_recorder]: Subscribed to topic '/wheel/odom'
+[INFO] [1790138820.775755267] [rosbag2_recorder]: Subscribed to topic '/odom'
+[INFO] [1790138820.779171131] [rosbag2_recorder]: Subscribed to topic '/tf'
+[INFO] [1790138820.782136127] [rosbag2_recorder]: Subscribed to topic '/mid360/imu/data_raw'
+[INFO] [1790138820.784142456] [rosbag2_recorder]: Subscribed to topic '/cmd_vel'
+[INFO] [1790138820.784381314] [rosbag2_recorder]: Recording...
+[INFO] [1790138821.299359790] [rosbag2_recorder]: Subscribed to topic '/carbot/status'
+[INFO] [1790138823.752969715] [rosbag2_recorder]: Subscribed to topic '/cmd_vel_command'
+[INFO] [1790138823.753112090] [rosbag2_recorder]: All requested topics are subscribed. Stopping discovery...
+[INFO] [1790138846.156551693] [rosbag2_cpp]: Writing remaining messages from cache to the bag. It may take a while
+[INFO] [1790138846.160149052] [rosbag2_recorder]: Event publisher thread: Exiting
+[INFO] [1790138846.160353540] [rosbag2_recorder]: Recording stopped

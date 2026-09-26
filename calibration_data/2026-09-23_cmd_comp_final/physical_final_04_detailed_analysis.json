@@ -1,0 +1,77 @@
+{
+  "command_values": {
+    "forward_mps": 0.08,
+    "reverse_mps": -0.08,
+    "left_requested_rad_s": 0.3,
+    "left_actuator_rad_s": 0.3,
+    "right_requested_rad_s": -0.3,
+    "right_actuator_rad_s": -0.2688
+  },
+  "ekf_covariance": {
+    "all_finite": true,
+    "pose_x_min_max": [0.08515446219518866, 0.38903288378393414],
+    "pose_yaw_min_max": [0.00003139985605353626, 0.010652854079084513],
+    "twist_x_min_max": [0.0018818447795029708, 0.1823274518120296],
+    "twist_yaw_min_max": [0.00000382112573128013, 0.0017015707417188013]
+  },
+  "segments": {
+    "forward": {
+      "duration_s": 2.9996933937072754,
+      "motion_latency_s": 0.36814451217651367,
+      "stop_tail_s": 0.38842010498046875,
+      "steady_twist_mps": 0.05482258363402713,
+      "peak_smoothed_acceleration_mps2": 0.21491244143613158,
+      "tick_delta": [1898, 1785],
+      "wheel_yaw_delta_deg": -2.2329648697758984,
+      "imu_yaw_delta_deg": -2.9242951037561005,
+      "ekf_yaw_delta_deg": -2.466160307042513
+    },
+    "reverse": {
+      "duration_s": 2.9993762969970703,
+      "motion_latency_s": 0.3274052143096924,
+      "stop_tail_s": 0.40810585021972656,
+      "steady_twist_mps": -0.05372642433286614,
+      "peak_smoothed_acceleration_mps2": 0.21372954560695592,
+      "tick_delta": [-1861, -1816],
+      "wheel_yaw_delta_deg": 0.8892337976983695,
+      "imu_yaw_delta_deg": 1.096365912560454,
+      "ekf_yaw_delta_deg": 1.0507095971295446
+    },
+    "left": {
+      "duration_s": 2.99882173538208,
+      "motion_latency_s": 0.3642871379852295,
+      "stop_tail_s": 0.46505236625671387,
+      "steady_twist_rad_s": 0.1724278415475079,
+      "peak_smoothed_acceleration_rad_s2": 0.7024185250669966,
+      "tick_delta": [-825, 693],
+      "wheel_yaw_delta_deg": 29.996820109024835,
+      "imu_yaw_delta_deg": 29.65552978317498,
+      "ekf_yaw_delta_deg": 30.08430038284271
+    },
+    "right": {
+      "duration_s": 2.9978857040405273,
+      "motion_latency_s": 0.48264026641845703,
+      "stop_tail_s": 0.42467665672302246,
+      "steady_twist_rad_s": -0.1725140899676497,
+      "peak_smoothed_acceleration_rad_s2": 0.779521495492949,
+      "tick_delta": [796, -650],
+      "wheel_yaw_delta_deg": -28.574046032707443,
+      "imu_yaw_delta_deg": -28.217516838158403,
+      "ekf_yaw_delta_deg": -28.68082369191085
+    }
+  },
+  "status": {
+    "boot_ids": [268099638],
+    "agent_connected_all": true,
+    "time_synchronized_all": true,
+    "reconnect_count_constant": 8
+  },
+  "turn_residual_diagnosis": {
+    "wheel_pair_residual_deg": 1.422774076317392,
+    "imu_pair_residual_deg": 1.4380129450165775,
+    "ekf_pair_residual_deg": 1.4034766909318606,
+    "right_to_left_abs_ekf_ratio": 0.9533485348480208,
+    "single_run_equalizing_scale_estimate": 0.939845153423178,
+    "conclusion": "The residual is physical finite-run response variation, not an EKF-only error. A single run does not supersede the five-pair calibration that selected 0.896."
+  }
+}

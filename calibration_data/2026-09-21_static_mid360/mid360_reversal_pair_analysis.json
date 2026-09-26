@@ -1,0 +1,58 @@
+{
+  "method": "manual approximately 180 degree chassis reversal on the same floor patch",
+  "status": "lidar_roll_pitch_accepted_imu_and_yaw_pending",
+  "assumptions": [
+    "the sensor mount did not move between poses",
+    "the chassis yaw change was approximately 180 degrees",
+    "track support deformation is repeatable",
+    "the selected horizontal plane is the same physical floor"
+  ],
+  "pose_a": {
+    "lidar_floor_height_m": 0.2011657953262329,
+    "lidar_roll_deg": -0.7206851894147378,
+    "lidar_pitch_deg": -0.6579198370178628,
+    "imu_gravity_roll_deg": -0.7402356052426374,
+    "imu_gravity_pitch_deg": -0.9348723880735517
+  },
+  "pose_b": {
+    "lidar_floor_height_m": 0.1919654756784439,
+    "lidar_roll_deg": -0.04590220029075363,
+    "lidar_pitch_deg": 0.09169674948413381,
+    "imu_gravity_roll_deg": -0.3801839250734864,
+    "imu_gravity_pitch_deg": -0.3514744082946563
+  },
+  "pose_c": {
+    "lidar_floor_height_m": 0.2006809562444687,
+    "lidar_roll_deg": -0.5936413746023896,
+    "lidar_pitch_deg": -0.6387387974505121,
+    "imu_gravity_roll_deg": -0.6764096326322164,
+    "imu_gravity_pitch_deg": -0.9342935628521217
+  },
+  "pose_a_c_repeatability": {
+    "lidar_height_difference_m": -0.0004848390817642212,
+    "lidar_roll_difference_deg": 0.12704381481234817,
+    "lidar_pitch_difference_deg": 0.019181039567350733,
+    "imu_roll_difference_deg": 0.063825972610421,
+    "imu_pitch_difference_deg": 0.000578825221429935
+  },
+  "half_sum_fixed_candidate": {
+    "lidar_mount_roll_deg": -0.3515327411496587,
+    "lidar_mount_pitch_deg": -0.2783162838750268,
+    "lidar_mount_roll_rad": -0.006135403761622501,
+    "lidar_mount_pitch_rad": -0.00485753551553442,
+    "imu_mount_roll_deg": -0.5442532720054567,
+    "imu_mount_pitch_deg": -0.6430286918787466,
+    "pose_a_c_lidar_height_mean_m": 0.2009233757853508
+  },
+  "half_difference_reversing_component": {
+    "lidar_roll_deg": -0.30563054085890506,
+    "lidar_pitch_deg": -0.3700130333591607,
+    "imu_roll_deg": -0.16406934693197028,
+    "imu_pitch_deg": -0.2915542835840902
+  },
+  "candidate_internal_imu_minus_lidar_rotation_deg": {
+    "roll": -0.192720530855798,
+    "pitch": -0.3647124080037198
+  },
+  "decision": "Accept the repeated LiDAR roll/pitch in the canonical transform. Keep yaw nominal and keep the IMU transform and lever arm pending surveyed planes and accelerometer-bias calibration."
+}

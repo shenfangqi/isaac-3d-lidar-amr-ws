@@ -1,0 +1,4 @@
+Communication job: By the end, ROS developers should understand which nodes own each major topic, action, service, and TF edge in every supported run mode, because mutually exclusive localization and odometry publishers are shown as branches rather than as simultaneous processes.
+
+Narrative: overview title -> saved-map navigation -> live exploration -> optional interfaces -> ownership checklist.
+Visual system: Codex Grid-inspired white canvas, black hierarchy, light gray rules, and one blue highlight. Graphviz-generated topology diagrams are embedded as SVG for crisp OnlyOffice rendering.

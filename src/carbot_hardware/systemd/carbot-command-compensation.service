@@ -1,0 +1,18 @@
+[Unit]
+Description=Carbot calibrated velocity command compensation
+Wants=micro-ros-agent.service
+After=micro-ros-agent.service
+
+[Service]
+Type=simple
+Environment=ROS_DOMAIN_ID=0
+Environment=PYTHONUNBUFFERED=1
+WorkingDirectory=/home/shenfq/Projects/carbot-ros2
+ExecStart=/bin/bash -lc 'source /opt/ros/humble/setup.bash && source /home/shenfq/Projects/carbot-ros2/install/local_setup.bash && exec ros2 run carbot_hardware cmd_vel_compensator'
+Restart=on-failure
+RestartSec=2
+KillSignal=SIGINT
+TimeoutStopSec=5
+
+[Install]
+WantedBy=default.target

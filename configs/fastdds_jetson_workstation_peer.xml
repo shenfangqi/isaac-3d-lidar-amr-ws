@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <participant profile_name="participant_profile_ros2" is_default_profile="true">
+    <rtps>
+      <builtin>
+        <!-- Workstation participant discovery port.  This reciprocal peer is
+             required when the room Wi-Fi filters DDS multicast discovery. -->
+        <initialPeersList>
+          <locator>
+            <udpv4>
+              <address>192.168.1.105</address>
+              <port>7410</port>
+            </udpv4>
+          </locator>
+        </initialPeersList>
+      </builtin>
+    </rtps>
+  </participant>
+</profiles>

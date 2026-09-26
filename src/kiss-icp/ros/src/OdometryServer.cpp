@@ -120,7 +120,9 @@ OdometryServer::OdometryServer(const rclcpp::NodeOptions &options)
     }
 
     // Initialize the transform broadcaster
-    tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+    if (publish_odom_tf_) {
+        tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+    }
     tf2_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
     tf2_buffer_->setUsingDedicatedThread(true);
     tf2_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf2_buffer_);

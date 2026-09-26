@@ -1,0 +1,26 @@
+/**:
+  ros__parameters:
+    # Isaac renders partial RTX scans at approximately 30 Hz even though the
+    # proxy rotates at 10 Hz. Consume all three partial clouds per revolution.
+    integrate_lidar_rate_hz: 30.0
+    # Preserve the warehouse_v3 baseline and reject any near-field Carbot
+    # chassis/track returns without changing the measured sensor transform.
+    lidar_min_valid_range_m: 0.5
+    input_qos: "DEFAULT"
+    map_clearing_radius_m: 15.0
+    map_clearing_frame_id: "odom"
+    esdf_slice_bounds_visualization_attachment_frame_id: "odom"
+    layer_visualization_exclusion_radius_m: 15.0
+
+    static_mapper:
+      lidar_projective_integrator_max_integration_distance_m: 10.0
+      esdf_slice_height: 0.09
+      esdf_slice_min_height: 0.09
+      # Match the 0.35 m autonomous overhead-clearance threshold.
+      esdf_slice_max_height: 0.35
+      layer_streamer_exclusion_radius_m: 15.0
+
+    dynamic_mapper:
+      esdf_slice_height: 0.09
+      esdf_slice_min_height: 0.09
+      esdf_slice_max_height: 0.35

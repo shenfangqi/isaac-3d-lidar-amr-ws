@@ -1,0 +1,297 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/ua8wat",
+    "id": "ua8wat",
+    "slide": 2,
+    "layoutId": "c9bd4946-c5b9-4068-b64e-b5e7ccd1fef7",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "8eaa4ef8-6231-44f6-a7e0-2eb98b56dd01",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Helvetica Neue"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "c9bd4946-c5b9-4068-b64e-b5e7ccd1fef7",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "8eaa4ef8-6231-44f6-a7e0-2eb98b56dd01",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "8eaa4ef8-6231-44f6-a7e0-2eb98b56dd01",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8ve9szat",
+      "id": "1",
+      "name": "title-2",
+      "bbox": [
+        41,
+        28,
+        1197,
+        62
+      ],
+      "geometry": "rect",
+      "text": "默认保存地图导航：传感器、定位、规划与控制形成一条闭环",
+      "textPreview": "默认保存地图导航：传感器、定位、规划与控制形成一条闭环",
+      "resolvedFontSize": 38,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 38,
+        "typeface": "Helvetica Neue",
+        "color": "#000000",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "默认保存地图导航：传感器、定位、规划与控制形成一条闭环"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "默认保存地图导航：传感器、定位、规划与控制形成一条闭环",
+          "resolvedTextStyle": {
+            "fontSize": 38,
+            "typeface": "Helvetica Neue",
+            "color": "#000000",
+            "bold": true
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "默认保存地图导航：传感器、定位、规划与控制形成一条闭环",
+              "fontSize": 38,
+              "typeface": "Helvetica Neue",
+              "color": "#000000",
+              "bold": true
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7u58zu98",
+      "id": "2",
+      "name": "subtitle-2",
+      "bbox": [
+        42,
+        92,
+        1197,
+        42
+      ],
+      "geometry": "rect",
+      "text": "默认 localization_mode=ground_truth；AMCL 是可替换分支。nvblox 地图用于 3D/2.5D 可视化，Nav2 静态规划使用 /map。",
+      "textPreview": "默认 localization_mode=ground_truth；AMCL 是可替换分支。nvblox 地图用于 3D/2.5D 可视化，Nav2 静态规划使用 /map。",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "Helvetica Neue",
+        "color": "#475467",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "默认 localization_mode=ground_truth；AMCL 是可替换分支。nvblox 地图用于 3D/2.5D 可视化，Nav2 静态规划使用 /map。"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "默认 localization_mode=ground_truth；AMCL 是可替换分支。nvblox 地图用于 3D/2.5D 可视化，Nav2 静态规划使用 /map。",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "typeface": "Helvetica Neue",
+            "color": "#475467"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "默认 localization_mode=ground_truth；AMCL 是可替换分支。nvblox 地图用于 3D/2.5D 可视化，Nav2 静态规划使用 /map。",
+              "fontSize": 18,
+              "typeface": "Helvetica Neue",
+              "color": "#475467"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/6twrqpsn",
+      "id": "3",
+      "name": "rule-2",
+      "bbox": [
+        41,
+        137,
+        1197,
+        2
+      ],
+      "geometry": "rect",
+      "fillColor": "#B8BCC4",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/0belcnqd",
+      "id": "4",
+      "bbox": [
+        35,
+        146,
+        1210,
+        500
+      ],
+      "alt": "默认保存地图导航：传感器、定位、规划与控制形成一条闭环：节点、Topic、Action、Service 与 TF 的关系图",
+      "contentType": "image/svg+xml",
+      "imageFit": "contain",
+      "asset": {
+        "assetId": "50511021-f55f-4ad6-9ddc-33a1991961b2",
+        "contentType": "image/svg+xml",
+        "byteLength": 39271
+      }
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/gzy9wzap",
+      "id": "5",
+      "name": "footer-2",
+      "bbox": [
+        1184,
+        659,
+        54,
+        25
+      ],
+      "geometry": "rect",
+      "text": "2",
+      "textPreview": "2",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 3,
+        "fontSize": 14,
+        "typeface": "Helvetica Neue",
+        "color": "#000000",
+        "alignment": "right",
+        "verticalAlignment": "bottom",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "2"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "2",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "typeface": "Helvetica Neue",
+            "color": "#000000",
+            "alignment": "right"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "2",
+              "fontSize": 14,
+              "typeface": "Helvetica Neue",
+              "color": "#000000",
+              "alignment": "right"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

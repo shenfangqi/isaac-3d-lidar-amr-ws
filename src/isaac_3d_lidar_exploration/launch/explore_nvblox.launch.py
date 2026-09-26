@@ -57,7 +57,8 @@ def generate_launch_description():
             'use_sim_time': use_sim_time,
             'target_frame': robot_base_frame,
             'min_height': 0.10,
-            'max_height': 0.65,
+            # Preserve 0.11 m above the top-mounted MID-360.
+            'max_height': 0.35,
             'angle_min': -3.14,
             'angle_max': 3.14,
             'angle_increment': 0.0174,
@@ -115,7 +116,7 @@ def generate_launch_description():
         DeclareLaunchArgument('robot_base_frame', default_value='base_link'),
         DeclareLaunchArgument(
             'pointcloud_topic',
-            default_value='/front_3d_lidar/lidar_points',
+            default_value='/livox/lidar',
         ),
         DeclareLaunchArgument('scan_topic', default_value='/scan'),
         DeclareLaunchArgument(

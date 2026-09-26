@@ -1,0 +1,71 @@
+{
+  "checks": {
+    "forward_response_is_reduced": true,
+    "latency_matches_20ms_runtime_resolution": true,
+    "reverse_response_is_reduced": true,
+    "right_turn_compensation_applied": true,
+    "stop_tail_in_measured_range": true
+  },
+  "limitations": [
+    "not a calibrated mass/friction/contact dynamics twin",
+    "finite-duration gains are specific to wood floor and zero payload",
+    "PWM, motor RPM, voltage sag and current were not recorded together"
+  ],
+  "mode": "deterministic_offline_evidence_regression",
+  "passed": true,
+  "profile_status": "EVIDENCE_CONSTRAINED_WOOD_FLOOR_ZERO_PAYLOAD",
+  "trials": {
+    "forward": {
+      "command": {
+        "angular_rad_s": 0.0,
+        "linear_mps": 0.05
+      },
+      "command_distance_m": 0.4308447556675463,
+      "command_yaw_rad": 0.0,
+      "duration_s": 10.0,
+      "final_distance_m": 0.4431014183915859,
+      "final_yaw_rad": 0.0,
+      "first_motion_latency_s": 0.1,
+      "stop_tail_s": 0.84
+    },
+    "left": {
+      "command": {
+        "angular_rad_s": 0.5,
+        "linear_mps": 0.0
+      },
+      "command_distance_m": 0.0,
+      "command_yaw_rad": 0.7916226879831056,
+      "duration_s": 3.0,
+      "final_distance_m": 0.0,
+      "final_yaw_rad": 0.8825516247635158,
+      "first_motion_latency_s": 0.1,
+      "stop_tail_s": 0.84
+    },
+    "reverse": {
+      "command": {
+        "angular_rad_s": 0.0,
+        "linear_mps": -0.05
+      },
+      "command_distance_m": -0.42742535284479144,
+      "command_yaw_rad": 0.0,
+      "duration_s": 10.0,
+      "final_distance_m": -0.43958474046784646,
+      "final_yaw_rad": 0.0,
+      "first_motion_latency_s": 0.1,
+      "stop_tail_s": 0.84
+    },
+    "right": {
+      "command": {
+        "angular_rad_s": -0.5,
+        "linear_mps": 0.0
+      },
+      "command_distance_m": 0.0,
+      "command_yaw_rad": -0.7543430211981844,
+      "duration_s": 3.0,
+      "final_distance_m": 0.0,
+      "final_yaw_rad": -0.8408350124779854,
+      "first_motion_latency_s": 0.1,
+      "stop_tail_s": 0.8200000000000001
+    }
+  }
+}

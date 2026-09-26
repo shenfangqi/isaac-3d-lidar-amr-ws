@@ -1,0 +1,55 @@
+<!--
+  Compute one global path and keep it while the local controller can make
+  progress.  Raw /scan still provides immediate collision stopping.  If a
+  persistent obstacle makes FollowPath fail, clear both costmaps, wait briefly
+  for a transient obstacle to leave, then compute one filtered global detour.
+
+  This intentionally avoids IsPathValid.  In narrow passages Navfn can return
+  a drivable path that Humble's IsPathValid condition immediately rejects,
+  producing a visible replan loop even with a static costmap.
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <!-- A memory Sequence does not tick ComputeInitialPath again while
+         FollowPath is RUNNING. PipelineSequence must not be used here: it
+         deliberately re-ticks all preceding children. There is intentionally
+         no outer recovery loop: after one unchanged-path retry and one global
+         replan, failure must terminate safely instead of spinning/backing up
+         or generating another path. -->
+    <Sequence name="NavigateWithFailureTriggeredReplanning">
+      <RecoveryNode number_of_retries="1" name="ComputeInitialPath">
+        <ComputePathToPose
+          goal="{goal}"
+          path="{path}"
+          planner_id="GridBased"/>
+        <ClearEntireCostmap
+          name="ClearGlobalCostmapPlanning"
+          service_name="global_costmap/clear_entirely_global_costmap"/>
+      </RecoveryNode>
+      <RecoveryNode number_of_retries="1" name="FollowAndReplanOnPersistentFailure">
+        <RecoveryNode number_of_retries="1" name="FollowAfterTransientPause">
+          <FollowPath path="{path}" controller_id="FollowPath"/>
+          <!-- Do not clear the local costmap here. Clearing creates a brief
+               unsafe window before the raw scan marks a persistent obstacle
+               again. A removed obstacle is cleared naturally by raytracing. -->
+          <Wait wait_duration="2"/>
+        </RecoveryNode>
+        <Sequence name="PersistentObstacleReplan">
+          <ClearEntireCostmap
+            name="ClearLocalCostmapBeforeReplan"
+            service_name="local_costmap/clear_entirely_local_costmap"/>
+          <ClearEntireCostmap
+            name="ClearGlobalCostmapBeforeReplan"
+            service_name="global_costmap/clear_entirely_global_costmap"/>
+          <!-- Allow the five-frame filtered scan to restore persistent
+               obstacles before the one permitted global replan. -->
+          <Wait wait_duration="2"/>
+          <ComputePathToPose
+            goal="{goal}"
+            path="{path}"
+            planner_id="GridBased"/>
+        </Sequence>
+      </RecoveryNode>
+    </Sequence>
+  </BehaviorTree>
+</root>

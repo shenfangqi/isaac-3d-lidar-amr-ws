@@ -1,0 +1,27 @@
+{
+  "bag": "calibration_data/2026-09-22_ekf_dynamic/compensated_visible_motion_04",
+  "commands": {
+    "forward_m_s": 0.08,
+    "reverse_m_s": -0.08,
+    "left_rad_s": 0.3,
+    "right_rad_s": -0.2554789571,
+    "right_multiplier": 0.8515965236
+  },
+  "ekf_result": {
+    "forward_distance_m": 0.3081985499,
+    "forward_reverse_return_error_m": 0.0075401851,
+    "left_yaw_deg": 32.084396,
+    "right_yaw_deg": -30.488173,
+    "turn_pair_residual_deg": 1.596223,
+    "complete_sequence_final_xy_m": [0.0082246736, -0.0038684399],
+    "complete_sequence_final_position_error_m": 0.009089,
+    "complete_sequence_final_yaw_deg": -0.278514
+  },
+  "refinement": {
+    "previous_uncompensated_pair_residual_deg": -5.91,
+    "residual_reduction_fraction": 0.73,
+    "current_compensation_is_slightly_too_strong": true,
+    "estimated_refined_right_multiplier": 0.8962
+  },
+  "decision": "compensation_effective_refine_once_before_global_deployment"
+}
