@@ -1,15 +1,18 @@
 # Jetson 履带底盘通信链路
 
-## 架构
+## USB 通信架构
 
 ```text
 工作站 Nav2（ROS_DOMAIN_ID=0，Fast DDS/LAN）
   -> /cmd_vel geometry_msgs/msg/Twist
-  -> Jetson micro-ROS Agent（Fast DDS，UDP 8888）
+  -> Jetson micro-ROS Agent
+  -> CP2102 USB-UART（921600 baud）
   -> ESP32 micro-ROS 履带差速控制
 ```
 
-ESP32 固件和真实履带车使用 Domain 0。Isaac 仿真也保留 Domain 0，但默认加载
+ESP32 不再通过 Wi-Fi 连接 Jetson；USB 串口只替换 ESP32 与 Agent 之间的
+XRCE-DDS transport，ROS 话题、Domain 0 和 Jetson 到工作站的物理 LAN DDS 保持
+不变。手机网页仍通过 Wi-Fi 访问 Jetson。Isaac 仿真也保留 Domain 0，但默认加载
 `cyclonedds_ros_local.xml` 并只绑定 `lo`；真实机器人则显式执行
 `scripts/real_robot_ros_env.sh`，切换到与 Jetson 硬件节点及 micro-ROS Agent 一致的
 Fast DDS。不要在真实机器人环境中同时启动默认仿真栈。
@@ -140,6 +143,58 @@ Jetson 项目：
 ```text
 /home/shenfq/Projects/carbot-ros2
 ```
+
+ESP32 开发板通过板载 CP2102 枚举为 `10c4:ea60`、USB serial `0001`。Agent 必须
+使用稳定的 `by-id` 名称，不能写死 `/dev/ttyUSB0`，也不能使用会随 USB-C/USB-A
+物理端口改变的 `by-path`：
+
+```text
+/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
+```
+
+Jetson 用户必须属于 `dialout`，并在当前登录会话中实际获得该组权限：
+
+```bash
+id
+test -r /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
+test -w /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
+```
+
+部署新的 Agent 前先构建并安装 `carbot_hardware`。复制 unit 会覆盖现有 UDP unit，
+所以先保存一份只用于回滚的副本；不要同时运行 UDP 和 serial Agent：
+
+```bash
+cd /home/shenfq/Projects/carbot-ros2
+colcon build --packages-select carbot_msgs carbot_hardware
+cp ~/.config/systemd/user/micro-ros-agent.service \
+  ~/.config/systemd/user/micro-ros-agent.service.udp-backup
+systemctl --user stop micro-ros-agent.service
+
+# Agent 停止后才能通过同一个 CP2102 串口烧录 ESP32 USB transport 固件。
+
+cp install/carbot_hardware/share/carbot_hardware/systemd/micro-ros-agent.service \
+  ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now micro-ros-agent.service
+```
+
+unit 默认使用 `921600 8N1`。启动脚本会等待设备出现，USB 拔出或 Agent 退出后由
+systemd 自动重启；插回 USB 后无需重启 Jetson。服务 active 只表示守护进程正在
+运行或等待设备，不代表 ESP32 ROS session 已建立，因此仍必须检查 topic freshness：
+
+```bash
+systemctl --user status micro-ros-agent.service
+journalctl --user -u micro-ros-agent.service -n 100 --no-pager
+readlink -f /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
+ss -lun | grep ':8888'  # 应无输出
+ros2 topic hz /wheel_ticks
+ros2 topic hz /imu/data_raw
+```
+
+当前生产固件使用 USB transport，不要同时启动旧 UDP Agent。更换 Jetson 物理 USB
+端口无需修改服务配置；只要 CP2102 的 USB serial 保持为 `0001`，`by-id` 路径就保持
+不变。服务 active 但 topic 不再更新时，不得发送运动命令；先检查 USB 数据面和
+`/carbot/status` freshness。
 
 ## 手机网页遥控建图
 

@@ -27,6 +27,7 @@ setup(
             "share/" + package_name + "/systemd",
             glob("systemd/*.service") + glob("systemd/*.cfg"),
         ),
+        ("share/" + package_name + "/scripts", glob("scripts/*.sh")),
     ],
     install_requires=["setuptools"],
     zip_safe=True,

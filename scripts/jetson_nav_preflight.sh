@@ -6,6 +6,8 @@ container_name="carbot-nvblox"
 workspace="/home/shenfq/Projects/isaac_ros-dev"
 container_workspace="/workspaces/isaac_ros-dev"
 carbot_workspace="/home/shenfq/Projects/carbot-ros2"
+esp32_serial_device="${CARBOT_MICROROS_SERIAL_DEVICE:-/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0}"
+esp32_serial_baudrate="${CARBOT_MICROROS_BAUDRATE:-921600}"
 failures=0
 
 pass() {
@@ -40,6 +42,45 @@ check_system_service() {
   fi
 }
 
+check_esp32_serial_transport() {
+  local resolved_device=""
+  local properties=""
+  local unit_text=""
+  local unit_environment=""
+
+  resolved_device="$(readlink -f -- "${esp32_serial_device}" 2>/dev/null || true)"
+  if [[ -z "${resolved_device}" || ! -c "${resolved_device}" ]]; then
+    fail "ESP32 USB serial device is unavailable: ${esp32_serial_device}"
+  elif [[ ! -r "${esp32_serial_device}" || ! -w "${esp32_serial_device}" ]]; then
+    fail "ESP32 USB serial device is not readable/writable by $(id -un): ${esp32_serial_device}"
+  else
+    properties="$(udevadm info --query=property --name="${resolved_device}" 2>/dev/null || true)"
+    if grep -qx 'ID_VENDOR_ID=10c4' <<<"${properties}" \
+        && grep -qx 'ID_MODEL_ID=ea60' <<<"${properties}" \
+        && grep -qx 'ID_SERIAL_SHORT=0001' <<<"${properties}"; then
+      pass "ESP32 CP2102 is available at ${esp32_serial_device} -> ${resolved_device}"
+    else
+      fail "serial device identity does not match CP2102 10c4:ea60 serial 0001"
+    fi
+  fi
+
+  unit_text="$(systemctl --user cat micro-ros-agent.service 2>/dev/null || true)"
+  unit_environment="$(systemctl --user show micro-ros-agent.service --property=Environment --value 2>/dev/null || true)"
+  if grep -Fq 'start_micro_ros_agent_serial.sh' <<<"${unit_text}" \
+      && grep -Fq "CARBOT_MICROROS_SERIAL_DEVICE=${esp32_serial_device}" <<<"${unit_environment}" \
+      && grep -Fq "CARBOT_MICROROS_BAUDRATE=${esp32_serial_baudrate}" <<<"${unit_environment}"; then
+    pass "micro-ros-agent.service uses USB serial at ${esp32_serial_baudrate} baud"
+  else
+    fail "micro-ros-agent.service is not configured for the expected USB serial transport"
+  fi
+
+  if ss -H -lun 2>/dev/null | awk '{print $4}' | grep -Eq '(^|:)8888$'; then
+    fail "legacy UDP micro-ROS Agent is still listening on port 8888"
+  else
+    pass "legacy UDP port 8888 is not listening"
+  fi
+}
+
 topic_count() {
   local topic="$1"
   local endpoint="$2"
@@ -51,6 +92,7 @@ topic_count() {
 echo "Carbot Jetson navigation preflight (read-only)"
 echo
 
+check_esp32_serial_transport
 check_user_service micro-ros-agent.service
 check_user_service carbot-wheel-odometry.service
 check_user_service carbot-mid360.service

@@ -1,0 +1,21 @@
+[Unit]
+Description=Carbot micro-ROS Agent (USB serial)
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Environment=ROS_DOMAIN_ID=0
+Environment=ROS_LOCALHOST_ONLY=0
+Environment=RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+Environment=MICRO_ROS_AGENT_VERBOSE=4
+Environment=MICRO_ROS_AGENT_SETUP=/home/shenfq/Projects/micro_ros_agent_ws/install/setup.bash
+Environment=CARBOT_MICROROS_SERIAL_DEVICE=/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
+Environment=CARBOT_MICROROS_BAUDRATE=921600
+ExecStart=/home/shenfq/Projects/carbot-ros2/install/carbot_hardware/share/carbot_hardware/scripts/start_micro_ros_agent_serial.sh
+Restart=always
+RestartSec=2
+KillSignal=SIGINT
+TimeoutStopSec=10
+
+[Install]
+WantedBy=default.target
