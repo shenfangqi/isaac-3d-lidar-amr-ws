@@ -4,7 +4,7 @@ This is the durable project runbook for the real Jetson used by `isaac_3d_lidar_
 
 ## Connection
 
-Last verified: 2026-09-25 (Asia/Tokyo).
+Last verified: 2026-09-27 (Asia/Tokyo).
 
 | Field | Value |
 |---|---|
@@ -18,7 +18,7 @@ Last verified: 2026-09-25 (Asia/Tokyo).
 | SSH service | Active on TCP 22 when verified |
 | Authentication | Dedicated Ed25519 key; password fallback may be available |
 | Physical robot ROS domain | `0` (matches completed ESP32 firmware) |
-| micro-ROS Agent | User service `micro-ros-agent.service`, UDP 8888 |
+| micro-ROS Agent | User service `micro-ros-agent.service`, CP2102 USB serial at 921600 baud |
 | Wheel odometry | User service `carbot-wheel-odometry.service` |
 | Phone Web teleop | User service `carbot-web-teleop.service`, TCP 8080 |
 
@@ -51,7 +51,10 @@ Never store the Jetson password in this repository, a Skill, shell history, an e
 | Docker client | Docker 29.4.1 |
 | Root filesystem | `/dev/nvme0n1p1`, 467 GB total, 32 GB used, 412 GB available when verified |
 
-The user belongs to `sudo`, `video`, `render`, `i2c`, and `gpio`, but not `docker`. Passwordless sudo was not available when verified, so Docker administration normally needs an interactive `sudo` prompt. Do not attempt to persist or automate the sudo password.
+The user belongs to `sudo`, `video`, `render`, `i2c`, `gpio`, `dialout`, and
+`docker`. Passwordless sudo was not available when verified, so privileged
+administration normally needs an interactive `sudo` prompt. Do not attempt to
+persist or automate the sudo password.
 
 ## Standard access and checks
 
@@ -125,6 +128,24 @@ lease. The 2026-09-24 deployment was verified from the workstation and on the
 Jetson with only zero Twist messages; no nonzero physical command was sent.
 Use it only for supervised mapping, and do not enable Nav2 or another teleop
 publisher at the same time.
+
+### ESP32 USB serial transport
+
+The live ESP32-to-Jetson micro-ROS transport uses the board's CP2102
+USB-UART. The device enumerates as CP2102 `10c4:ea60`, USB serial `0001`, with
+stable path
+`/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0`.
+User `shenfq` is in `dialout`, and the device is readable/writable in the
+current login session. Always use the stable `by-id` path when moving the cable
+between Jetson ports; `/dev/ttyUSB0` and `by-path` are not stable deployment
+inputs.
+
+The live user service runs the Agent at `921600 8N1` and waits for the stable
+device path, so reconnecting the cable does not require a Jetson restart. The
+legacy UDP listener on port 8888 must remain absent. Stop the Agent before
+flashing because the bootloader and micro-ROS share the CP2102 port. Service
+`active` alone is not proof of a live ESP32 session: also verify fresh
+`/carbot/status` and `/wheel_ticks` data before sending motion commands.
 
 ## Remote-operation rules
 
