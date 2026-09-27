@@ -17,8 +17,8 @@ amcl:
     alpha3: 0.20
     alpha4: 0.20
     alpha5: 0.10
-    update_min_d: 0.10
-    update_min_a: 0.10
+    update_min_d: 0.05
+    update_min_a: 0.05
     resample_interval: 2
     laser_model_type: likelihood_field_prob
     laser_min_range: 0.5
@@ -38,4 +38,4 @@ amcl:
     max_particles: 3000
     pf_err: 0.03
     pf_z: 0.99
-    transform_tolerance: 0.5
+    transform_tolerance: 1.5

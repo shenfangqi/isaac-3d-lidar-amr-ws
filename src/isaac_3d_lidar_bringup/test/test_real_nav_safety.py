@@ -22,16 +22,19 @@ def test_real_nav_limits_are_conservative():
         PACKAGE_DIR / 'config/nav2/carbot_navigation_real.yaml')
 
     controller = nav['controller_server']['ros__parameters']['FollowPath']
+    controller_server = nav['controller_server']['ros__parameters']
     goal_checker = nav['controller_server']['ros__parameters'][
         'general_goal_checker']
     assert controller['desired_linear_vel'] <= 0.10
     assert goal_checker['yaw_goal_tolerance'] == 0.03
     assert controller['rotate_to_heading_angular_vel'] == 0.50
-    # At 20 Hz the requested turn must cross the measured 0.40 rad/s track
-    # deadband in one RPP cycle.  The final smoother, not RPP's odometry-based
-    # clamp, owns the physical output ramp.
+    # The requested turn must cross the measured 0.40 rad/s track deadband in
+    # one RPP cycle. The final smoother owns the physical output ramp.
     assert controller['max_angular_accel'] == 10.00
     assert controller['use_collision_detection'] is True
+    assert controller_server['controller_frequency'] == 10.0
+    assert controller['transform_tolerance'] >= 0.7
+    assert controller['lookahead_dist'] <= 0.15
 
     smoother = nav['velocity_smoother']['ros__parameters']
     assert smoother['max_velocity'] == [0.10, 0.0, 0.50]
@@ -46,6 +49,78 @@ def test_real_nav_limits_are_conservative():
     assert behavior['max_rotational_vel'] == 0.50
     assert behavior['rotational_acc_lim'] == 0.50
     assert smoother['velocity_timeout'] <= 0.5
+
+
+def test_real_amcl_does_not_scan_match_stationary_noise():
+    amcl = _load_yaml(
+        PACKAGE_DIR / 'config/nav2/carbot_amcl_real.yaml'
+    )['amcl']['ros__parameters']
+
+    assert amcl['update_min_d'] >= 0.05
+    assert amcl['update_min_a'] >= 0.05
+    assert amcl['transform_tolerance'] >= 1.5
+
+
+def test_legacy_real_profiles_keep_the_same_tf_timing_guards():
+    nav = _load_yaml(PROJECT_DIR / 'configs/nav2_params_real.yaml')
+    amcl = _load_yaml(PROJECT_DIR / 'configs/amcl_params_real.yaml')
+    controller = nav['controller_server']['ros__parameters']
+    follow_path = controller['FollowPath']
+    amcl_params = amcl['amcl']['ros__parameters']
+
+    assert controller['controller_frequency'] == 10.0
+    assert follow_path['transform_tolerance'] >= 0.7
+    assert amcl_params['update_min_d'] >= 0.05
+    assert amcl_params['update_min_a'] >= 0.05
+
+
+def test_real_local_costmap_retains_mapped_and_recent_table_legs():
+    nav = _load_yaml(
+        PACKAGE_DIR / 'config/nav2/carbot_navigation_real.yaml')
+    local = nav['local_costmap']['local_costmap']['ros__parameters']
+    scan = local['obstacle_layer']['scan']
+    planner = nav['planner_server']['ros__parameters']['GridBased']
+
+    assert local['plugins'] == [
+        'static_layer', 'obstacle_layer', 'inflation_layer']
+    assert local['static_layer']['map_subscribe_transient_local'] is True
+    assert scan['observation_persistence'] >= 2.0
+    assert planner['tolerance'] <= 0.15
+    assert planner['plugin'] == 'nav2_smac_planner/SmacPlanner2D'
+    assert planner['downsample_costmap'] is False
+    assert planner['smoother']['max_iterations'] > 0
+
+
+def test_real_controller_and_recoveries_use_the_map_frame():
+    nav = _load_yaml(
+        PACKAGE_DIR / 'config/nav2/carbot_navigation_real.yaml')
+    local = nav['local_costmap']['local_costmap']['ros__parameters']
+    behavior = nav['behavior_server']['ros__parameters']
+
+    # The saved-map global plan is in map. Keeping the local controller in
+    # odom made RPP request a transform at the newest odometry timestamp while
+    # AMCL's map transform was still one 10 Hz sample behind. That aborts the
+    # controller and makes the BT alternate spin/backup paths.
+    assert local['global_frame'] == 'map'
+    assert behavior['global_frame'] == 'map'
+
+
+def test_real_table_approach_has_stable_path_without_motion_recoveries():
+    nav = _load_yaml(
+        PACKAGE_DIR / 'config/nav2/carbot_navigation_real.yaml')
+    local = nav['local_costmap']['local_costmap']['ros__parameters']
+    global_ = nav['global_costmap']['global_costmap']['ros__parameters']
+    bt = nav['bt_navigator']['ros__parameters']
+
+    # 0.25 m remains outside the roughly 0.204 m circumscribed footprint while
+    # preserving substantially more narrow-space clearance than 0.45 m.
+    assert 0.204 < local['inflation_layer']['inflation_radius'] <= 0.25
+    assert global_['inflation_layer']['inflation_radius'] == \
+        local['inflation_layer']['inflation_radius']
+    assert global_['obstacle_layer']['enabled'] is False
+    assert local['obstacle_layer'].get('enabled', True) is True
+    assert bt['default_nav_to_pose_bt_xml'].endswith(
+        'navigate_w_replanning_only_if_path_becomes_invalid.xml')
 
 
 def test_real_nav_footprint_matches_canonical_parameters():
@@ -76,6 +151,9 @@ def test_real_navigation_launch_is_inactive_and_has_one_final_velocity_path():
     assert "default_value='/cmd_vel_command'" in launch_source
     assert 'Use /cmd_vel_diagnostic' in launch_source
     assert "'autostart': autostart" in launch_source
+    assert "executable='manual_map_localizer'" in launch_source
+    assert "executable='amcl'" not in launch_source
+    assert "'node_names': ['map_server']" in launch_source
 
 
 def test_real_mapping_uses_fast_lio_pose_and_nvblox_map_only():

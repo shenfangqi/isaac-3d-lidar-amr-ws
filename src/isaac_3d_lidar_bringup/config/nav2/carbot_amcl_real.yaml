@@ -17,6 +17,10 @@ amcl:
     alpha3: 0.20
     alpha4: 0.20
     alpha5: 0.10
+    # Do not scan-match stationary sensor noise. Zero thresholds let repeated
+    # MID-360 scans pull AMCL into a similar-looking table-leg arrangement
+    # while odometry was stationary. The controller now operates in map, so
+    # it no longer needs a new AMCL correction on every scan for FollowPath.
     update_min_d: 0.05
     update_min_a: 0.05
     resample_interval: 2
@@ -38,4 +42,7 @@ amcl:
     max_particles: 3000
     pf_err: 0.03
     pf_z: 0.99
-    transform_tolerance: 0.5
+    # Post-date map->odom beyond the longest measured scan/update gap. Odom
+    # still supplies current base motion; this extends the AMCL correction's
+    # validity so the controller does not request a transform in the future.
+    transform_tolerance: 1.5

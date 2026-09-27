@@ -1,7 +1,12 @@
 controller_server:
   ros__parameters:
     use_sim_time: false
-    controller_frequency: 20.0
+    # FAST-LIO publishes the navigation odometry at about 10 Hz. Running the
+    # controller twice as fast repeatedly requested map->odom transforms newer
+    # than AMCL had published, aborting FollowPath and triggering alternating
+    # clear/spin/backup recovery plans. Match the controller to the measured
+    # odometry cadence instead.
+    controller_frequency: 10.0
     progress_checker_plugin: progress_checker
     goal_checker_plugins: [general_goal_checker]
     controller_plugins: [FollowPath]
@@ -20,32 +25,47 @@ controller_server:
     FollowPath:
       plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
       desired_linear_vel: 0.10
-      lookahead_dist: 0.30
-      min_lookahead_dist: 0.15
-      max_lookahead_dist: 0.50
+      # Follow the planned centerline closely between table legs. The former
+      # 0.30 m carrot cut tight corners and RPP then rejected its own arc as a
+      # collision even though the global path itself was traversable.
+      lookahead_dist: 0.15
+      min_lookahead_dist: 0.10
+      max_lookahead_dist: 0.25
       use_velocity_scaled_lookahead_dist: false
       use_collision_detection: true
+      # The real AMCL/FAST-LIO chain has measured short bursts of 0.2--0.7 s
+      # transform latency. Wait for the matching map->odom sample instead of
+      # aborting FollowPath and clearing both costmaps.
+      transform_tolerance: 0.75
       use_rotate_to_heading: true
       rotate_to_heading_angular_vel: 0.50
-      # RPP clamps against measured odometry on every control cycle.  With the
-      # tracked-base deadband, 0.50 rad/s^2 at 20 Hz produced only 0.025 rad/s;
-      # odometry stayed at zero and the command could never ramp higher.  Let
-      # RPP request the measured 0.50 rad/s turn immediately; the final velocity
-      # smoother below still applies the real 2.00 rad/s^2 output ramp.
+      # RPP clamps against measured odometry on every control cycle. The high
+      # internal limit lets it request the measured 0.50 rad/s track-deadband
+      # turn in one cycle; the final smoother still owns the physical ramp.
       max_angular_accel: 10.00
 
 local_costmap:
   local_costmap:
     ros__parameters:
       use_sim_time: false
-      global_frame: odom
+      # Keep the controller pose and the global plan in the same frame.  With
+      # an odom-frame local costmap, RPP requested odom->map at the newest
+      # odometry stamp; AMCL's 10 Hz map transform could lag that stamp by one
+      # sample and abort FollowPath, starting the oscillatory recovery tree.
+      global_frame: map
       robot_base_frame: base_footprint
       rolling_window: true
       width: 4
       height: 4
       resolution: 0.05
       footprint: "[[0.155, 0.133], [0.155, -0.133], [-0.130, -0.133], [-0.130, 0.133]]"
-      plugins: [obstacle_layer, inflation_layer]
+      # Keep mapped furniture in the controller's collision costmap. Without
+      # this layer, a table leg vanished as soon as it entered the MID-360's
+      # 0.5 m near-field blind zone even though it remained in /map.
+      plugins: [static_layer, obstacle_layer, inflation_layer]
+      static_layer:
+        plugin: nav2_costmap_2d::StaticLayer
+        map_subscribe_transient_local: true
       obstacle_layer:
         plugin: nav2_costmap_2d::ObstacleLayer
         observation_sources: scan
@@ -54,12 +74,17 @@ local_costmap:
           data_type: LaserScan
           clearing: true
           marking: true
+          # Hold a recently observed thin leg through short Livox sparsity and
+          # the final approach into the LiDAR minimum-range blind zone.
+          observation_persistence: 2.0
           max_obstacle_height: 2.0
           obstacle_max_range: 10.0
           raytrace_max_range: 10.0
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        inflation_radius: 0.45
+        # The footprint's circumscribed radius is about 0.204 m. Keep a small
+        # planning margin without closing the gaps between table legs.
+        inflation_radius: 0.25
         cost_scaling_factor: 3.0
 
 global_costmap:
@@ -79,6 +104,11 @@ global_costmap:
         map_subscribe_transient_local: true
       obstacle_layer:
         plugin: nav2_costmap_2d::ObstacleLayer
+        # Plan a stable route against the saved map. Live MID-360 obstacles
+        # remain enabled in the local controller costmap, where they safely
+        # stop the robot; feeding the same sparse returns into the global map
+        # transiently disconnected narrow passages and canceled valid routes.
+        enabled: false
         observation_sources: scan
         scan:
           topic: /scan
@@ -90,7 +120,7 @@ global_costmap:
           raytrace_max_range: 10.0
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        inflation_radius: 0.45
+        inflation_radius: 0.25
         cost_scaling_factor: 3.0
 
 planner_server:
@@ -98,10 +128,25 @@ planner_server:
     use_sim_time: false
     planner_plugins: [GridBased]
     GridBased:
-      plugin: nav2_navfn_planner/NavfnPlanner
-      tolerance: 0.5
-      use_astar: false
+      # Navfn's potential-gradient extraction repeatedly alternated between
+      # two adjacent cells at the table entrance, producing a literal
+      # left/right loop in the path. Smac2D performs cost-aware A* followed by
+      # smoothing and does not use that gradient traceback.
+      plugin: nav2_smac_planner/SmacPlanner2D
+      tolerance: 0.15
+      downsample_costmap: false
+      downsampling_factor: 1
       allow_unknown: false
+      max_iterations: 1000000
+      max_on_approach_iterations: 1000
+      max_planning_time: 2.0
+      cost_travel_multiplier: 2.0
+      use_final_approach_orientation: false
+      smoother:
+        max_iterations: 1000
+        w_smooth: 0.30
+        w_data: 0.20
+        tolerance: 1.0e-10
 
 bt_navigator:
   ros__parameters:
@@ -109,11 +154,18 @@ bt_navigator:
     global_frame: map
     robot_base_frame: base_footprint
     odom_topic: /odom
+    # Keep a valid route stable instead of selecting a different side at 1 Hz.
+    # This tree also has no clear/spin/backup recovery loop: if the footprint
+    # really cannot pass, the robot stops and reports failure rather than
+    # oscillating next to a table leg.
+    default_nav_to_pose_bt_xml: /opt/ros/humble/share/nav2_bt_navigator/behavior_trees/navigate_w_replanning_only_if_path_becomes_invalid.xml
 
 behavior_server:
   ros__parameters:
     use_sim_time: false
-    global_frame: odom
+    # Recovery behaviors share the controller's frame so a FollowPath failure
+    # cannot reintroduce the same timestamp-sensitive odom->map conversion.
+    global_frame: map
     robot_base_frame: base_footprint
     max_rotational_vel: 0.50
     min_rotational_vel: 0.40

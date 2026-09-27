@@ -62,11 +62,16 @@ def generate_launch_description():
         parameters=[amcl_config, {'yaml_filename': map_yaml}],
         output='screen',
     )
-    amcl = Node(
-        package='nav2_amcl',
-        executable='amcl',
-        name='amcl',
-        parameters=[amcl_config],
+    manual_localizer = Node(
+        package='isaac_3d_lidar_bringup',
+        executable='manual_map_localizer',
+        name='manual_map_localizer',
+        parameters=[{
+            'global_frame': 'map',
+            'odom_frame': 'odom',
+            'base_frame': 'base_footprint',
+            'publish_rate': 20.0,
+        }],
         output='screen',
     )
     localization_lifecycle = Node(
@@ -76,7 +81,7 @@ def generate_launch_description():
         parameters=[{
             'use_sim_time': False,
             'autostart': autostart,
-            'node_names': ['map_server', 'amcl'],
+            'node_names': ['map_server'],
         }],
         output='screen',
     )
@@ -172,7 +177,7 @@ def generate_launch_description():
         lio_odometry,
         scan_projection,
         map_server,
-        amcl,
+        manual_localizer,
         localization_lifecycle,
         controller,
         planner,
