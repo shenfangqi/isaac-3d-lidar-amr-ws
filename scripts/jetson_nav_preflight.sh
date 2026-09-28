@@ -6,6 +6,7 @@ container_name="carbot-nvblox"
 workspace="/home/shenfq/Projects/isaac_ros-dev"
 container_workspace="/workspaces/isaac_ros-dev"
 carbot_workspace="/home/shenfq/Projects/carbot-ros2"
+livox_workspace="/home/shenfq/Projects/lidar-mid360/ws_livox"
 esp32_serial_device="${CARBOT_MICROROS_SERIAL_DEVICE:-/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0}"
 esp32_serial_baudrate="${CARBOT_MICROROS_BAUDRATE:-921600}"
 failures=0
@@ -84,9 +85,18 @@ check_esp32_serial_transport() {
 topic_count() {
   local topic="$1"
   local endpoint="$2"
-  ros2_in_container "ros2 topic info '${topic}'" 2>/dev/null \
-    | sed -n "s/^${endpoint} count: //p" \
-    | head -n 1
+  local value=""
+  for _ in $(seq 1 30); do
+    value="$(ros2_in_container "ros2 topic info '${topic}'" 2>/dev/null \
+      | sed -n "s/^${endpoint} count: //p" \
+      | head -n 1)"
+    if [[ -n "${value}" ]]; then
+      printf '%s\n' "${value}"
+      return 0
+    fi
+    sleep 0.5
+  done
+  return 1
 }
 
 echo "Carbot Jetson navigation preflight (read-only)"
@@ -108,7 +118,15 @@ if [[ "$(docker inspect -f '{{.State.Running}}' "${container_name}" 2>/dev/null 
 fi
 pass "${container_name} is running"
 
-map_state="$(ros2_in_container "ros2 lifecycle get /map_server" 2>/dev/null || true)"
+map_state=""
+for _ in $(seq 1 30); do
+  map_state="$(ros2_in_container \
+    "ros2 lifecycle get /map_server --no-daemon" 2>/dev/null || true)"
+  if [[ -n "${map_state}" ]]; then
+    break
+  fi
+  sleep 0.5
+done
 if grep -Eq '^(unconfigured|inactive)' <<<"${map_state}"; then
   pass "Nav2 is not active (${map_state})"
 else
@@ -155,11 +173,19 @@ else
 fi
 
 freshness_output="$(bash -lc \
-  "source /opt/ros/humble/setup.bash && source ${carbot_workspace}/install/setup.bash && ROS_DOMAIN_ID=0 python3 ${workspace}/scripts/jetson_ros_freshness_check.py" 2>&1)"
+  "source /opt/ros/humble/setup.bash && source ${livox_workspace}/install/setup.bash && source ${carbot_workspace}/install/setup.bash && ROS_DOMAIN_ID=0 python3 ${workspace}/scripts/jetson_ros_freshness_check.py" 2>&1)"
 freshness_status=$?
 echo "${freshness_output}"
 if ((freshness_status > 0)); then
   failures=$((failures + freshness_status))
+fi
+
+lio_stability_output="$(ros2_in_container \
+  "python3 ${container_workspace}/scripts/jetson_lio_stability_check.py" 2>&1)"
+lio_stability_status=$?
+echo "${lio_stability_output}"
+if ((lio_stability_status > 0)); then
+  failures=$((failures + 1))
 fi
 
 echo

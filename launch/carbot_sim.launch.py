@@ -17,9 +17,10 @@ def generate_launch_description():
     initial_x = LaunchConfiguration("amcl_initial_x")
     initial_y = LaunchConfiguration("amcl_initial_y")
     initial_yaw = LaunchConfiguration("amcl_initial_yaw")
+    nav2_params_file = LaunchConfiguration("nav2_params_file")
     actions = build_navigation_actions(
         "sim", localization_mode, initial_pose_mode,
-        initial_x, initial_y, initial_yaw,
+        initial_x, initial_y, initial_yaw, nav2_params_file,
     )
     return LaunchDescription(
         [
@@ -36,6 +37,18 @@ def generate_launch_description():
             DeclareLaunchArgument("amcl_initial_x", default_value="0.0"),
             DeclareLaunchArgument("amcl_initial_y", default_value="0.0"),
             DeclareLaunchArgument("amcl_initial_yaw", default_value="0.0"),
+            DeclareLaunchArgument(
+                "nav2_params_file",
+                default_value=(
+                    "/workspace/ros-humble/isaac_3d_lidar_amr_ws/"
+                    "configs/nav2_params_sim.yaml"
+                ),
+                description=(
+                    "Nav2 parameter file. Select "
+                    "configs/nav2_params_sim_real_parity.yaml for the "
+                    "physical-navigation policy parity profile."
+                ),
+            ),
             *actions,
         ]
     )

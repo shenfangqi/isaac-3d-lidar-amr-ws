@@ -41,10 +41,14 @@ def test_runtime_profiles_separate_simulation_from_real_hardware():
     assert simulation["allow_ground_truth_map_to_odom"] is True
 
     assert real["use_sim_time"] is False
-    assert real["odom_source"] == "jetson_wheel_ticks"
+    assert real["odom_source"] == "fast_lio_base_adapter"
     assert real["allow_chassis_odom_relay"] is False
     assert real["allow_ground_truth_map_to_odom"] is False
-    assert real["amcl_initial_pose_default"] == "manual"
+    assert real["localization_default"] == "manual_map_localizer"
+    assert real["initial_pose_default"] == "rviz_manual"
+    assert real["map_to_odom_owner"] == "manual_map_localizer"
+    assert "/livox/lidar" in real["required_external_interfaces"]
+    assert "/mid360/imu/data_raw" in real["required_external_interfaces"]
 
 
 def test_nav2_footprints_match_the_canonical_carbot_polygon():
@@ -59,7 +63,22 @@ def test_nav2_footprints_match_the_canonical_carbot_polygon():
             assert node["robot_base_frame"] == "base_footprint"
             assert "robot_radius" not in node
             assert yaml.safe_load(node["footprint"]) == canonical
-            assert node["inflation_layer"]["inflation_radius"] == 0.45
+            if runtime == "sim":
+                assert node["inflation_layer"]["inflation_radius"] == 0.45
+
+    real = nav_parameters("real")
+    assert real["local_costmap"]["local_costmap"]["ros__parameters"][
+        "footprint_padding"
+    ] == 0.01
+    assert real["global_costmap"]["global_costmap"]["ros__parameters"][
+        "footprint_padding"
+    ] == 0.03
+    assert real["local_costmap"]["local_costmap"]["ros__parameters"][
+        "inflation_layer"
+    ]["inflation_radius"] == 0.25
+    assert real["global_costmap"]["global_costmap"]["ros__parameters"][
+        "inflation_layer"
+    ]["inflation_radius"] == 0.30
 
 
 def test_nav2_time_and_velocity_limits_are_runtime_specific():
@@ -89,6 +108,100 @@ def test_nav2_time_and_velocity_limits_are_runtime_specific():
             assert behavior["max_rotational_vel"] == 0.50
 
 
+def test_sim_real_parity_profile_matches_physical_navigation_policy():
+    simulation = nav_parameters("sim")
+    parity = load_yaml("configs/nav2_params_sim_real_parity.yaml")
+    real = nav_parameters("real")
+
+    # The established fast simulation profile stays the default and retains
+    # its independent warehouse regression envelope.
+    sim_profile = load_yaml("configs/carbot/sim.yaml")
+    assert sim_profile["nav2_params_file"].endswith(
+        "configs/nav2_params_sim.yaml"
+    )
+    assert simulation["controller_server"]["ros__parameters"][
+        "FollowPath"
+    ]["desired_linear_vel"] == 0.30
+
+    for node_name in (
+        "controller_server",
+        "planner_server",
+        "bt_navigator",
+        "behavior_server",
+        "waypoint_follower",
+        "velocity_smoother",
+        "lifecycle_manager_navigation",
+    ):
+        assert parity[node_name]["ros__parameters"]["use_sim_time"] is True
+
+    parity_controller = parity["controller_server"]["ros__parameters"]
+    real_controller = real["controller_server"]["ros__parameters"]
+    assert parity_controller["controller_frequency"] == (
+        real_controller["controller_frequency"]
+    )
+    for key in (
+        "desired_linear_vel",
+        "lookahead_dist",
+        "min_lookahead_dist",
+        "max_lookahead_dist",
+        "max_allowed_time_to_collision_up_to_carrot",
+        "rotate_to_heading_min_angle",
+        "rotate_to_heading_angular_vel",
+        "max_angular_accel",
+    ):
+        assert parity_controller["FollowPath"][key] == (
+            real_controller["FollowPath"][key]
+        )
+
+    for costmap in ("local_costmap", "global_costmap"):
+        parity_costmap = parity[costmap][costmap]["ros__parameters"]
+        real_costmap = real[costmap][costmap]["ros__parameters"]
+        assert parity_costmap["use_sim_time"] is True
+        assert parity_costmap["global_frame"] == real_costmap["global_frame"]
+        assert parity_costmap["footprint"] == real_costmap["footprint"]
+        assert parity_costmap["footprint_padding"] == (
+            real_costmap["footprint_padding"]
+        )
+        assert parity_costmap["inflation_layer"]["inflation_radius"] == (
+            real_costmap["inflation_layer"]["inflation_radius"]
+        )
+    assert parity["global_costmap"]["global_costmap"]["ros__parameters"][
+        "obstacle_layer"
+    ]["enabled"] is False
+
+    assert parity["planner_server"]["ros__parameters"]["GridBased"] == (
+        real["planner_server"]["ros__parameters"]["GridBased"]
+    )
+    assert parity["bt_navigator"]["ros__parameters"][
+        "default_nav_to_pose_bt_xml"
+    ] == real["bt_navigator"]["ros__parameters"][
+        "default_nav_to_pose_bt_xml"
+    ]
+    for key in ("max_velocity", "min_velocity", "max_accel", "max_decel"):
+        assert parity["velocity_smoother"]["ros__parameters"][key] == (
+            real["velocity_smoother"]["ros__parameters"][key]
+        )
+
+    parity_source = (
+        WORKSPACE / "configs/nav2_params_sim_real_parity.yaml"
+    ).read_text(encoding="utf-8")
+    assert "fast_lio" not in parity_source.lower()
+    assert "manual_map_localizer" not in parity_source
+
+
+def test_sim_launch_can_select_real_navigation_parity_profile():
+    launch_source = (LAUNCH_ROOT / "carbot_sim.launch.py").read_text(
+        encoding="utf-8"
+    )
+    shared_source = (LAUNCH_ROOT / "carbot_navigation.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'LaunchConfiguration("nav2_params_file")' in launch_source
+    assert '"nav2_params_file",' in launch_source
+    assert "nav2_params_sim_real_parity.yaml" in launch_source
+    assert '"params_file": nav2_params_file or profile[' in shared_source
+
+
 def test_amcl_uses_base_footprint_and_runtime_time_source():
     for runtime, use_sim_time in (("sim", True), ("real", False)):
         parameters = load_yaml(f"configs/amcl_params_{runtime}.yaml")
@@ -108,8 +221,9 @@ def test_launch_contract_has_no_legacy_odom_relay():
     assert "/chassis/odom" not in shared
     assert "topic_tools" not in shared
     assert '"sim"' in simulation
-    assert '"real"' in real
-    assert '"amcl"' in real
+    assert "carbot_navigation_real.launch.py" in real
+    assert "cmd_vel_output" in real
+    assert "amcl_initial_pose_mode" not in real
     assert "ground_truth" not in real
 
 

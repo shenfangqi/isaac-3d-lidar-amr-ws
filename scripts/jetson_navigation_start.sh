@@ -3,19 +3,16 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 MAP_YAML X_M Y_M YAW_RAD [navigation-safe|navigation-diagnostic]" >&2
+  echo "Usage: $0 MAP_YAML [navigation-safe|navigation-diagnostic]" >&2
 }
 
-if (( $# < 4 || $# > 5 )); then
+if (( $# < 1 || $# > 2 )); then
   usage
   exit 2
 fi
 
 map_yaml="$1"
-initial_x="$2"
-initial_y="$3"
-initial_yaw="$4"
-mode="${5:-navigation-safe}"
+mode="${2:-navigation-safe}"
 if [[ "${mode}" != "navigation-safe" && "${mode}" != "navigation-diagnostic" ]]; then
   usage
   exit 2
@@ -32,11 +29,16 @@ stop_on_error() {
 }
 trap stop_on_error ERR
 
+if systemctl --user is-active --quiet carbot-web-teleop.service; then
+  echo 'Stopping carbot-web-teleop.service; phone teleop and Nav2 are mutually exclusive.'
+  systemctl --user stop carbot-web-teleop.service
+fi
+
 "${script_dir}/jetson_nvblox_container.sh" recreate "${mode}" "${map_yaml}" >/dev/null
 "${script_dir}/jetson_nav_preflight.sh"
 
 docker exec "${container_name}" bash -lc \
-  "source /opt/ros/humble/setup.bash && source ${container_workspace}/install/setup.bash && python3 '${initializer}' --x '${initial_x}' --y '${initial_y}' --yaw '${initial_yaw}'"
+  "source /opt/ros/humble/setup.bash && source ${container_workspace}/install/setup.bash && python3 '${initializer}' --timeout '${CARBOT_INITIAL_POSE_TIMEOUT:-300}'"
 
 topic_count() {
   local topic="$1"

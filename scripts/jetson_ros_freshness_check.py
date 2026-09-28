@@ -6,9 +6,10 @@ import time
 
 import rclpy
 from carbot_msgs.msg import WheelTicks
+from livox_ros_driver2.msg import CustomMsg
 from nav_msgs.msg import Odometry
 from rclpy.qos import qos_profile_sensor_data
-from sensor_msgs.msg import LaserScan, PointCloud2
+from sensor_msgs.msg import LaserScan
 from tf2_ros import Buffer, TransformListener
 
 
@@ -26,7 +27,7 @@ def main() -> int:
     for topic, message_type in (
         ('/wheel_ticks', WheelTicks),
         ('/odom', Odometry),
-        ('/livox/lidar', PointCloud2),
+        ('/livox/lidar', CustomMsg),
         ('/scan', LaserScan),
     ):
         subscriptions.append(node.create_subscription(

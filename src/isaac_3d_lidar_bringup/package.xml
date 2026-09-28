@@ -29,6 +29,7 @@
   <depend>rclpy</depend>
   <depend>robot_localization</depend>
   <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
   <depend>slam_toolbox</depend>
   <depend>tf2_ros</depend>
   <depend>visualization_msgs</depend>

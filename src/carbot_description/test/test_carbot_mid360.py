@@ -41,6 +41,26 @@ def test_runtime_config_comes_from_canonical_parameters():
     }
 
 
+def test_runtime_profiles_separate_real_and_sim_pointcloud_contracts():
+    real_profile = yaml.safe_load(
+        (WORKSPACE / "configs" / "carbot" / "real.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    sim_profile = yaml.safe_load(
+        (WORKSPACE / "configs" / "carbot" / "sim.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert real_profile["pointcloud_message_type"] == (
+        "livox_ros_driver2/msg/CustomMsg"
+    )
+    assert sim_profile["pointcloud_message_type"] == (
+        "sensor_msgs/msg/PointCloud2"
+    )
+
+
 def _parameters():
     return yaml.safe_load(PARAMETER_PATH.read_text(encoding="utf-8"))
 
