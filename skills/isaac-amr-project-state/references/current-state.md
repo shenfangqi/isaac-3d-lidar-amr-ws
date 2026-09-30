@@ -1,5 +1,17 @@
 # Current authoritative project state
 
+## Automatic localization acceptance: 2026-09-30
+
+- The prior automatic-localization `READY` was a severe false positive. The repaired system scores all sampled beams, rejects unknown/outside coverage and wall-crossing rays, performs a deterministic three-scan map-wide search, and continuously rechecks the selected pose.
+- `/scan_localization` uses the operator-validated `0.22..0.35 m` height band for AMCL and quality scoring. Full-height `/scan` remains authoritative for costmaps and the `0.55 m` rotation-clearance interlock.
+- RViz `/initialpose` is forwarded to AMCL's private input with source-time and adoption checks. A real wrong pose was rejected with zero score and full wall conflict, and a subsequent correct manual pose recovered successfully.
+- AMCL now uses the beam model. Accepted candidates are not repeatedly forced through no-motion resampling, preventing the earlier static post-search drift. Scan transforms are evaluated at each scan's source time and a bounded pending queue handles one-frame TF arrival delay.
+- Three different physical starts and headings passed automatic localization. The operator confirmed the blue robot pose/direction and cyan scan alignment each time. Search best scores were `0.825`, `0.900`, and `0.872`, with distant runner scores `0.458`, `0.592`, and `0.567`.
+- Final dataset `2026-09-30_auto_activate_no_goal_04` completed a `6.300 rad` turn and selected `(2.715, 2.705, -119.0 deg)` with score `0.861`, coverage `0.989`, and wall-conflict ratio `0.061`. AMCL shifted only `1.48 cm/0.20 deg`.
+- Every Nav2 lifecycle node and required action server became active. No goal was sent. The system stayed `READY` for `109.2 s`, and 2102 recorded velocity-command samples contained zero nonzero commands.
+- `--automatic` and the launch default remain `validation_only=true`; only explicit `--automatic-activate` may activate Nav2 after all gates pass. `CANDIDATE_READY` is never navigation-ready.
+- Evidence is under `calibration_data/2026-09-30_*`; detailed conclusions are in `docs/carbot_localization_validation.md`. The maintained final stop left Nav2/RViz down, cleared the velocity latch, and restored web teleop disarmed.
+
 Session handoff and next-step procedure:
 [`docs/carbot_2026-09-21_handoff.md`](../../../docs/carbot_2026-09-21_handoff.md).
 

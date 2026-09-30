@@ -1,0 +1,120 @@
+automatic_localization_manager:
+  ros__parameters:
+    fast_lio_odom_topic: /fast_lio/imu_odom
+    odom_topic: /odom
+    # Match the same stable height band consumed by AMCL.
+    scan_topic: /scan_localization
+    # Keep close-obstacle rotation interlocks on the full collision band.
+    safety_scan_topic: /scan
+    map_topic: /map
+    amcl_pose_topic: /amcl_pose
+    initial_pose_topic: /initialpose
+    # The manager sanitizes RViz timestamps before forwarding poses to AMCL.
+    amcl_initial_pose_topic: /amcl_initialpose
+    particle_cloud_topic: /particle_cloud
+    cmd_vel_topic: /cmd_vel_command
+    global_localization_service: /reinitialize_global_localization
+    nomotion_update_service: /request_nomotion_update
+    # jetson_navigation_start.sh arms motion only after preflight passes.
+    start_armed: false
+    # Pending real positive/negative datasets and supervised acceptance.
+    validation_only: true
+    max_future_stamp_sec: 0.05
+    max_tf_future_sec: 0.6
+
+    sensor_freshness_sec: 0.5
+    # AMCL may not republish pose/particles while stopped even after a
+    # no-motion update.  Keep the end-of-rotation solution long enough for
+    # the 3 s TF window plus the 3 s quality hold; scan/TF remain live-gated.
+    localization_evidence_freshness_sec: 10.0
+    # One forced update per second is enough for the static evidence window;
+    # faster requests caused repeated resampling and measurable pose drift.
+    nomotion_update_interval_sec: 1.0
+    manual_seed_xy_std_m: 0.10
+    manual_seed_yaw_std_rad: 0.087266463
+    max_manual_pose_drift_m: 0.20
+    max_manual_pose_drift_yaw_rad: 0.174532925
+    max_candidate_pose_drift_m: 0.08
+    max_candidate_pose_drift_yaw_rad: 0.043633231
+    sensor_stable_sec: 5.0
+    startup_timeout_sec: 90.0
+    service_timeout_sec: 20.0
+    max_stationary_linear_speed: 0.02
+    max_stationary_angular_speed: 0.03
+    # Ignore isolated odometry twist spikes, but reject sustained motion.
+    stationary_motion_grace_sec: 0.3
+    max_odom_position_jump: 0.20
+    max_odom_yaw_jump: 0.35
+    min_scan_beams_for_motion: 10
+    min_rotation_clearance_m: 0.55
+    # Stop on the first close frame; fault only if it persists for this long.
+    rotation_obstacle_confirmation_sec: 0.3
+
+    # The physical tracked base does not turn reliably below about 0.40 rad/s.
+    rotation_speed_rad_s: 0.40
+    rotation_target_rad: 6.283185307179586
+    # A 0.40 rad/s command produced about 0.24 rad/s of measured yaw on the
+    # tracked base.  One full turn therefore needs about 26 s; keep margin for
+    # controller ramp-up and brief scan holds without weakening any interlock.
+    rotation_timeout_sec: 45.0
+    # A measured Jetson projection stall recovered after 2.694 s. Motion is
+    # held at zero throughout this grace period; persistent loss still faults.
+    rotation_data_grace_sec: 3.0
+    zero_command_duration_sec: 0.5
+    stopped_confirmation_sec: 1.0
+
+    verification_timeout_sec: 15.0
+    quality_hold_sec: 3.0
+    # Keep validating a stopped candidate.  This exceeds observed transient
+    # projection gaps near 3 s but revokes permanently stale evidence.
+    # Covers the observed ~3 s scan gap plus rebuilding the 3 s TF window.
+    candidate_recheck_grace_sec: 7.0
+    max_amcl_xy_std: 0.20
+    max_amcl_yaw_std: 0.15
+    min_particle_concentration: 0.65
+    particle_score_max_samples: 1000
+    particle_cluster_xy_radius: 0.75
+    particle_cluster_yaw_radius: 0.50
+    min_scan_map_score: 0.65
+    min_scan_map_coverage: 0.65
+    min_valid_scan_beams: 30
+    scan_match_tolerance_m: 0.15
+    scan_score_max_beams: 120
+    occupied_threshold: 65
+    # Deterministic post-rotation search uses endpoint, coverage and free-ray
+    # evidence, then seeds AMCL.  This prevents endpoint-only particle peaks
+    # from becoming the accepted global pose.
+    global_search_position_step_m: 0.20
+    global_search_yaw_step_rad: 0.1745329252
+    global_search_coarse_beams: 40
+    global_search_refine_count: 120
+    global_search_fine_position_step_m: 0.05
+    global_search_fine_yaw_step_rad: 0.0349065850
+    global_search_fine_position_radius_m: 0.20
+    global_search_fine_yaw_radius_rad: 0.1745329252
+    global_search_fine_seed_count: 1
+    # A second bounded refinement improves seed precision without multiplying
+    # the whole-map search.  Its 729 poses are evaluated only around the winner.
+    global_search_final_position_step_m: 0.01
+    global_search_final_yaw_step_rad: 0.0087266463
+    global_search_final_position_radius_m: 0.04
+    global_search_final_yaw_radius_rad: 0.0349065850
+    # The deterministic search already resolves the local pose more tightly
+    # than AMCL's endpoint-only model.  Preserve that evidence and explicitly
+    # reject a later particle-filter shift instead of silently accepting it.
+    global_search_seed_xy_std_m: 0.02
+    global_search_seed_yaw_std_rad: 0.0174532925
+    max_post_search_translation_drift_m: 0.08
+    max_post_search_yaw_drift_rad: 0.0436332313
+    # Three stationary frames produced the same correct winner with a 0.414
+    # margin; the Jetson measured 65.6 s versus 11.7 s on the workstation.
+    # Five near-identical frames exceeded the old 90 s deadline without adding
+    # spatial evidence, so bound production work to three and retain margin.
+    global_search_scan_count: 3
+    global_search_timeout_sec: 120.0
+    global_search_ambiguity_distance_m: 0.75
+    global_search_min_score_margin: 0.12
+    global_search_max_wall_conflict_ratio: 0.25
+    tf_window_sec: 3.0
+    max_tf_translation_span: 0.08
+    max_tf_yaw_span: 0.08

@@ -152,8 +152,81 @@ def test_real_navigation_launch_is_inactive_and_has_one_final_velocity_path():
     assert 'Use /cmd_vel_diagnostic' in launch_source
     assert "'autostart': autostart" in launch_source
     assert "executable='manual_map_localizer'" in launch_source
-    assert "executable='amcl'" not in launch_source
+    assert "condition=UnlessCondition(automatic_localization)" in launch_source
+    assert "executable='amcl'" in launch_source
+    assert launch_source.count(
+        'condition=IfCondition(automatic_localization)') == 3
     assert "'node_names': ['map_server']" in launch_source
+    assert "'node_names': ['map_server', 'amcl']" in launch_source
+    assert "'autostart': lifecycle_autostart" in launch_source
+    assert "automatic_localization, \"' == 'false'\"" in launch_source
+    assert "default_value='false'" in launch_source
+    assert "'cmd_vel_topic': cmd_vel_output" in launch_source
+    assert "'validation_only': auto_localization_validation_only" in launch_source
+    assert "default_value='true'" in launch_source
+
+
+def test_health_check_allows_read_only_command_monitors():
+    control_source = (
+        PROJECT_DIR / 'scripts/jetson_navigation_control.py'
+    ).read_text(encoding='utf-8')
+
+    assert control_source.count(
+        'observed[0] != counts[0] or observed[1] < counts[1]'
+    ) == 2
+
+
+def test_automatic_localization_defaults_preserve_safety_gates():
+    config = _load_yaml(
+        PACKAGE_DIR / 'config/nav2/carbot_auto_localization_real.yaml')
+    params = config['automatic_localization_manager']['ros__parameters']
+    assert params['rotation_speed_rad_s'] == 0.40
+    assert params['rotation_target_rad'] == pytest.approx(2.0 * 3.141592653589793)
+    assert params['min_scan_beams_for_motion'] >= 10
+    assert params['min_rotation_clearance_m'] >= 0.50
+    assert params['rotation_obstacle_confirmation_sec'] <= 0.30
+    assert params['scan_topic'] == '/scan_localization'
+    assert params['safety_scan_topic'] == '/scan'
+    assert params['max_amcl_xy_std'] <= 0.20
+    assert params['max_amcl_yaw_std'] <= 0.15
+    assert params['min_particle_concentration'] >= 0.65
+    assert params['nomotion_update_service'] == '/request_nomotion_update'
+    assert params['min_scan_map_score'] >= 0.65
+    assert params['min_scan_map_coverage'] >= 0.65
+    assert params['global_search_min_score_margin'] >= 0.10
+    assert params['global_search_max_wall_conflict_ratio'] <= 0.25
+    assert params['global_search_scan_count'] == 3
+    assert params['global_search_timeout_sec'] >= 100.0
+    assert params['quality_hold_sec'] >= params['tf_window_sec']
+    assert params['candidate_recheck_grace_sec'] >= (
+        params['tf_window_sec'] + params['sensor_freshness_sec']
+    )
+    assert params['localization_evidence_freshness_sec'] >= (
+        params['tf_window_sec'] + params['quality_hold_sec']
+    )
+    assert params['localization_evidence_freshness_sec'] < (
+        params['verification_timeout_sec']
+    )
+
+    amcl = _load_yaml(
+        PACKAGE_DIR / 'config/nav2/carbot_amcl_real.yaml')
+    amcl_params = amcl['amcl']['ros__parameters']
+    assert amcl_params['tf_broadcast'] is True
+    assert amcl_params['scan_topic'] == '/scan_localization'
+    # The manager owns map-wide discovery; AMCL uses ray-consistent local
+    # tracking after a tight seed without starving the scan watchdog.
+    assert amcl_params['laser_model_type'] == 'beam'
+    assert 400 <= amcl_params['max_particles'] <= 800
+    assert 40 <= amcl_params['max_beams'] <= 90
+    assert sum(amcl_params[name] for name in (
+        'z_hit', 'z_rand', 'z_max', 'z_short')) == pytest.approx(1.0)
+
+    launch_source = (
+        PACKAGE_DIR / 'launch/carbot_navigation_real.launch.py'
+    ).read_text(encoding='utf-8')
+    assert "name='mid360_localization_pointcloud_to_laserscan'" in launch_source
+    assert "('scan', '/scan_localization')" in launch_source
+    assert "'min_height': 0.22" in launch_source
 
 
 def test_real_mapping_uses_fast_lio_pose_and_nvblox_map_only():
@@ -228,3 +301,36 @@ def test_jetson_startup_orders_localization_pose_then_navigation():
         initializer_source.index('call_manager(node, NAVIGATION_MANAGER'))
     assert "'map', 'odom'" in initializer_source
     assert 'LIFECYCLE_NODES' in initializer_source
+
+
+def test_automatic_localization_is_armed_only_after_preflight():
+    start_source = (
+        PROJECT_DIR / 'scripts/jetson_navigation_start.sh'
+    ).read_text(encoding='utf-8')
+    container_source = (
+        PROJECT_DIR / 'scripts/jetson_nvblox_container.sh'
+    ).read_text(encoding='utf-8')
+    manager_source = (
+        PACKAGE_DIR / 'isaac_3d_lidar_bringup'
+        / 'automatic_localization_manager.py'
+    ).read_text(encoding='utf-8')
+
+    preflight = start_source.index('jetson_nav_preflight.sh')
+    arm = start_source.index('/automatic_localization/start')
+    assert preflight < arm
+    assert 'automatic_localization:=true' in container_source
+    assert container_source.count(
+        'Automatic physical localization requires navigation-safe mode.'
+    ) == 1
+    assert start_source.count(
+        'Automatic physical localization requires navigation-safe mode.'
+    ) == 1
+    assert 'State.WAIT_FOR_START' in manager_source
+    assert 'ReliabilityPolicy.BEST_EFFORT' in manager_source
+    assert 'self._command_publisher = None' in manager_source
+    assert manager_source.index('def _on_start_request') < (
+        manager_source.index(
+            'self._ensure_command_publisher()',
+            manager_source.index('def _on_start_request'),
+        )
+    )

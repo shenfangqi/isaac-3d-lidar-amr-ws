@@ -10,6 +10,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import ComposableNodeContainer, Node, SetParameter
 from launch_ros.descriptions import ComposableNode
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -22,6 +23,14 @@ def generate_launch_description():
     enable_scan = LaunchConfiguration('enable_scan')
     scan_pointcloud_topic = LaunchConfiguration('scan_pointcloud_topic')
     enable_lio = LaunchConfiguration('enable_lio')
+    map_clearing_radius_m = LaunchConfiguration('map_clearing_radius_m')
+    static_tsdf_decay_factor = LaunchConfiguration(
+        'static_tsdf_decay_factor')
+    static_decay_deallocate = LaunchConfiguration(
+        'static_decay_deallocate')
+    decay_tsdf_rate_hz = LaunchConfiguration('decay_tsdf_rate_hz')
+    clear_map_outside_radius_rate_hz = LaunchConfiguration(
+        'clear_map_outside_radius_rate_hz')
 
     lio_odometry = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -46,6 +55,19 @@ def generate_launch_description():
                 'use_color': False,
                 'use_lidar': True,
                 'input_qos': 'SENSOR_DATA',
+                # These must be supplied before the component is constructed.
+                # Runtime ros2 param writes can update the parameter server
+                # without rebuilding nvblox's clearing/decay internals.
+                'map_clearing_radius_m': ParameterValue(
+                    map_clearing_radius_m, value_type=float),
+                'static_mapper.tsdf_decay_factor': ParameterValue(
+                    static_tsdf_decay_factor, value_type=float),
+                'static_mapper.decay_integrator_deallocate_decayed_blocks':
+                    ParameterValue(static_decay_deallocate, value_type=bool),
+                'decay_tsdf_rate_hz': ParameterValue(
+                    decay_tsdf_rate_hz, value_type=float),
+                'clear_map_outside_radius_rate_hz': ParameterValue(
+                    clear_map_outside_radius_rate_hz, value_type=float),
             },
         ],
     )
@@ -146,6 +168,32 @@ def generate_launch_description():
             'scan_pointcloud_topic',
             default_value='/fast_lio/cloud_registered_body',
             description='PointCloud2 input used for the 2D obstacle scan.',
+        ),
+        DeclareLaunchArgument(
+            'map_clearing_radius_m',
+            default_value='7.0',
+            description='Radius retained by nvblox rolling-map clearing.',
+        ),
+        DeclareLaunchArgument(
+            'static_tsdf_decay_factor',
+            default_value='0.95',
+            description='Static TSDF weight multiplier applied during decay.',
+        ),
+        DeclareLaunchArgument(
+            'static_decay_deallocate',
+            default_value='true',
+            choices=['true', 'false'],
+            description='Deallocate static blocks after their weights decay.',
+        ),
+        DeclareLaunchArgument(
+            'decay_tsdf_rate_hz',
+            default_value='5.0',
+            description='Static TSDF decay frequency; non-positive disables it.',
+        ),
+        DeclareLaunchArgument(
+            'clear_map_outside_radius_rate_hz',
+            default_value='1.0',
+            description='Radius-clearing frequency; non-positive disables it.',
         ),
         SetParameter(name='use_sim_time', value=False),
         lio_odometry,

@@ -27,6 +27,7 @@ Thumbs.db
 # Runtime captures and local datasets
 bags/
 datasets/
+calibration_data/
 *.bag
 *.db3
 *.mcap

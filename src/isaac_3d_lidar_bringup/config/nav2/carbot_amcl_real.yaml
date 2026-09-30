@@ -9,7 +9,7 @@ amcl:
     base_frame_id: base_footprint
     odom_frame_id: odom
     global_frame_id: map
-    scan_topic: /scan
+    scan_topic: /scan_localization
     tf_broadcast: true
     robot_model_type: nav2_amcl::DifferentialMotionModel
     alpha1: 0.20
@@ -24,22 +24,32 @@ amcl:
     update_min_d: 0.05
     update_min_a: 0.05
     resample_interval: 2
-    laser_model_type: likelihood_field_prob
+    # The likelihood-field endpoint model repeatedly pulled a correct static
+    # seed past the geometric scan optimum.  The beam model also evaluates
+    # free space along each ray, matching the manager's wall-conflict gate.
+    laser_model_type: beam
     laser_min_range: 0.5
     laser_max_range: 20.0
-    max_beams: 180
+    # Beam ray tracing is more expensive than endpoint lookup.  Global search
+    # is external, so a compact local cloud and 60 beams are sufficient here.
+    max_beams: 60
     laser_likelihood_max_dist: 2.0
-    sigma_hit: 0.20
+    sigma_hit: 0.15
     z_hit: 0.80
-    z_rand: 0.20
-    z_max: 0.0
-    z_short: 0.0
-    do_beamskip: true
+    z_rand: 0.10
+    z_max: 0.05
+    z_short: 0.05
+    lambda_short: 0.10
+    do_beamskip: false
     beam_skip_distance: 0.5
     beam_skip_threshold: 0.3
     beam_skip_error_threshold: 0.9
-    min_particles: 800
-    max_particles: 3000
+    min_particles: 400
+    # Global discovery is performed by the manager's deterministic map search.
+    # AMCL now receives a tight local seed after the robot stops, so a 3000
+    # particle global cloud only adds CPU stalls and can pull the seed toward
+    # an endpoint-only local optimum.
+    max_particles: 800
     pf_err: 0.03
     pf_z: 0.99
     # Post-date map->odom beyond the longest measured scan/update gap. Odom

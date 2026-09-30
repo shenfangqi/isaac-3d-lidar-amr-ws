@@ -5,8 +5,9 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 
 
@@ -16,12 +17,22 @@ def generate_launch_description():
         bringup_dir, 'config', 'nav2', 'carbot_amcl_real.yaml')
     navigation_config = os.path.join(
         bringup_dir, 'config', 'nav2', 'carbot_navigation_real.yaml')
+    auto_localization_config = os.path.join(
+        bringup_dir, 'config', 'nav2',
+        'carbot_auto_localization_real.yaml')
     lio_launch = os.path.join(
         bringup_dir, 'launch', 'mid360_fast_lio_odometry.launch.py')
 
     map_yaml = LaunchConfiguration('map')
     autostart = LaunchConfiguration('autostart')
     cmd_vel_output = LaunchConfiguration('cmd_vel_output')
+    automatic_localization = LaunchConfiguration('automatic_localization')
+    auto_localization_validation_only = LaunchConfiguration(
+        'auto_localization_validation_only')
+    lifecycle_autostart = PythonExpression([
+        "'", autostart, "' == 'true' and '",
+        automatic_localization, "' == 'false'",
+    ])
 
     lio_odometry = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(lio_launch),
@@ -55,6 +66,36 @@ def generate_launch_description():
         output='screen',
     )
 
+    # Localization uses the upper part of the saved-map obstacle slice.  The
+    # broader /scan remains the safety and costmap source so low obstacles are
+    # never hidden from motion checks.
+    localization_scan_projection = Node(
+        package='pointcloud_to_laserscan',
+        executable='pointcloud_to_laserscan_node',
+        name='mid360_localization_pointcloud_to_laserscan',
+        remappings=[
+            ('cloud_in', '/fast_lio/cloud_registered_body'),
+            ('scan', '/scan_localization'),
+        ],
+        parameters=[{
+            'use_sim_time': False,
+            'target_frame': 'base_footprint',
+            'transform_tolerance': 0.05,
+            'queue_size': 30,
+            'min_height': 0.22,
+            'max_height': 0.35,
+            'angle_min': -3.141592654,
+            'angle_max': 3.141592654,
+            'angle_increment': 0.017453293,
+            'scan_time': 0.1,
+            'range_min': 0.5,
+            'range_max': 20.0,
+            'use_inf': True,
+            'inf_epsilon': 1.0,
+        }],
+        output='screen',
+    )
+
     map_server = Node(
         package='nav2_map_server',
         executable='map_server',
@@ -72,9 +113,19 @@ def generate_launch_description():
             'base_frame': 'base_footprint',
             'publish_rate': 20.0,
         }],
+        condition=UnlessCondition(automatic_localization),
         output='screen',
     )
-    localization_lifecycle = Node(
+    amcl = Node(
+        package='nav2_amcl',
+        executable='amcl',
+        name='amcl',
+        parameters=[amcl_config],
+        remappings=[('initialpose', '/amcl_initialpose')],
+        condition=IfCondition(automatic_localization),
+        output='screen',
+    )
+    manual_localization_lifecycle = Node(
         package='nav2_lifecycle_manager',
         executable='lifecycle_manager',
         name='lifecycle_manager_localization',
@@ -83,6 +134,19 @@ def generate_launch_description():
             'autostart': autostart,
             'node_names': ['map_server'],
         }],
+        condition=UnlessCondition(automatic_localization),
+        output='screen',
+    )
+    automatic_localization_lifecycle = Node(
+        package='nav2_lifecycle_manager',
+        executable='lifecycle_manager',
+        name='lifecycle_manager_localization',
+        parameters=[{
+            'use_sim_time': False,
+            'autostart': False,
+            'node_names': ['map_server', 'amcl'],
+        }],
+        condition=IfCondition(automatic_localization),
         output='screen',
     )
 
@@ -140,7 +204,7 @@ def generate_launch_description():
         name='lifecycle_manager_navigation',
         parameters=[{
             'use_sim_time': False,
-            'autostart': autostart,
+            'autostart': lifecycle_autostart,
             'node_names': [
                 'controller_server',
                 'planner_server',
@@ -150,6 +214,20 @@ def generate_launch_description():
                 'velocity_smoother',
             ],
         }],
+        output='screen',
+    )
+    automatic_localization_manager = Node(
+        package='isaac_3d_lidar_bringup',
+        executable='automatic_localization_manager',
+        name='automatic_localization_manager',
+        parameters=[
+            auto_localization_config,
+            {
+                'cmd_vel_topic': cmd_vel_output,
+                'validation_only': auto_localization_validation_only,
+            },
+        ],
+        condition=IfCondition(automatic_localization),
         output='screen',
     )
 
@@ -174,11 +252,33 @@ def generate_launch_description():
                 'non-actuating control-pipeline diagnostic.'
             ),
         ),
+        DeclareLaunchArgument(
+            'automatic_localization',
+            default_value='false',
+            choices=['true', 'false'],
+            description=(
+                'Run guarded AMCL global localization before activating '
+                'navigation. This forces lifecycle autostart off.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'auto_localization_validation_only',
+            default_value='true',
+            choices=['true', 'false'],
+            description=(
+                'Keep Nav2 inactive after a valid automatic localization. '
+                'The maintained --automatic-activate entry is the only '
+                'physical workflow that sets this false.'
+            ),
+        ),
         lio_odometry,
         scan_projection,
+        localization_scan_projection,
         map_server,
         manual_localizer,
-        localization_lifecycle,
+        amcl,
+        manual_localization_lifecycle,
+        automatic_localization_lifecycle,
         controller,
         planner,
         behaviors,
@@ -186,4 +286,5 @@ def generate_launch_description():
         waypoint_follower,
         velocity_smoother,
         navigation_lifecycle,
+        automatic_localization_manager,
     ])
