@@ -50,6 +50,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'automatic_localization_manager = '
+            'isaac_3d_lidar_bringup.automatic_localization_manager:main',
             'amcl_pose_initializer = '
             'isaac_3d_lidar_bringup.amcl_pose_initializer:main',
             'pointcloud_padder = '

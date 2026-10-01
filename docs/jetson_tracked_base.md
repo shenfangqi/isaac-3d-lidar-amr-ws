@@ -99,20 +99,51 @@ scripts/jetson_nav_preflight.sh
 在限时内收到新数据。任何一项失败都会返回非零状态并提示不得激活 Nav2；脚本
 自身不发布速度、不改 lifecycle 状态。
 
-正式加载保存地图时统一使用下面的无运动启动入口，不再手工逐条调用生命周期服务：
+正式加载保存地图时，自动定位使用下面的入口：
 
 ```bash
 scripts/jetson_navigation_start.sh \
   /home/shenfq/Projects/isaac_ros-dev/maps/real/carbot_site_route_retry_20260919.yaml \
-  INITIAL_X_M INITIAL_Y_M INITIAL_YAW_RAD navigation-safe
+  auto navigation-safe
 ```
 
-脚本固定执行“重建未激活容器 → 只读前置检查 → 激活 map_server/AMCL → 发布并
+该模式固定执行“重建未激活容器 → 只读前置检查 → 解锁自动定位 → 等待
+FAST-LIO2 稳定 → AMCL 全局撒粒子 → 低速原地旋转 → 联合可信度检查 → 激活
+导航”。前置检查完成之前，自动定位节点停在 `WAIT_FOR_START`，不创建速度发布者。
+定位旋转按 `/odom` 的实际角度累计，不按固定时间估算。
+
+自动定位同时检查 AMCL 协方差、粒子主簇集中度、`/scan` 与静态地图的端点吻合度，
+以及 `map -> odom` 在连续窗口中的稳定程度。通过后仍由 AMCL 独占发布动态
+`map -> odom`，不会额外创建冲突的静态 TF；成功时只激活导航，不会自动发送
+Goal。
+
+如果自动定位不可信，脚本返回状态 3，底盘保持零速，导航保持 inactive，容器保留
+以便人工恢复。此时在 RViz 点击一次 `2D Pose Estimate`；管理节点收到
+`/initialpose` 后会重新执行同一套可信度检查，通过后自动激活导航。可用下面的命令
+查看当前状态：
+
+```bash
+ros2 topic echo /automatic_localization/status \
+  --qos-durability transient_local --once
+```
+
+传感器、TF 或 lifecycle 等基础设施故障会进入 `FAULT_STOPPED`，不会错误提示人工
+重定位；应先按 `failure_reason` 修复故障。自动物理定位只允许
+`navigation-safe`，不能使用不会驱动底盘的 `navigation-diagnostic`。
+
+已经测量出初始地图坐标时，保留固定初始位姿入口作为回退：
+
+```bash
+scripts/jetson_navigation_start.sh \
+  /home/shenfq/Projects/isaac_ros-dev/maps/real/carbot_site_route_retry_20260919.yaml \
+  fixed INITIAL_X_M INITIAL_Y_M INITIAL_YAW_RAD navigation-safe
+```
+
+固定模式执行“重建未激活容器 → 只读前置检查 → 激活 map_server/AMCL → 发布并
 确认初始位姿和 `map -> odom` → 激活导航节点 → 核对生命周期、速度拓扑与静默”
-顺序。任一步失败都会停止容器；成功时也不会发送导航目标。短生命周期 DDS 客户端
-统一在一个 Python 初始化进程内执行，并预留发现稳定时间，避免此前偶发的服务发现
-超时。若只调控制链，末尾改为 `navigation-diagnostic`，最终输出会被隔离到
-`/cmd_vel_diagnostic`，真实 `/cmd_vel` 保持零发布者。
+顺序。旧的 `MAP X Y YAW [MODE]` 参数形式继续兼容。若只调控制链，末尾改为
+`navigation-diagnostic`，最终输出会被隔离到 `/cmd_vel_diagnostic`，真实
+`/cmd_vel` 保持零发布者；自动定位的实车旋转验收必须使用 `navigation-safe`。
 
 2026-09-19 的首次移动建图发现，原 `0.30 rad/s` 实车 Nav2 转向上限低于履带
 可靠启动门槛：`+0.20 rad/s` 短脉冲产生 `0--0.8°`，`+0.30 rad/s × 2 s`

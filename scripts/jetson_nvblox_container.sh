@@ -13,6 +13,7 @@ usage() {
   echo "Usage: $0 {start|recreate|stop|status|logs} [compact|full|mapping]" >&2
   echo "       $0 {start|recreate} navigation-safe MAP_YAML" >&2
   echo "       $0 {start|recreate} navigation-diagnostic MAP_YAML" >&2
+  echo "       Append 'auto' for validation or 'auto-activate' for guarded Nav2 activation." >&2
 }
 
 mode="${2:-compact}"
@@ -47,10 +48,25 @@ case "${mode}" in
     fi
     container_map_yaml="/workspaces/isaac_ros-dev${map_yaml#${workspace}}"
     printf -v quoted_container_map '%q' "${container_map_yaml}"
+    initialization="${4:-manual}"
+    if [[ "${initialization}" != "manual" && "${initialization}" != "auto" && "${initialization}" != "auto-activate" ]]; then
+      echo "Initialization must be 'manual', 'auto', or 'auto-activate'." >&2
+      exit 2
+    fi
+    if [[ "${initialization}" != "manual" && "${mode}" != "navigation-safe" ]]; then
+      echo "Automatic physical localization requires navigation-safe mode." >&2
+      exit 2
+    fi
+    auto_launch_argument=""
+    if [[ "${initialization}" == "auto" ]]; then
+      auto_launch_argument=" automatic_localization:=true"
+    elif [[ "${initialization}" == "auto-activate" ]]; then
+      auto_launch_argument=" automatic_localization:=true auto_localization_validation_only:=false"
+    fi
     if [[ "${mode}" == "navigation-diagnostic" ]]; then
-      launch_command="carbot_navigation_real.launch.py map:=${quoted_container_map} autostart:=false cmd_vel_output:=/cmd_vel_diagnostic"
+      launch_command="carbot_navigation_real.launch.py map:=${quoted_container_map} autostart:=false cmd_vel_output:=/cmd_vel_diagnostic${auto_launch_argument}"
     else
-      launch_command="carbot_navigation_real.launch.py map:=${quoted_container_map} autostart:=false"
+      launch_command="carbot_navigation_real.launch.py map:=${quoted_container_map} autostart:=false${auto_launch_argument}"
     fi
     ;;
   *) usage; exit 2 ;;

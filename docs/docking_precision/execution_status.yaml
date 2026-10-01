@@ -1,0 +1,120 @@
+schema_version: 1
+design_version: "1.0"
+design_date: "2026-09-30"
+project: carbot_precision_docking_navigation
+overall_status: DESIGN_ONLY
+current_stage: S00
+hardware_acceptance_valid: false
+motion_authorization: NOT_GRANTED_BY_THIS_DOCUMENT
+status_values: [NOT_STARTED, IN_PROGRESS, PASS, FAIL, WAITING_FOR_HARDWARE]
+scope:
+  navigation: true
+  contact_insertion: false
+  charging: false
+acceptance:
+  final_lateral_m: 0.010
+  final_longitudinal_m: 0.015
+  final_yaw_rad: 0.01745329252
+  stationary_hold_s: 1.0
+  frozen_trials: 100
+  minimum_first_attempt_successes: 95
+baseline:
+  design_head: 2c3aec51d03b3bf8adbbf6d38cdb9060576a572d
+  implementation_head: null
+  working_tree_snapshot: null
+  deployment_version: null
+  cloud_type_verified: false
+  hardware_profile_hash: null
+stages:
+  - id: S00
+    name: 基线核验与接口冻结
+    depends_on: []
+    status: NOT_STARTED
+    artifacts: []
+    evidence: []
+    gate_result: null
+  - id: S01
+    name: 标记板与独立测量方案
+    depends_on: [S00]
+    status: NOT_STARTED
+    artifacts: []
+    evidence: []
+    gate_result: null
+  - id: S02
+    name: 数据采集与点云适配
+    depends_on: [S01]
+    status: NOT_STARTED
+    artifacts: []
+    evidence: []
+    gate_result: null
+  - id: S03
+    name: 静态检测与相对位姿
+    depends_on: [S02]
+    status: NOT_STARTED
+    artifacts: []
+    evidence: []
+    gate_result: null
+  - id: S04
+    name: 时间一致性与动态跟踪
+    depends_on: [S03]
+    status: NOT_STARTED
+    artifacts: []
+    evidence: []
+    gate_result: null
+  - id: S05
+    name: 低速直行与停车能力关卡
+    depends_on: [S04]
+    status: NOT_STARTED
+    artifacts: []
+    evidence: []
+    gate_result: null
+  - id: S06
+    name: 控制器与状态机离线验证
+    depends_on: [S05]
+    status: NOT_STARTED
+    artifacts: []
+    evidence: []
+    gate_result: null
+  - id: S07
+    name: 仲裁与零运动集成
+    depends_on: [S06]
+    status: NOT_STARTED
+    artifacts: []
+    evidence: []
+    gate_result: null
+  - id: S08
+    name: 局部精确倒车实车验证
+    depends_on: [S07]
+    status: NOT_STARTED
+    artifacts: []
+    evidence: []
+    gate_result: null
+  - id: S09
+    name: 全局导航与局部交接
+    depends_on: [S08]
+    status: NOT_STARTED
+    artifacts: []
+    evidence: []
+    gate_result: null
+  - id: S10
+    name: 故障与锁定参数的最终验收
+    depends_on: [S09]
+    status: NOT_STARTED
+    artifacts: []
+    evidence: []
+    gate_result: null
+  - id: S11
+    name: 部署手册与最终交接
+    depends_on: [S10]
+    status: NOT_STARTED
+    artifacts: []
+    evidence: []
+    gate_result: null
+handoff:
+  last_updated: null
+  last_passed_stage: null
+  blocking_items: []
+  independent_work_remaining: []
+  next_action: 阅读完整设计与项目技能，记录工作区及部署接口基线，开始 S00。
+  running_hardware_processes: NOT_INSPECTED
+  change_log: []

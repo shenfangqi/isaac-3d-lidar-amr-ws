@@ -28,7 +28,7 @@ Visualization Manager:
         Durability Policy: Transient Local
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /robot_description
+        Value: /carbot_workstation/robot_description
       Enabled: true
       Name: Carbot
       Visual Enabled: true
@@ -86,7 +86,7 @@ Visualization Manager:
       Class: rviz_default_plugins/PointCloud2
       Color Transformer: AxisColor
       Decay Time: 0.25
-      Enabled: true
+      Enabled: false
       Name: Mid360 PointCloud
       Position Transformer: XYZ
       Selectable: true
@@ -102,24 +102,45 @@ Visualization Manager:
         Value: /livox/lidar
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Class: rviz_default_plugins/LaserScan
-      Color: 255; 80; 40
-      Decay Time: 0
+      Color: 255; 0; 0
+      Color Transformer: FlatColor
+      Decay Time: 0.5
       Enabled: true
       Name: Navigation Scan
       Position Transformer: XYZ
       Selectable: true
-      Size (Pixels): 4
+      Size (Pixels): 5
       Style: Points
       Topic:
         Depth: 5
         Durability Policy: Volatile
-        Filter size: 10
+        Filter size: 100
         History Policy: Keep Last
         Reliability Policy: Best Effort
         Value: /scan
+      Use Fixed Frame: true
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/LaserScan
+      Color: 0; 255; 255
+      Color Transformer: FlatColor
+      Decay Time: 0.5
+      Enabled: true
+      Name: Localization Scan
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 10
+      Style: Points
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 100
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /scan_localization
       Use Fixed Frame: true
       Value: true
     - Class: rviz_default_plugins/MarkerArray
@@ -205,13 +226,13 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 7
+      Distance: 3
       Focal Point:
-        X: 0
-        Y: 0
+        X: 2.716
+        Y: 3.154
         Z: 0
       Name: Orbit
-      Pitch: 0.85
+      Pitch: 1.2
       Target Frame: map
       Yaw: 0.75
 Window Geometry:

@@ -49,6 +49,17 @@ def generate_launch_description():
             'enable_scan': 'true',
             'scan_pointcloud_topic': '/fast_lio/cloud_registered_body',
             'enable_lio': 'false',
+            # Whole-area mapping must be cumulative from component startup.
+            # Supplying these here avoids the 7 m rolling defaults used by
+            # navigation and avoids ineffective post-start parameter writes.
+            'map_clearing_radius_m': '1000.0',
+            # nvblox requires the constructor value to be strictly below 1.0.
+            # Disable the decay tick itself, then the runbook sets the exposed
+            # factor to 1.0 after startup for independent verification.
+            'static_tsdf_decay_factor': '0.95',
+            'static_decay_deallocate': 'false',
+            'decay_tsdf_rate_hz': '0.0',
+            'clear_map_outside_radius_rate_hz': '0.0',
         }.items(),
     )
 
