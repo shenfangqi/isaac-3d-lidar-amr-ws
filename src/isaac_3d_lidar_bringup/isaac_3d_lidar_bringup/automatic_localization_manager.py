@@ -6,6 +6,7 @@ from enum import Enum
 import json
 import math
 import time
+import uuid
 
 from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
 from nav2_msgs.msg import ParticleCloud
@@ -76,6 +77,7 @@ class AutomaticLocalizationManager(Node):
     def __init__(self):
         """Create subscriptions, services, safety state, and the timer."""
         super().__init__('automatic_localization_manager')
+        self._status_instance_id = uuid.uuid4().hex
         self._declare_parameters()
         # Immutable for this run; dynamic parameter changes cannot enable Nav2.
         # The maintained launcher defaults this to true and only its explicit
@@ -1370,6 +1372,9 @@ class AutomaticLocalizationManager(Node):
             return round(now - value, 3)
 
         data = {
+            'instance_id': self._status_instance_id,
+            'source_stamp_ns': self.get_clock().now().nanoseconds,
+            'evidence_epoch_ns': self._evidence_epoch_ns,
             'state': self._state.value,
             'ready': self._state == State.READY,
             'validation_only': self._validation_only,

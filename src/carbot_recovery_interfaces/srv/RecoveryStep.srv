@@ -1,0 +1,15 @@
+uint8 START=0
+uint8 TICK=1
+uint8 STOP=2
+uint8 operation
+string token
+geometry_msgs/PoseStamped original_goal
+uint64 failed_path_fingerprint
+---
+uint8 RUNNING=0
+uint8 SUCCEEDED=1
+uint8 FAILED=2
+uint8 status
+string reason
+geometry_msgs/Twist command
+float64 distance_used_m

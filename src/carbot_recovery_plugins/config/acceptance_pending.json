@@ -1,0 +1,8 @@
+{
+  "physical_acceptance_complete": false,
+  "evidence_directory": "",
+  "braking_distance_m": null,
+  "braking_yaw_rad": null,
+  "position_margin_m": null,
+  "max_odom_gap_sec": null
+}

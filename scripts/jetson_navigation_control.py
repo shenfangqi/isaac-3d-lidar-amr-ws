@@ -2,6 +2,7 @@
 """Reliable lifecycle and health operations for physical Carbot navigation."""
 
 import argparse
+from collections import deque
 import sys
 import time
 
@@ -176,11 +177,30 @@ def wait_for_map_tf(node, timeout_s):
 
 
 def assert_fresh_scan(node, timeout_s):
-    received = False
+    # Receipt alone used to accept scans which Nav2 could not transform and
+    # discarded. Allow TF to arrive after the scan, but check its source time.
+    pending = deque(maxlen=20)
+    buffer = Buffer()
+    listener = TransformListener(buffer, node)
+    valid_stamps = set()
 
-    def callback(_message):
-        nonlocal received
-        received = True
+    def callback(message):
+        pending.append(message)
+
+    def usable():
+        now = node.get_clock().now().nanoseconds
+        for message in list(pending):
+            stamp = rclpy.time.Time.from_msg(message.header.stamp)
+            age = (now - stamp.nanoseconds) * 1e-9
+            if age > 0.5:
+                pending.remove(message)
+                continue
+            if age < -0.1:
+                continue
+            if buffer.can_transform('map', message.header.frame_id, stamp):
+                valid_stamps.add(stamp.nanoseconds)
+                pending.remove(message)
+        return len(valid_stamps) >= 5
 
     qos = QoSProfile(
         depth=5,
@@ -189,9 +209,11 @@ def assert_fresh_scan(node, timeout_s):
     )
     subscription = node.create_subscription(LaserScan, '/scan', callback, qos)
     try:
-        spin_until(node, lambda: received, timeout_s, '/scan')
+        spin_until(node, usable, timeout_s,
+                   'five fresh scans with source-time map TF')
     finally:
         node.destroy_subscription(subscription)
+        del listener
 
 
 def assert_cmd_vel_safe(node, duration_s):

@@ -1,0 +1,3 @@
+<library path="carbot_recovery_plugins">
+  <class name="carbot_recovery_plugins/EvidenceLayer" type="carbot_recovery_plugins::EvidenceLayer" base_class_type="nav2_costmap_2d::Layer"/>
+</library>

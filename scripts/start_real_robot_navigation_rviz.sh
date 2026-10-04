@@ -19,21 +19,25 @@ display="${DISPLAY:-:1}"
 xauthority="${XAUTHORITY:-/run/user/$(id -u)/gdm/Xauthority}"
 initial_pose_timeout="${CARBOT_INITIAL_POSE_TIMEOUT:-600}"
 health_check_only=false
-automatic_localization=false
-automatic_activation=false
+# Normal startup uses the merged guarded localization flow and activates Nav2
+# only after the automatic map match passes. Manual alignment remains an
+# explicit recovery mode instead of a step required on every boot.
+automatic_localization=true
+automatic_activation=true
 stationary_validation=false
 map_argument_seen=false
 
 usage() {
   cat <<EOF
-Usage: $0 [--health-check] [--automatic|--automatic-activate] [MAP_YAML]
+Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [MAP_YAML]
 
 Start saved-map navigation for the physical Carbot and open RViz.
 
 Options:
   --health-check  Validate an already-running navigation stack without changes.
+  --manual        Require RViz 2D Pose Estimate before activating Nav2.
   --automatic     Rotate, score, and stop at CANDIDATE_READY; Nav2 stays inactive.
-  --automatic-activate  Rotate, validate, then activate Nav2 without sending a goal.
+  --automatic-activate  Rotate, validate, then activate Nav2 without sending a goal (default).
   --validation-only  Alias for --automatic (does include rotation).
   --stationary-validation  No rotation; prepare manual reference and keep Nav2 inactive.
   -h, --help      Show this help.
@@ -55,14 +59,21 @@ while (( $# > 0 )); do
       ;;
     --stationary-validation)
       automatic_localization=true
+      automatic_activation=false
       stationary_validation=true
       ;;
     --validation-only|--automatic)
       automatic_localization=true
+      automatic_activation=false
       ;;
     --automatic-activate)
       automatic_localization=true
       automatic_activation=true
+      ;;
+    --manual)
+      automatic_localization=false
+      automatic_activation=false
+      stationary_validation=false
       ;;
     -h|--help)
       usage
@@ -427,7 +438,7 @@ run_automatic_localization() {
   remote_ros \
     "timeout --kill-after=1s 30s ros2 service call ${service} std_srvs/srv/Trigger '{}'" || return 1
   remote docker exec carbot-nvblox bash -lc \
-    'source /opt/ros/humble/setup.bash; source /workspaces/isaac_ros-dev/install/setup.bash; exec python3 /tmp/jetson_navigation_wait.py --timeout 230'
+    "source /opt/ros/humble/setup.bash; source /workspaces/isaac_ros-dev/install/setup.bash; exec python3 /tmp/jetson_navigation_wait.py --timeout ${initial_pose_timeout}"
 }
 
 require_command docker

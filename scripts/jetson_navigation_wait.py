@@ -7,7 +7,7 @@ import time
 
 import rclpy
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 
 
 def parse_args():
@@ -60,6 +60,22 @@ def main():
     )
     subscription = node.create_subscription(
         String, '/automatic_localization/status', on_status, qos
+    )
+    # The odometry adapter can latch a fault while the localization manager
+    # is still waiting for sensors. Do not wait out the full startup timeout
+    # after the source has deliberately stopped publishing odometry/TF.
+    def on_emergency_stop(message):
+        if message.data:
+            result['code'] = 4
+            result['status'] = {
+                'state': 'FAULT_STOPPED',
+                'failure_reason': 'localization emergency stop asserted',
+                'source': '/localization/emergency_stop',
+            }
+            print('LOCALIZATION_EMERGENCY_STOP: aborting startup', flush=True)
+
+    emergency_subscription = node.create_subscription(
+        Bool, '/localization/emergency_stop', on_emergency_stop, qos
     )
     deadline = time.monotonic() + args.timeout
     while (

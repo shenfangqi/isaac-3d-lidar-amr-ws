@@ -4,7 +4,7 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression
@@ -29,6 +29,10 @@ def generate_launch_description():
     automatic_localization = LaunchConfiguration('automatic_localization')
     auto_localization_validation_only = LaunchConfiguration(
         'auto_localization_validation_only')
+    recovery_enabled = LaunchConfiguration('bounded_recovery_enabled')
+    acceptance_profile = LaunchConfiguration('recovery_acceptance_profile')
+    recovery_validation_preview = LaunchConfiguration(
+        'recovery_validation_preview')
     lifecycle_autostart = PythonExpression([
         "'", autostart, "' == 'true' and '",
         automatic_localization, "' == 'false'",
@@ -50,7 +54,10 @@ def generate_launch_description():
             'use_sim_time': False,
             'target_frame': 'base_footprint',
             'transform_tolerance': 0.05,
-            'queue_size': 30,
+            # At 10 Hz, a deep TF filter queue can release seconds-old scans
+            # after a CPU scheduling pause. Keep only a short transform grace
+            # window so Nav2 and recovery guards never consume stale geometry.
+            'queue_size': 3,
             'min_height': 0.10,
             # Preserve 0.11 m above the top-mounted MID-360.
             'max_height': 0.35,
@@ -81,7 +88,7 @@ def generate_launch_description():
             'use_sim_time': False,
             'target_frame': 'base_footprint',
             'transform_tolerance': 0.05,
-            'queue_size': 30,
+            'queue_size': 3,
             'min_height': 0.22,
             'max_height': 0.35,
             'angle_min': -3.141592654,
@@ -156,6 +163,7 @@ def generate_launch_description():
         name='controller_server',
         parameters=[navigation_config],
         remappings=[('cmd_vel', 'cmd_vel_nav')],
+        condition=UnlessCondition(recovery_enabled),
         output='screen',
     )
     planner = Node(
@@ -171,6 +179,7 @@ def generate_launch_description():
         name='behavior_server',
         parameters=[navigation_config],
         remappings=[('cmd_vel', 'cmd_vel_nav')],
+        condition=UnlessCondition(recovery_enabled),
         output='screen',
     )
     bt_navigator = Node(
@@ -178,6 +187,7 @@ def generate_launch_description():
         executable='bt_navigator',
         name='bt_navigator',
         parameters=[navigation_config],
+        condition=UnlessCondition(recovery_enabled),
         output='screen',
     )
     waypoint_follower = Node(
@@ -230,8 +240,62 @@ def generate_launch_description():
         condition=IfCondition(automatic_localization),
         output='screen',
     )
+    recovery_preview = Node(
+        package='carbot_nav_recovery',
+        executable='recovery_validation_visualizer',
+        name='carbot_nav_recovery_validation',
+        parameters=[{
+            'costmap_topic': '/local_costmap/costmap_raw',
+            'marker_topic': '/carbot_nav_recovery/markers',
+            'base_frame': 'base_footprint',
+            'localization_valid': False,
+            'footprint_xy': [0.155, 0.133, 0.155, -0.133,
+                             -0.130, -0.133, -0.130, 0.133],
+        }],
+        condition=IfCondition(recovery_validation_preview),
+        output='screen',
+    )
+    recovery_runtime_observer = Node(
+        package='carbot_nav_recovery',
+        executable='recovery_runtime_observer',
+        name='carbot_recovery_runtime_observer',
+        parameters=[{'global_frame': 'map', 'base_frame': 'base_footprint'}],
+        condition=IfCondition(PythonExpression([
+            "'", recovery_validation_preview, "' == 'true' and '",
+            recovery_enabled, "' == 'false'"])),
+        output='screen',
+    )
+
+    def configure_recovery(context):
+        if recovery_enabled.perform(context) != 'true':
+            return []
+        profile = acceptance_profile.perform(context)
+        if not profile or not os.path.isfile(profile):
+            raise RuntimeError('bounded recovery requires a physical acceptance profile')
+        if automatic_localization.perform(context) != 'true':
+            raise RuntimeError('bounded recovery requires automatic localization status')
+        plugin_dir = get_package_share_directory('carbot_recovery_plugins')
+        overlay = os.path.join(plugin_dir, 'config', 'recovery_overlay.yaml')
+        tree = os.path.join(plugin_dir, 'behavior_trees', 'bounded_recovery.xml')
+        return [
+            Node(package='nav2_controller', executable='controller_server',
+                 name='controller_server', parameters=[navigation_config, overlay],
+                 remappings=[('cmd_vel', 'cmd_vel_nav')], output='screen'),
+            Node(package='nav2_behaviors', executable='behavior_server',
+                 name='behavior_server', parameters=[navigation_config, overlay],
+                 remappings=[('cmd_vel', 'cmd_vel_nav')], output='screen'),
+            Node(package='nav2_bt_navigator', executable='bt_navigator',
+                 name='bt_navigator', parameters=[navigation_config, overlay,
+                   {'default_nav_to_pose_bt_xml': tree}], output='screen'),
+            Node(package='carbot_nav_recovery', executable='recovery_coordinator',
+                 name='carbot_recovery_runtime_observer',
+                 parameters=[{'acceptance_profile': profile}], output='screen'),
+        ]
 
     return LaunchDescription([
+        DeclareLaunchArgument('bounded_recovery_enabled', default_value='false',
+                              choices=['true', 'false']),
+        DeclareLaunchArgument('recovery_acceptance_profile', default_value=''),
         DeclareLaunchArgument(
             'map',
             description='Absolute path to the real-robot Nav2 map YAML.',
@@ -271,6 +335,16 @@ def generate_launch_description():
                 'physical workflow that sets this false.'
             ),
         ),
+        DeclareLaunchArgument(
+            'recovery_validation_preview',
+            default_value='false',
+            choices=['true', 'false'],
+            description=(
+                'Show non-actuating rotation sweep evaluations in RViz. '
+                'This preview never publishes velocity commands.'
+            ),
+        ),
+        OpaqueFunction(function=configure_recovery),
         lio_odometry,
         scan_projection,
         localization_scan_projection,
@@ -287,4 +361,6 @@ def generate_launch_description():
         velocity_smoother,
         navigation_lifecycle,
         automatic_localization_manager,
+        recovery_preview,
+        recovery_runtime_observer,
     ])
