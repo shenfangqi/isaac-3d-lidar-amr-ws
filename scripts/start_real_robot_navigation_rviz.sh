@@ -25,11 +25,12 @@ health_check_only=false
 automatic_localization=true
 automatic_activation=true
 stationary_validation=false
+complex_route_validation=false
 map_argument_seen=false
 
 usage() {
   cat <<EOF
-Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [MAP_YAML]
+Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [--complex-route-validation] [MAP_YAML]
 
 Start saved-map navigation for the physical Carbot and open RViz.
 
@@ -40,6 +41,7 @@ Options:
   --automatic-activate  Rotate, validate, then activate Nav2 without sending a goal (default).
   --validation-only  Alias for --automatic (does include rotation).
   --stationary-validation  No rotation; prepare manual reference and keep Nav2 inactive.
+  --complex-route-validation  Start the read-only Issue #12 advisory and evidence topics.
   -h, --help      Show this help.
 
 Environment overrides:
@@ -61,6 +63,9 @@ while (( $# > 0 )); do
       automatic_localization=true
       automatic_activation=false
       stationary_validation=true
+      ;;
+    --complex-route-validation)
+      complex_route_validation=true
       ;;
     --validation-only|--automatic)
       automatic_localization=true
@@ -220,6 +225,20 @@ check_command_topology() {
     return 1
   }
   echo "PASS: velocity topology is Nav2 -> compensator -> ESP32 (1/1 at each edge)."
+}
+
+check_complex_route_advisor() {
+  if [[ "${complex_route_validation}" != "true" ]]; then
+    return 0
+  fi
+  remote_ros 'ros2 node list --no-daemon | grep -qx /carbot_complex_route_advisor'
+  local advisory_publishers
+  advisory_publishers="$(topic_count /carbot_nav_recovery/complex_route_advisory Publisher)"
+  [[ "${advisory_publishers}" == "1" ]] || {
+    echo "Complex-route advisory publisher count is ${advisory_publishers:-unknown}; expected 1." >&2
+    return 1
+  }
+  echo "PASS: Issue #12 advisor is active in read-only validation mode."
 }
 
 check_fresh_hardware() {
@@ -530,6 +549,7 @@ fi
 echo "Target: ${identity} (${jetson_host})"
 echo "Map: ${map_yaml}"
 echo "Localization: $(if [[ "${automatic_localization}" == "true" ]]; then echo automatic; else echo manual; fi)"
+echo "Complex-route advisor: $(if [[ "${complex_route_validation}" == "true" ]]; then echo validation-only; else echo disabled; fi)"
 remote test -f "${map_yaml}"
 
 echo "[1/8] Disabling the conflicting web teleop publisher..."
@@ -543,14 +563,18 @@ remote systemctl --user start \
 
 echo "[3/8] Recreating the inactive saved-map navigation container..."
 initialization_mode=manual
+complex_route_mode=none
 if [[ "${automatic_localization}" == "true" ]]; then
   initialization_mode=auto
 fi
 if [[ "${automatic_activation}" == "true" ]]; then
   initialization_mode=auto-activate
 fi
+if [[ "${complex_route_validation}" == "true" ]]; then
+  complex_route_mode=complex-route-validation
+fi
 remote "${jetson_workspace}/scripts/jetson_nvblox_container.sh" \
-  recreate navigation-safe "${map_yaml}" "${initialization_mode}" >/dev/null
+  recreate navigation-safe "${map_yaml}" "${initialization_mode}" "${complex_route_mode}" >/dev/null
 
 echo "[4/8] Running the non-motion hardware preflight..."
 run_preflight_with_readiness_retry
@@ -589,6 +613,7 @@ else
 fi
 check_rviz
 control health --timeout 15 --settle 4
+check_complex_route_advisor
 
 startup_complete=true
 trap - ERR INT TERM

@@ -4,6 +4,7 @@ from dataclasses import replace
 import math
 import os
 import json
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -13,7 +14,9 @@ from carbot_nav_recovery.failure_evidence import (
 )
 from carbot_nav_recovery.runtime_context import RecoveryContext
 from carbot_nav_recovery.sensor_visibility import scan_visibility
-from carbot_nav_recovery.swept_footprint import CostmapSnapshot, Pose2D
+from carbot_nav_recovery.swept_footprint import (
+    CostmapSnapshot, ObservedFreeSpaceSnapshot, Pose2D,
+)
 from carbot_nav_recovery.trace_retreat import TraceContext
 
 
@@ -152,7 +155,10 @@ def test_rotation_selection_is_sliced_across_control_heartbeats():
     rclpy.init()
     node = RecoveryCoordinator()
     try:
-        node._profile = {'braking_yaw_rad': 0.08}
+        node._profile = {
+            'braking_yaw_rad': 0.08,
+            'position_margin_m': 0.0,
+        }
         checked = []
         planned = []
         node._clear = lambda path: checked.append(path)
@@ -163,6 +169,10 @@ def test_rotation_selection_is_sliced_across_control_heartbeats():
             'translations': None,
             'translation_check': None,
             'retreats_evaluated': False,
+            'visibility': ObservedFreeSpaceSnapshot(
+                80, 80, 0.05, -2.0, -2.0, (True,) * 6400,
+                'map', node.get_clock().now().nanoseconds * 1.0e-9,
+                time.monotonic()),
         }
         pose = Pose2D(0.0, 0.0, 0.0)
 

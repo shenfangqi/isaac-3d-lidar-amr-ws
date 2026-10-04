@@ -1,4 +1,4 @@
-# carbot_nav_recovery — Issue #9
+# carbot_nav_recovery — Issues #9 and #12
 
 当前包含只读诊断、Python 几何与执行协调器，以及 C++ 控制器证据、地图更新证据、有界行为和行为树插件。**默认配置不启用动作；实验执行尚未经过真机验收。**
 
@@ -101,6 +101,55 @@ Python 参考接口用于离线分析；C++ `EvidenceController` 已在实际碰
 - `max_odom_gap_sec`：验收允许的里程计间隔，最多 0.5 秒。
 
 仓库没有提供伪造“已验收”的参数文件，正常启动行为保持不变。
+
+## 复杂弯路速度诊断（Issue #12，默认关闭）
+
+`complex_route_advisor` 对当前全局路径的局部窗口做完整 footprint 扫掠检查，并分别计算曲率速度上限与制动距离速度上限。它只发布建议和证据，不发布 `Twist`、不修改控制器参数，也不会自动重发目标。
+
+维护的一键入口可用下列方式显式启用：
+
+```bash
+./start_real_nav.sh --complex-route-validation
+```
+
+对应 launch 参数为 `complex_route_validation:=true`，默认 `false`。输出为：
+
+- JSON：`/carbot_nav_recovery/complex_route_advisory`
+- RViz MarkerArray：`/carbot_nav_recovery/complex_route_markers`
+- Trigger：`/carbot_complex_route_advisor/save_snapshot`
+- 快照目录：`/tmp/carbot_complex_route`
+
+没有通过物理验收的制动配置时，节点仍会输出路径曲率和距首个不安全扫掠位置的距离，但顶层原因为 `CALIBRATION_REQUIRED`，且所有数值速度建议为空。配置必须是严格 JSON，只允许以下字段：
+
+```json
+{
+  "physical_acceptance_complete": true,
+  "evidence_directory": "/absolute/path/to/real/evidence",
+  "max_deceleration_mps2": 0.0,
+  "command_latency_sec": 0.0,
+  "position_margin_m": 0.0,
+  "max_linear_speed_mps": 0.0,
+  "max_angular_speed_radps": 0.0
+}
+```
+
+上面的零值仅表示字段结构，不能加载，也不能作为实车参数。仓库不提供猜测的验收配置。必须用真实底盘、完整速度链和实际载荷测得非零减速度、指令延迟、定位/跟踪余量及速度上限，并保存原始证据后，才能设置 `physical_acceptance_complete=true`。
+
+保存一帧一致证据：
+
+```bash
+ros2 service call /carbot_complex_route_advisor/save_snapshot \
+  std_srvs/srv/Trigger '{}'
+```
+
+离线汇总一个或多个快照/JSONL：
+
+```bash
+ros2 run carbot_nav_recovery analyze_complex_route_evidence \
+  /tmp/carbot_complex_route/advisory_*.json
+```
+
+第一阶段只用于确认“弯道曲率、当前速度、完整车身扫掠和预测碰撞”之间的关系。把建议真正接入控制器、以及失败后的原目标自动续航，必须等真机制动参数、代表性复杂路线证据和 Issue #9/#10 的近场安全边界完成验收后再启用。
 
 ## 当前验证范围及剩余工作
 

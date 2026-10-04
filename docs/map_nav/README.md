@@ -954,6 +954,10 @@ amcl_initial_pose_mode:=odom_identity
 - 最后一个 Goal 的 action 终态和恢复次数。
 - 是否存在 teleop、explorer 或测试脚本等额外 `/cmd_vel` 来源。
 
+### 19.1 Issue #12 复杂弯路只读采证
+
+需要调查弯道近障提前停车时，可在维护入口增加 `--complex-route-validation`。它只启动 advisory、RViz 标记和证据快照，不会修改控制速度或自动续发目标。没有经真机验收的制动配置时不会给出数值速度建议；具体字段和采证边界见 `src/carbot_nav_recovery/README.md` 与 `docs/carbot_issue12_handoff.md`。
+
 ## 20. 当前项目结论
 
 截至 `warehouse_v3` 验收：

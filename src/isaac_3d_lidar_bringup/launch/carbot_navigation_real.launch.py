@@ -33,6 +33,10 @@ def generate_launch_description():
     acceptance_profile = LaunchConfiguration('recovery_acceptance_profile')
     recovery_validation_preview = LaunchConfiguration(
         'recovery_validation_preview')
+    complex_route_validation = LaunchConfiguration(
+        'complex_route_validation')
+    complex_route_braking_profile = LaunchConfiguration(
+        'complex_route_braking_profile')
     lifecycle_autostart = PythonExpression([
         "'", autostart, "' == 'true' and '",
         automatic_localization, "' == 'false'",
@@ -265,6 +269,21 @@ def generate_launch_description():
             recovery_enabled, "' == 'false'"])),
         output='screen',
     )
+    complex_route_advisor = Node(
+        package='carbot_nav_recovery',
+        executable='complex_route_advisor',
+        name='carbot_complex_route_advisor',
+        parameters=[{
+            'global_frame': 'map',
+            'base_frame': 'base_footprint',
+            'braking_profile': complex_route_braking_profile,
+            'navigation_config_path': navigation_config,
+            'footprint_xy': [0.155, 0.133, 0.155, -0.133,
+                             -0.130, -0.133, -0.130, 0.133],
+        }],
+        condition=IfCondition(complex_route_validation),
+        output='screen',
+    )
 
     def configure_recovery(context):
         if recovery_enabled.perform(context) != 'true':
@@ -344,6 +363,23 @@ def generate_launch_description():
                 'This preview never publishes velocity commands.'
             ),
         ),
+        DeclareLaunchArgument(
+            'complex_route_validation',
+            default_value='false',
+            choices=['true', 'false'],
+            description=(
+                'Publish Issue #12 curvature/braking advice without changing '
+                'controller commands.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'complex_route_braking_profile',
+            default_value='',
+            description=(
+                'Absolute accepted physical braking profile. Empty keeps the '
+                'advisor in CALIBRATION_REQUIRED mode.'
+            ),
+        ),
         OpaqueFunction(function=configure_recovery),
         lio_odometry,
         scan_projection,
@@ -363,4 +399,5 @@ def generate_launch_description():
         automatic_localization_manager,
         recovery_preview,
         recovery_runtime_observer,
+        complex_route_advisor,
     ])
