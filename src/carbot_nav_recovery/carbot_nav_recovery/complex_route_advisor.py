@@ -8,6 +8,7 @@ import os
 from pathlib import Path as FilePath
 import time
 
+from action_msgs.msg import GoalStatusArray
 from geometry_msgs.msg import Point
 from nav2_msgs.msg import Costmap
 from nav_msgs.msg import Odometry, Path
@@ -118,9 +119,11 @@ class ComplexRouteAdvisor(Node):
                                '/tmp/carbot_complex_route')
         self.declare_parameter('horizon_m', 1.5)
         self.declare_parameter('max_path_join_distance_m', 0.50)
-        self.declare_parameter('max_costmap_age_sec', 0.5)
+        # The real local costmap publishes at about 0.9 Hz.  This remains
+        # bounded, but must span one normal publication interval plus jitter.
+        self.declare_parameter('max_costmap_age_sec', 1.5)
         self.declare_parameter('max_odom_age_sec', 0.5)
-        self.declare_parameter('max_path_receive_age_sec', 5.0)
+        self.declare_parameter('max_path_goal_skew_sec', 1.0)
         self.declare_parameter('max_localization_age_sec', 0.75)
         self.declare_parameter('evaluation_budget_sec', 0.08)
         self.declare_parameter('safety_margin_m', 0.0)
@@ -147,6 +150,8 @@ class ComplexRouteAdvisor(Node):
         self._localization_ready = False
         self._localization_received = None
         self._localization_reason = 'NO_LOCALIZATION_STATUS'
+        self._active_goal_id = None
+        self._active_goal_started = None
         self._last_snapshot = None
 
         reliable = QoSProfile(
@@ -168,6 +173,9 @@ class ComplexRouteAdvisor(Node):
             String,
             str(self.get_parameter('localization_status_topic').value),
             self._on_localization, 10)
+        self.create_subscription(
+            GoalStatusArray, '/navigate_to_pose/_action/status',
+            self._on_goals, 10)
         self._status = self.create_publisher(
             String, str(self.get_parameter('status_topic').value), 10)
         self._markers = self.create_publisher(
@@ -227,6 +235,17 @@ class ComplexRouteAdvisor(Node):
             self._localization_ready = False
             self._localization_reason = 'INVALID_LOCALIZATION_STATUS'
 
+    def _on_goals(self, message):
+        active = [
+            bytes(item.goal_info.goal_id.uuid).hex()
+            for item in message.status_list if item.status in (1, 2, 3)
+        ]
+        goal_id = active[0] if len(active) == 1 else None
+        if goal_id != self._active_goal_id:
+            self._active_goal_id = goal_id
+            self._active_goal_started = (
+                time.monotonic() if goal_id is not None else None)
+
     def _localization_gate(self, now):
         if bool(self.get_parameter('localization_valid').value):
             return True, 'PARAMETER_OVERRIDE'
@@ -253,15 +272,20 @@ class ComplexRouteAdvisor(Node):
 
     def _evaluate(self):
         now_monotonic = time.monotonic()
+        if self._active_goal_id is None:
+            self._publish_reason('NO_ACTIVE_NAVIGATION_GOAL')
+            return
         inputs = (self._path, self._costmap, self._odom)
         if any(value is None for value in inputs):
             self._publish_reason('MISSING_RUNTIME_INPUT')
             return
-        path_age = now_monotonic - self._path_received
         odom_age = now_monotonic - self._odom_received
-        if path_age > float(
-                self.get_parameter('max_path_receive_age_sec').value):
-            self._publish_reason('PATH_RECEIVE_STALE')
+        path_goal_skew = float(
+            self.get_parameter('max_path_goal_skew_sec').value)
+        if (self._active_goal_started is None
+                or self._path_received + path_goal_skew
+                < self._active_goal_started):
+            self._publish_reason('PATH_NOT_FOR_ACTIVE_GOAL')
             return
         if odom_age > float(self.get_parameter('max_odom_age_sec').value):
             self._publish_reason('ODOMETRY_STALE')

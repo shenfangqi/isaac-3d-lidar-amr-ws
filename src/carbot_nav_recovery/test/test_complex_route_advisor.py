@@ -11,6 +11,7 @@ import pytest
                     reason='requires dedicated synthetic ROS_DOMAIN_ID=73')
 def test_validation_node_reports_calibration_gate_and_has_no_twist_publisher():
     import rclpy
+    from action_msgs.msg import GoalStatus, GoalStatusArray
     from geometry_msgs.msg import PoseStamped, TransformStamped
     from nav2_msgs.msg import Costmap
     from nav_msgs.msg import Odometry, Path
@@ -27,6 +28,8 @@ def test_validation_node_reports_calibration_gate_and_has_no_twist_publisher():
     costmap_publisher = source.create_publisher(
         Costmap, '/local_costmap/costmap_raw', 10)
     odom_publisher = source.create_publisher(Odometry, '/odom', 10)
+    status_publisher = source.create_publisher(
+        GoalStatusArray, '/navigate_to_pose/_action/status', 10)
     broadcaster = TransformBroadcaster(source)
     reports = []
     source.create_subscription(
@@ -73,6 +76,13 @@ def test_validation_node_reports_calibration_gate_and_has_no_twist_publisher():
         odom.child_frame_id = 'base_footprint'
         odom_publisher.publish(odom)
 
+        statuses = GoalStatusArray()
+        active = GoalStatus()
+        active.goal_info.goal_id.uuid = list(range(16))
+        active.status = GoalStatus.STATUS_EXECUTING
+        statuses.status_list.append(active)
+        status_publisher.publish(statuses)
+
     timer = source.create_timer(0.1, publish_inputs)
     try:
         advisor.set_parameters([
@@ -98,6 +108,22 @@ def test_validation_node_reports_calibration_gate_and_has_no_twist_publisher():
         assert all('cmd_vel' not in name for name, _ in topics)
         assert all('geometry_msgs/msg/Twist' not in types
                    for _, types in topics)
+
+        timer.cancel()
+        terminal = GoalStatusArray()
+        finished = GoalStatus()
+        finished.goal_info.goal_id.uuid = list(range(16))
+        finished.status = GoalStatus.STATUS_ABORTED
+        terminal.status_list.append(finished)
+        status_publisher.publish(terminal)
+        terminal_deadline = time.monotonic() + 3.0
+        while time.monotonic() < terminal_deadline:
+            executor.spin_once(timeout_sec=0.05)
+            if any(report.get('reason') == 'NO_ACTIVE_NAVIGATION_GOAL'
+                   for report in reports):
+                break
+        assert any(report.get('reason') == 'NO_ACTIVE_NAVIGATION_GOAL'
+                   for report in reports)
     finally:
         timer.cancel()
         executor.shutdown()
