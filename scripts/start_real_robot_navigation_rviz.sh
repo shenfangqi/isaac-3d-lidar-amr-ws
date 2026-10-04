@@ -231,24 +231,20 @@ check_complex_route_advisor() {
   if [[ "${complex_route_validation}" != "true" ]]; then
     return 0
   fi
-  local advisory_publishers attempt nodes
-  for attempt in 1 2 3 4 5; do
-    # A fresh Fast DDS CLI participant can initially see nodes but no topics,
-    # or the reverse.  Warm discovery and require both views in one attempt.
-    nodes="$(remote_ros \
-      'ros2 topic list --no-daemon >/dev/null; ros2 node list --no-daemon' \
-      2>/dev/null || true)"
-    advisory_publishers="$(topic_count \
-      /carbot_nav_recovery/complex_route_advisory Publisher \
-      2>/dev/null || true)"
-    if grep -qx /carbot_complex_route_advisor <<<"${nodes}" \
-        && [[ "${advisory_publishers}" == "1" ]]; then
+  remote docker exec carbot-nvblox bash -lc \
+    'pgrep -af "/carbot_nav_recovery/complex_route_advisor" >/dev/null'
+  local attempt
+  for attempt in 1 2 3; do
+    # Unlike topic-info, echo waits for Fast DDS discovery and proves the
+    # publisher is delivering the validation-only schema, not merely listed.
+    if remote_ros \
+        'ros2 topic list --no-daemon >/dev/null; timeout --kill-after=1s 12s ros2 topic echo /carbot_nav_recovery/complex_route_advisory --once --field data 2>/dev/null | grep -q "validation_only.*true"'; then
       echo "PASS: Issue #12 advisor is active in read-only validation mode."
       return 0
     fi
     sleep 2
   done
-  echo "Complex-route advisor discovery failed after ${attempt} attempts; publisher count is ${advisory_publishers:-unknown}." >&2
+  echo "Complex-route advisor did not deliver validation-only evidence after ${attempt} attempts." >&2
   return 1
 }
 
