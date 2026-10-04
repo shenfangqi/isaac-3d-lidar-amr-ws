@@ -128,6 +128,8 @@ def test_real_table_approach_has_stable_path_without_motion_recoveries():
     assert local['obstacle_layer'].get('enabled', True) is True
     assert bt['default_nav_to_pose_bt_xml'].endswith(
         'navigate_w_replanning_only_if_path_becomes_invalid.xml')
+    assert bt['bt_loop_duration'] >= 100
+    assert bt['default_server_timeout'] >= 1000
 
 
 def test_real_nav_footprint_matches_canonical_parameters():

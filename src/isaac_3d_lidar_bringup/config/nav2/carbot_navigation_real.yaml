@@ -167,6 +167,12 @@ planner_server:
 bt_navigator:
   ros__parameters:
     use_sim_time: false
+    # The Jetson controller and odometry both run at 10 Hz.  The Humble
+    # defaults tick this tree at 100 Hz and allow only a few milliseconds for
+    # an action acknowledgement; under live costmap load that repeatedly
+    # starved compute_path_to_pose and aborted an otherwise healthy goal.
+    bt_loop_duration: 100
+    default_server_timeout: 1000
     global_frame: map
     robot_base_frame: base_footprint
     odom_topic: /odom
