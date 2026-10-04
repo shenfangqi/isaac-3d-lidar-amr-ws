@@ -1,0 +1,9 @@
+uint8 COLLISION=1
+uint8 OTHER=2
+std_msgs/Header header
+string goal_id
+string localization_epoch
+string controller_id
+uint64 path_fingerprint
+uint8 cause
+bool collision_checked

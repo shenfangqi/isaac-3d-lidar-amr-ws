@@ -18,7 +18,12 @@
       # The IMU adapter already applies the measured -9.782937 ms correction.
       time_offset_lidar_to_imu: 0.0
       world_frame: odom
-      body_frame: fast_lio_imu
+      # The body-frame cloud is expressed at the calibrated physical IMU
+      # origin. Label it imu_link so scan projection uses the static URDF
+      # transform to base_footprint; depending on the dynamic odometry TF here
+      # created multi-second scan gaps when reliable /tf delivery was delayed.
+      # fast_lio_base_adapter still publishes the separate fast_lio_imu pose TF.
+      body_frame: imu_link
 
     preprocess:
       lidar_type: 1

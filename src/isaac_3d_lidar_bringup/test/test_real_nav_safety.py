@@ -145,7 +145,10 @@ def test_real_navigation_launch_is_inactive_and_has_one_final_velocity_path():
     ).read_text(encoding='utf-8')
 
     assert "default_value='false'" in launch_source
-    assert launch_source.count("('cmd_vel', 'cmd_vel_nav')") == 3
+    # Two mutually exclusive controller/behavior variants use the same chain.
+    assert launch_source.count("('cmd_vel', 'cmd_vel_nav')") == 5
+    assert launch_source.count('condition=UnlessCondition(recovery_enabled)') == 3
+    assert "if recovery_enabled.perform(context) != 'true':" in launch_source
     assert launch_source.count(
         "('cmd_vel_smoothed', cmd_vel_output)") == 1
     assert "default_value='/cmd_vel_command'" in launch_source
@@ -164,6 +167,24 @@ def test_real_navigation_launch_is_inactive_and_has_one_final_velocity_path():
     assert "'cmd_vel_topic': cmd_vel_output" in launch_source
     assert "'validation_only': auto_localization_validation_only" in launch_source
     assert "default_value='true'" in launch_source
+
+
+def test_recovery_preview_is_opt_in_and_has_no_motion_output():
+    launch_source = (
+        PACKAGE_DIR / 'launch/carbot_navigation_real.launch.py'
+    ).read_text(encoding='utf-8')
+    preview_source = (
+        SOURCE_DIR / 'carbot_nav_recovery'
+        / 'carbot_nav_recovery/validation_visualizer.py'
+    ).read_text(encoding='utf-8')
+
+    assert "'recovery_validation_preview'," in launch_source
+    assert "default_value='false'" in launch_source
+    assert "executable='recovery_validation_visualizer'" in launch_source
+    assert "'localization_valid': False" in launch_source
+    assert "'/carbot_nav_recovery/markers'" in preview_source
+    assert 'Twist' not in preview_source
+    assert 'departure-path feasibility: not evaluated' in preview_source
 
 
 def test_health_check_allows_read_only_command_monitors():
@@ -255,7 +276,9 @@ def test_real_lio_is_tightly_coupled_and_has_one_tf_owner():
     assert params['common']['lid_topic'] == '/livox/lidar'
     assert params['common']['imu_topic'] == '/mid360/imu/data_raw'
     assert params['common']['world_frame'] == 'odom'
-    assert params['common']['body_frame'] == 'fast_lio_imu'
+    # FAST-LIO's body cloud is expressed at the calibrated physical IMU
+    # origin. The adapter remains the sole owner of the dynamic odometry TF.
+    assert params['common']['body_frame'] == 'imu_link'
     assert params['mapping']['extrinsic_est_en'] is False
     assert params['publish']['tf_en'] is False
     assert params['preprocess']['lidar_type'] == 1

@@ -1,0 +1,4 @@
+<library path="carbot_recovery_plugins">
+  <class name="carbot_recovery_plugins/EvidenceController" type="carbot_recovery_plugins::EvidenceController" base_class_type="nav2_core::Controller"/>
+  <class name="carbot_recovery_plugins/BoundedRecovery" type="carbot_recovery_plugins::BoundedRecovery" base_class_type="nav2_core::Behavior"/>
+</library>

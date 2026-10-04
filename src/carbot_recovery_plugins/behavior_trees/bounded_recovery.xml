@@ -1,0 +1,11 @@
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="2" name="BoundedGoalRecovery">
+      <Sequence name="ReplanOriginalGoal">
+        <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+        <FollowPath path="{path}" controller_id="FollowPath"/>
+      </Sequence>
+      <CarbotBoundedRecovery goal="{goal}" path="{path}"/>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

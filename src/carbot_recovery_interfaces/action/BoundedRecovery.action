@@ -1,0 +1,9 @@
+geometry_msgs/PoseStamped original_goal
+uint64 failed_path_fingerprint
+---
+bool recovered
+string reason
+builtin_interfaces/Duration total_elapsed_time
+---
+string phase
+float64 distance_used_m
