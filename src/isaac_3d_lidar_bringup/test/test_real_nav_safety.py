@@ -35,6 +35,13 @@ def test_real_nav_limits_are_conservative():
     assert controller_server['controller_frequency'] == 10.0
     assert controller['transform_tolerance'] >= 0.7
     assert controller['lookahead_dist'] <= 0.15
+    assert controller['use_regulated_linear_velocity_scaling'] is True
+    assert controller['regulated_linear_scaling_min_radius'] >= 0.40
+    assert 0.0 < controller['regulated_linear_scaling_min_speed'] <= 0.04
+    assert controller['use_cost_regulated_linear_velocity_scaling'] is True
+    assert controller['cost_scaling_dist'] <= 0.25
+    assert controller['inflation_cost_scaling_factor'] == 3.0
+    assert controller['max_allowed_time_to_collision_up_to_carrot'] >= 1.0
 
     smoother = nav['velocity_smoother']['ros__parameters']
     assert smoother['max_velocity'] == [0.10, 0.0, 0.50]
