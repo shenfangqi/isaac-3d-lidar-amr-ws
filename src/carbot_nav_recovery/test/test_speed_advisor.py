@@ -46,7 +46,7 @@ def accepted_profile(**changes):
     values = dict(
         physical_acceptance_complete=True,
         evidence_directory='/tmp/physical-evidence',
-        max_deceleration_mps2=0.2,
+        minimum_deceleration_mps2=0.2,
         command_latency_sec=0.5,
         position_margin_m=0.02,
         max_linear_speed_mps=0.10,

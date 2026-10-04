@@ -125,7 +125,7 @@ Python 参考接口用于离线分析；C++ `EvidenceController` 已在实际碰
 {
   "physical_acceptance_complete": true,
   "evidence_directory": "/absolute/path/to/real/evidence",
-  "max_deceleration_mps2": 0.0,
+  "minimum_deceleration_mps2": 0.0,
   "command_latency_sec": 0.0,
   "position_margin_m": 0.0,
   "max_linear_speed_mps": 0.0,
@@ -133,7 +133,7 @@ Python 参考接口用于离线分析；C++ `EvidenceController` 已在实际碰
 }
 ```
 
-上面的零值仅表示字段结构，不能加载，也不能作为实车参数。仓库不提供猜测的验收配置。必须用真实底盘、完整速度链和实际载荷测得非零减速度、指令延迟、定位/跟踪余量及速度上限，并保存原始证据后，才能设置 `physical_acceptance_complete=true`。
+上面的零值仅表示字段结构，不能加载，也不能作为实车参数。仓库不提供猜测的验收配置。必须用真实底盘、完整速度链和实际载荷测得保守的最小减速度、停车指令延迟、定位/跟踪余量及速度上限，并保存原始证据后，才能设置 `physical_acceptance_complete=true`。这里必须取验收条件下最慢的制动能力，不能填峰值或最佳减速度。
 
 保存一帧一致证据：
 

@@ -32,12 +32,14 @@ bash -n scripts/start_real_robot_navigation_rviz.sh
 bash -n scripts/jetson_nvblox_container.sh
 ```
 
-本机合成 80×80、0.05 m 栅格、实车 footprint、31 点弯曲路径的 200 次只读几何基准为 median 21.00 ms、p95 21.38 ms、p99 21.88 ms。该结果只说明桌面实现没有明显性能退化，不能替代 Jetson 基准或物理验收。
+本机合成 80×80、0.05 m 栅格、实车 footprint、31 点弯曲路径的 200 次只读几何基准为 median 21.00 ms、p95 21.38 ms、p99 21.88 ms。Jetson aarch64 同一基准为 median 123.38 ms、p95 135.18 ms、p99 148.16 ms，因此只读节点计算预算调整为 200 ms；它以 2 Hz 运行，不在控制闭环中。
+
+2026-10-04 真机复杂路线复现中，RPP 在目标开始约 22.3 秒后明确报告 `RegulatedPurePursuitController detected collision ahead` 并中止。最后一致 advisory 快照记录实际速度 `0.0813 m/s`、检查到不安全方向前缀 `0.430 m`、局部路径最大曲率 `12.19 1/m`；当时旧 80 ms 预算耗尽。证据保存在 Jetson `/home/shenfq/Projects/isaac_ros-dev/calibration_data/2026-10-04_issue12_route_01`。
 
 ## 真机阶段（需要人工）
 
 1. 确认急停操作员、空旷制动标定区域、实际载荷和轮胎/地面条件。
-2. 测量控制指令到实际减速的完整延迟，以及多个速度点的保守最大制动减速度。
+2. 测量停车指令到实际减速的完整延迟，以及多个速度点的保守最小制动减速度；不能使用峰值或最佳制动能力。
 3. 根据定位抖动、路径跟踪误差和 footprint 不确定性确定 `position_margin_m`。
 4. 保存原始 rosbag/日志，生成严格制动配置，但在验收签字前保持 `physical_acceptance_complete=false`。
 5. 同步本分支到 Jetson 并重新构建；用 `./start_real_nav.sh --complex-route-validation` 启动。

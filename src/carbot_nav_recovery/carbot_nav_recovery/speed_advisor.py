@@ -29,7 +29,7 @@ class BrakingProfile:
 
     physical_acceptance_complete: bool
     evidence_directory: str
-    max_deceleration_mps2: float
+    minimum_deceleration_mps2: float
     command_latency_sec: float
     position_margin_m: float
     max_linear_speed_mps: float
@@ -38,7 +38,7 @@ class BrakingProfile:
     def __post_init__(self):
         """Reject incomplete or nonphysical profile values."""
         values = (
-            self.max_deceleration_mps2,
+            self.minimum_deceleration_mps2,
             self.command_latency_sec,
             self.position_margin_m,
             self.max_linear_speed_mps,
@@ -46,7 +46,7 @@ class BrakingProfile:
         )
         if not all(math.isfinite(value) for value in values):
             raise ValueError('braking profile values must be finite')
-        if (self.max_deceleration_mps2 <= 0.0
+        if (self.minimum_deceleration_mps2 <= 0.0
                 or self.command_latency_sec < 0.0
                 or self.position_margin_m < 0.0
                 or self.max_linear_speed_mps <= 0.0
@@ -63,7 +63,7 @@ class BrakingProfile:
         required = {
             'physical_acceptance_complete',
             'evidence_directory',
-            'max_deceleration_mps2',
+            'minimum_deceleration_mps2',
             'command_latency_sec',
             'position_margin_m',
             'max_linear_speed_mps',
@@ -133,7 +133,7 @@ def stopping_distance(speed_mps: float, profile: BrakingProfile) -> float:
         raise ValueError('speed must be finite and nonnegative')
     return (speed_mps * profile.command_latency_sec
             + speed_mps * speed_mps
-            / (2.0 * profile.max_deceleration_mps2)
+            / (2.0 * profile.minimum_deceleration_mps2)
             + profile.position_margin_m)
 
 
@@ -145,7 +145,7 @@ def braking_speed_limit(available_distance_m: float,
     distance = available_distance_m - profile.position_margin_m
     if distance <= 0.0:
         return 0.0
-    acceleration = profile.max_deceleration_mps2
+    acceleration = profile.minimum_deceleration_mps2
     latency = profile.command_latency_sec
     limit = acceleration * (
         math.sqrt(latency * latency + 2.0 * distance / acceleration)

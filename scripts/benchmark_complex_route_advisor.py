@@ -8,6 +8,7 @@ benchmarks the read-only swept-path risk calculation without a braking profile.
 import argparse
 import json
 import math
+import platform
 from statistics import median
 import time
 
@@ -62,7 +63,7 @@ def main(args=None):
     print(json.dumps({
         'schema': 'carbot_complex_route_desktop_benchmark_v1',
         'physical_acceptance': False,
-        'platform': 'desktop_python',
+        'platform': f'python_{platform.machine()}',
         'iterations': parsed.iterations,
         'median_ms': median(durations),
         'p95_ms': percentile(durations, 0.95),

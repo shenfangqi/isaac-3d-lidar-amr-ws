@@ -125,7 +125,9 @@ class ComplexRouteAdvisor(Node):
         self.declare_parameter('max_odom_age_sec', 0.5)
         self.declare_parameter('max_path_goal_skew_sec', 1.0)
         self.declare_parameter('max_localization_age_sec', 0.75)
-        self.declare_parameter('evaluation_budget_sec', 0.08)
+        # Jetson aarch64 synthetic p99 is about 148 ms for the full horizon.
+        # This node runs at 2 Hz and never participates in the control loop.
+        self.declare_parameter('evaluation_budget_sec', 0.20)
         self.declare_parameter('safety_margin_m', 0.0)
         self.declare_parameter('localization_valid', False)
         self.declare_parameter('localization_status_topic',
