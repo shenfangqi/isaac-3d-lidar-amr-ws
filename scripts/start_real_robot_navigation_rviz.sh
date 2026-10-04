@@ -239,7 +239,8 @@ check_complex_route_advisor() {
       'ros2 topic list --no-daemon >/dev/null; ros2 node list --no-daemon' \
       2>/dev/null || true)"
     advisory_publishers="$(topic_count \
-      /carbot_nav_recovery/complex_route_advisory Publisher)"
+      /carbot_nav_recovery/complex_route_advisory Publisher \
+      2>/dev/null || true)"
     if grep -qx /carbot_complex_route_advisor <<<"${nodes}" \
         && [[ "${advisory_publishers}" == "1" ]]; then
       echo "PASS: Issue #12 advisor is active in read-only validation mode."
