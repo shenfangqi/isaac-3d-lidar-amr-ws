@@ -231,14 +231,24 @@ check_complex_route_advisor() {
   if [[ "${complex_route_validation}" != "true" ]]; then
     return 0
   fi
-  remote_ros 'ros2 node list --no-daemon | grep -qx /carbot_complex_route_advisor'
-  local advisory_publishers
-  advisory_publishers="$(topic_count /carbot_nav_recovery/complex_route_advisory Publisher)"
-  [[ "${advisory_publishers}" == "1" ]] || {
-    echo "Complex-route advisory publisher count is ${advisory_publishers:-unknown}; expected 1." >&2
-    return 1
-  }
-  echo "PASS: Issue #12 advisor is active in read-only validation mode."
+  local advisory_publishers attempt nodes
+  for attempt in 1 2 3 4 5; do
+    # A fresh Fast DDS CLI participant can initially see nodes but no topics,
+    # or the reverse.  Warm discovery and require both views in one attempt.
+    nodes="$(remote_ros \
+      'ros2 topic list --no-daemon >/dev/null; ros2 node list --no-daemon' \
+      2>/dev/null || true)"
+    advisory_publishers="$(topic_count \
+      /carbot_nav_recovery/complex_route_advisory Publisher)"
+    if grep -qx /carbot_complex_route_advisor <<<"${nodes}" \
+        && [[ "${advisory_publishers}" == "1" ]]; then
+      echo "PASS: Issue #12 advisor is active in read-only validation mode."
+      return 0
+    fi
+    sleep 2
+  done
+  echo "Complex-route advisor discovery failed after ${attempt} attempts; publisher count is ${advisory_publishers:-unknown}." >&2
+  return 1
 }
 
 check_fresh_hardware() {
