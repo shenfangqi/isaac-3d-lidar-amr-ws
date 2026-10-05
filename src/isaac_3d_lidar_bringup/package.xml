@@ -32,6 +32,7 @@
   <depend>rclpy</depend>
   <depend>robot_localization</depend>
   <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
   <depend>slam_toolbox</depend>
   <depend>std_msgs</depend>
   <depend>std_srvs</depend>

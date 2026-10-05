@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Initialize saved-map Nav2 in a deterministic, non-motion sequence."""
+"""Initialize manual saved-map Nav2 in a deterministic, non-motion sequence."""
 
 import argparse
-import math
 import time
 
 import rclpy
@@ -17,7 +16,6 @@ LOCALIZATION_MANAGER = '/lifecycle_manager_localization/manage_nodes'
 NAVIGATION_MANAGER = '/lifecycle_manager_navigation/manage_nodes'
 LIFECYCLE_NODES = (
     'map_server',
-    'amcl',
     'controller_server',
     'planner_server',
     'behavior_server',
@@ -29,10 +27,7 @@ LIFECYCLE_NODES = (
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--x', type=float, required=True)
-    parser.add_argument('--y', type=float, required=True)
-    parser.add_argument('--yaw', type=float, required=True)
-    parser.add_argument('--timeout', type=float, default=30.0)
+    parser.add_argument('--timeout', type=float, default=300.0)
     parser.add_argument('--discovery-settle', type=float, default=3.0)
     return parser.parse_args()
 
@@ -78,11 +73,11 @@ def main():
     node = rclpy.create_node('carbot_navigation_initializer')
     tf_buffer = Buffer()
     tf_listener = TransformListener(tf_buffer, node)
-    amcl_received = False
+    initial_pose = None
 
-    def amcl_callback(_message):
-        nonlocal amcl_received
-        amcl_received = True
+    def initial_pose_callback(message):
+        nonlocal initial_pose
+        initial_pose = message
 
     qos = QoSProfile(
         depth=10,
@@ -90,50 +85,43 @@ def main():
         durability=DurabilityPolicy.VOLATILE,
     )
     subscription = node.create_subscription(
-        PoseWithCovarianceStamped, '/amcl_pose', amcl_callback, qos
-    )
-    publisher = node.create_publisher(
-        PoseWithCovarianceStamped, '/initialpose', qos
+        PoseWithCovarianceStamped, '/initialpose', initial_pose_callback, qos
     )
     try:
         time.sleep(args.discovery_settle)
         call_manager(node, LOCALIZATION_MANAGER, args.timeout)
         spin_until(
             node,
-            lambda: publisher.get_subscription_count() >= 1,
+            lambda: any(
+                endpoint.node_name == 'manual_map_localizer'
+                for endpoint in node.get_subscriptions_info_by_topic(
+                    '/initialpose'
+                )
+            ),
             args.timeout,
-            '/initialpose subscriber discovery',
+            'manual_map_localizer /initialpose subscription',
         )
-
-        message = PoseWithCovarianceStamped()
-        message.header.frame_id = 'map'
-        message.pose.pose.position.x = args.x
-        message.pose.pose.position.y = args.y
-        message.pose.pose.orientation.z = math.sin(args.yaw / 2.0)
-        message.pose.pose.orientation.w = math.cos(args.yaw / 2.0)
-        message.pose.covariance[0] = 0.03
-        message.pose.covariance[7] = 0.03
-        message.pose.covariance[35] = 0.02
-        for _ in range(10):
-            message.header.stamp = node.get_clock().now().to_msg()
-            publisher.publish(message)
-            rclpy.spin_once(node, timeout_sec=0.2)
-
+        print(
+            'WAITING_FOR_INITIAL_POSE map_server=active '
+            'use_rviz_2d_pose_estimate=true goal_sent=false',
+            flush=True,
+        )
         spin_until(
             node,
-            lambda: amcl_received and tf_buffer.can_transform(
+            lambda: initial_pose is not None and tf_buffer.can_transform(
                 'map', 'odom', rclpy.time.Time()
             ),
             args.timeout,
-            'AMCL pose and map -> odom',
+            'RViz Initial Pose and map -> odom',
         )
         call_manager(node, NAVIGATION_MANAGER, args.timeout)
         for node_name in LIFECYCLE_NODES:
             assert_active(node, node_name, args.timeout)
+        pose = initial_pose.pose.pose
         print(
             'NAVIGATION_INITIALIZED '
-            f'x={args.x:.3f} y={args.y:.3f} yaw={args.yaw:.4f} '
-            'localization=active navigation=active goal_sent=false',
+            f'x={pose.position.x:.3f} y={pose.position.y:.3f} '
+            'localization=manual navigation=active goal_sent=false',
             flush=True,
         )
     finally:
