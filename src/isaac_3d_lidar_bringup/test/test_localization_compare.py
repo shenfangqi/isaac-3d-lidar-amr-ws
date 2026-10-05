@@ -14,11 +14,13 @@ def test_cli_compares_same_scan_without_claiming_navigation_acceptance(tmp_path)
     cells[13] = cells[15] = 100
     dataset = {
         'map': {'info': {'width': 10, 'height': 4, 'resolution': 1.,
-                        'origin': {'position': {'x': 0., 'y': 0.},
-                                   'orientation': quaternion}}, 'data': cells},
+                         'origin': {'position': {'x': 0., 'y': 0.},
+                                    'orientation': quaternion}},
+                'data': cells},
         'scans': [{'scan': {'header': {'frame_id': 'base_footprint'},
-                   'ranges': [2., None], 'range_min': .1, 'range_max': 20.,
-                   'angle_min': 0., 'angle_increment': 1.}}]}
+                            'ranges': [2., None], 'range_min': .1,
+                            'range_max': 20., 'angle_min': 0.,
+                            'angle_increment': 1.}}]}
     poses = [dict(name='synthetic_correct', x=1., y=1., yaw=0.),
              dict(name='synthetic_wrong', x=3., y=1., yaw=0.)]
     params = dict(occupied_threshold=65, scan_match_tolerance_m=0.,
