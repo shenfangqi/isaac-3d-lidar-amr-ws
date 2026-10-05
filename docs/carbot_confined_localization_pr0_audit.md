@@ -30,14 +30,14 @@
 | `/cmd_vel_command` | `Twist` | 定位阶段：manager（`start` 时才创建，START_NAVIGATION 销毁）；Nav2 激活后：velocity_smoother（`cmd_vel_smoothed` remap 到同一话题） | preflight 要求 Nav2 激活前 0 发布者、1 订阅者 | 已记录 |
 | `/cmd_vel` | `Twist` | `cmd_vel_compensator`（右转 ×0.896），systemd `carbot-command-compensation.service` | 订阅者为 micro-ROS ESP32 | 已记录 |
 | 底盘 watchdog | — | ESP32 固件（不在仓库） | canonical `cmd_vel_timeout_s: 0.50` | 待实机核对：实际超时与清零行为 |
-| `/localization/emergency_stop` | `std_msgs/Bool`，RELIABLE + TRANSIENT_LOCAL | **仓库内找不到发布者** | 订阅方：`jetson_navigation_control.py`、`jetson_navigation_wait.py`、`jetson_ros_freshness_check.py`、`carbot_bounded_ground_pulse.py` | 待实机核对：发布节点与锁存语义 |
+| `/localization/emergency_stop` | `std_msgs/Bool`，RELIABLE + TRANSIENT_LOCAL | `fast_lio_base_adapter` 的 `PosePlausibilityGuard`（来自 `ebb2580`，2026-10-05 合入，见下文） | 订阅方：`jetson_navigation_control.py`、`jetson_navigation_wait.py`、`jetson_ros_freshness_check.py`、`carbot_bounded_ground_pulse.py`、`cmd_vel_compensator` | 已核对：部署预演显示 Jetson 运行的 adapter 与 `ebb2580` 逐字节一致 |
 | `/localization/fault_reason` | `std_msgs/String`，同上 QoS | 同上 | — | 待实机核对 |
 | `/carbot/status` | `carbot_msgs/CarbotStatus` | ESP32（micro-ROS） | 字段含 `motion_blocked`、`active_command_source`、`agent_connected`、`time_synchronized`、`invalid_cmd_count`、`last_disconnect_reason` | 已记录；manager 目前未订阅 |
 | `/automatic_localization/status` | `std_msgs/String` JSON，transient-local | manager | 新字段见 `STATUS_EXTENSION_FIELDS` | 已记录 |
 
 ### 控制源发现
 
-1. **compensator 锁存与仓库代码不符。** `start_real_robot_navigation_rviz.sh::clear_command_compensation_latch` 说明 compensator 会锁存定位急停，需要重启服务才能清除。但仓库里的 `carbot_hardware/cmd_vel_compensator.py` 只做右转比例补偿，没有订阅急停，也没有锁存。Jetson 实际运行的是 `/home/shenfq/Projects/carbot-ros2` 里的构建，和本仓库可能不同步。PR3 的 guard 依赖这条链路，所以合入 PR3 之前必须在实机上确认实际运行的 compensator 版本和锁存行为。
+1. **（已解决，2026-10-05）compensator 锁存与仓库代码不符。** 原因：锁存、定位急停发布者和 `jetson_lio_stability_check.py` 都只在未合并分支 `codex/nav2-manual-localization`（`ebb2580`）上，该分支已部署到实车。现已通过 `merge/nav2-safety` 合入，安全层与实车一致；该分支的 RPP/costmap 调参未采用，导航配置保持实车现状。以下为原始记录： `start_real_robot_navigation_rviz.sh::clear_command_compensation_latch` 说明 compensator 会锁存定位急停，需要重启服务才能清除。但仓库里的 `carbot_hardware/cmd_vel_compensator.py` 只做右转比例补偿，没有订阅急停，也没有锁存。Jetson 实际运行的是 `/home/shenfq/Projects/carbot-ros2` 里的构建，和本仓库可能不同步。PR3 的 guard 依赖这条链路，所以合入 PR3 之前必须在实机上确认实际运行的 compensator 版本和锁存行为。
 2. **定位阶段与 Nav2 共用 `/cmd_vel_command`。** 当前靠两点保证互斥：manager 先销毁自己的 publisher，Nav2 才激活；preflight 也检查发布者数量。新设计里 guard 必须沿用同样的时序（spec C07）。
 3. manager 目前不订阅 `/localization/emergency_stop` 和 `/carbot/status`。spec 4.1 要求新状态在急停或锁止时禁止运动，PR3 需要接入这两个话题，而且要使用实机核实过的类型和 QoS。
 
