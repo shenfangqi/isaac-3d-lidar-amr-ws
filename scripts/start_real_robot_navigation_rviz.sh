@@ -319,10 +319,10 @@ clear_command_compensation_latch() {
 run_preflight_with_readiness_retry() {
   local output status failure_lines
 
-  set +e
-  output="$(remote bash /tmp/carbot_nav_preflight.sh 2>&1)"
-  status=$?
-  set -e
+  # A failing command fires the ERR trap even under set +e; only the
+  # right-hand side of || keeps it from aborting before the retry below.
+  status=0
+  output="$(remote bash /tmp/carbot_nav_preflight.sh 2>&1)" || status=$?
   printf '%s\n' "${output}"
   if ((status == 0)); then
     return 0
@@ -462,10 +462,8 @@ run_automatic_localization() {
   # every other parameter error still fails immediately.
   local attempt output status
   for attempt in {1..10}; do
-    set +e
-    output="$(remote_ros 'timeout 5s ros2 param get /automatic_localization_manager validation_only' 2>&1)"
-    status=$?
-    set -e
+    status=0
+    output="$(remote_ros 'timeout 5s ros2 param get /automatic_localization_manager validation_only' 2>&1)" || status=$?
     if (( status == 0 )); then
       validation_mode="${output}"
       break
