@@ -236,6 +236,46 @@ def test_runner_up_not_pruned():
                                    ValidationThresholds()).accepted
 
 
+@pytest.mark.parametrize('duplicate, filler, rival, complete', [
+    # Real 2026-10-05 replay shape: a weak duplicate refines best.  Its
+    # coarse score must not lower the floor below unrelated clusters.
+    (0.55, 0.50, 0.45, True),
+    # An unrefined rival close to the basin's best coarse score still
+    # makes the search incomplete.
+    (0.75, 0.70, 0.68, False),
+])
+def test_competition_floor_uses_best_coarse_score_of_winner_basin(
+        monkeypatch, duplicate, filler, rival, complete):
+    import isaac_3d_lidar_bringup.localization_hypotheses as hypotheses
+
+    winner = SE2(1.0, 1.0, 0.0)
+    seeds = [(0.80, 1.0, 1.0, 0.0), (duplicate, 1.0, 1.0, math.radians(20))]
+    seeds += [(filler, 0.3 + 0.4 * i, 2.0, 0.0) for i in range(6)]
+    seeds += [(rival, 3.0, 0.5, math.pi), (rival - 0.01, 3.0, 2.0, math.pi)]
+    clusters = tuple({'cluster_id': i, 'seed': seed, 'members': 1}
+                     for i, seed in enumerate(seeds))
+
+    def refine(_grid, seed, *_args):
+        # The duplicate converges to the winner with a marginally higher
+        # score; filler clusters stay where they are with low scores.
+        index = seeds.index(seed)
+        pose = winner if index < 2 else SE2(seed[1], seed[2], seed[3])
+        score = {0: 0.76, 1: 0.77}.get(index, 0.50)
+        metrics = {'score': score, 'coverage': 0.9, 'conflict': 0.2,
+                   'known': 100, 'per_view': (score,)}
+        return (pose, metrics), None
+
+    monkeypatch.setattr(hypotheses, 'cluster_hypotheses',
+                        lambda *_args: clusters)
+    monkeypatch.setattr(hypotheses, 'refine_cluster', refine)
+    grid = _grid(ROOM, 3.4, 2.4)
+    tight = SearchConfig(**{**FAST.__dict__, 'coarse_step_m': 1.0,
+                            'coarse_yaw_step_rad': math.pi})
+    result = search_multiview(grid, _frames(ROOM, winner, 'TRAIN'), tight)
+    assert result.complete is complete
+    assert result.hypotheses[0].cluster_id == 1
+
+
 def test_search_deadline_and_cancel_are_incomplete():
     grid = _grid(ROOM, 3.4, 2.4)
     train = _frames(ROOM, SE2(1.2, 1.0, 0.4), 'TRAIN')

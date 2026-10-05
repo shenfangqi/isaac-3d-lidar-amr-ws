@@ -55,7 +55,8 @@ class SearchConfig:
     cluster_yaw_rad: float = math.pi / 12.0
     max_refined_clusters: int = 8
     # A cluster left unrefined still competes when its coarse score is this
-    # close to the coarse score of the refined winner's cluster.
+    # close to the best coarse score among clusters that refined into the
+    # winner's basin.
     coarse_competition_margin: float = 0.15
     refine_evaluations: int = 160
     refine_initial_step_m: float = 0.10
@@ -468,18 +469,25 @@ def search_multiview(grid, train_frames, config, deadline=None,
         evaluated += config.refine_evaluations + config.polish_evaluations
         refined.append((cluster, pose, metrics))
     refined.sort(key=lambda item: _ranking(item[2]), reverse=True)
+
+    def same_basin(first, second):
+        return (math.hypot(first.x - second.x, first.y - second.y)
+                <= config.cluster_xy_m
+                and _angle_distance(first.yaw, second.yaw)
+                <= config.cluster_yaw_rad)
+
     # Neighbouring coarse clusters may refine into the same optimum.  That
     # is one solution, not an independent alternative; keep the best copy.
     distinct = []
     for item in refined:
-        pose = item[1]
-        if not any(
-                math.hypot(pose.x - kept[1].x, pose.y - kept[1].y)
-                <= config.cluster_xy_m
-                and _angle_distance(pose.yaw, kept[1].yaw)
-                <= config.cluster_yaw_rad
-                for kept in distinct):
+        if not any(same_basin(item[1], kept[1]) for kept in distinct):
             distinct.append(item)
+    # The winner's coarse evidence is the best coarse score of every cluster
+    # that refined into its basin.  Taking only the copy that happened to
+    # refine highest let frame noise pick a weak duplicate and lower the
+    # competition floor below unrelated clusters (2026-10-05 real replay).
+    winner_coarse = max(cluster['seed'][0] for cluster, pose, _metrics
+                        in refined if same_basin(pose, distinct[0][1]))
     refined = distinct
 
     hypotheses = tuple(
@@ -489,7 +497,6 @@ def search_multiview(grid, train_frames, config, deadline=None,
             conflict=metrics['conflict'], cluster_id=cluster['cluster_id'],
             per_view=metrics['per_view'], support_bounds=())
         for cluster, pose, metrics in refined)
-    winner_coarse = refined[0][0]['seed'][0]
 
     def represented(seed):
         # Inside the basin of an already refined solution: not independent.
