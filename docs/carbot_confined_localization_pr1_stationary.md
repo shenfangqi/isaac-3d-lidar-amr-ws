@@ -55,8 +55,7 @@
   - 完整性门槛原来取"精化后最好的那个簇"的粗搜分，重复簇胜出时门槛从 0.65 掉到 0.375，约 23% 的帧误判 `SEARCH_INCOMPLETE`。现改为取收敛到胜者位置的所有簇中最高的粗搜分（`c2f05cd`）。真实 bag 回放 33 个窗口：25/33 → 33/33 接受。
   - AMCL 把 `map→odom` 提前 `transform_tolerance`（1.5 s）打时间戳，manager 按未来 TF 全部拒绝，`STOP_AND_VERIFY` 必然 `STALE_TF`。新增 `map_odom_postdate_sec`（必须等于 AMCL `transform_tolerance`，有配置测试约束），新鲜度和未来时间检查都改用扣除后的时间（`4ff92f3`）。
 
-**尚未完成：**
-- `--automatic-activate` 静止实车验证（激活 Nav2，不发目标）。
+- 实车 `--automatic-activate --localization-strategy stationary_only`（2026-10-06，有人在场）：定位通过后 8 个 Nav2 生命周期节点全部激活，进入 READY，位姿 (3.629, 2.369, −2.0°)。不发目标，READY 保持 2 分钟以上；8 分钟监视期间 `/cmd_vel` 0 条，左右轮编码器增量均为 0。
 
 ## 契约补充
 
