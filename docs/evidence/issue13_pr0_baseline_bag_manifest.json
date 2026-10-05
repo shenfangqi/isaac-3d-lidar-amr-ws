@@ -1,0 +1,5623 @@
+{
+  "bag_count": 77,
+  "bags": [
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": false
+      },
+      "duration_sec": 15.858,
+      "files": {
+        "forward_0p05_10s_bag_0.db3": {
+          "bytes": 1122304,
+          "sha256": "f818a99051161633755aa842d702b99bb2c14c14734e45e4aa339a9c69be356d"
+        }
+      },
+      "message_count": 3233,
+      "metadata_sha256": "8ee25471f68f6cb48ff4c32f0e0de9d8e68c5f1ba6a90e5e0821a3a533d1a6bb",
+      "path": "calibration_data/2026-09-16_ground/forward_0p05_10s_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789569047288776872,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 31,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 31,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 111,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 792,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 738,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 738,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 792,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": false
+      },
+      "duration_sec": 15.859,
+      "files": {
+        "forward_0p05_10s_repeat2_bag_0.db3": {
+          "bytes": 1118208,
+          "sha256": "de69b7bce0b404b5802d3edb79a06ef48e589bd1e45333890a577ab77eb701f3"
+        }
+      },
+      "message_count": 3191,
+      "metadata_sha256": "948badad810c39b7926bbb8f2b549ad4438d59f282f097c2445b7890f381cde8",
+      "path": "calibration_data/2026-09-16_ground/forward_0p05_10s_repeat2_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789569631030809952,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 32,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 32,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 111,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 793,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 738,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 693,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 792,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": false
+      },
+      "duration_sec": 15.936,
+      "files": {
+        "reverse_0p05_10s_bag_0.db3": {
+          "bytes": 1167360,
+          "sha256": "5f73bb251475bd87229d70957aff044e3878970362c7718b367956dc5f6da30e"
+        }
+      },
+      "message_count": 3333,
+      "metadata_sha256": "17789e28b73e17fa3cdd26abb844407ca855ad95ddf10f5b4f69a7823424566e",
+      "path": "calibration_data/2026-09-16_ground/reverse_0p05_10s_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789569356552039986,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 31,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 31,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 111,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 795,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 785,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 785,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 795,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": false
+      },
+      "duration_sec": 15.522,
+      "files": {
+        "reverse_0p05_10s_repeat2_bag_0.db3": {
+          "bytes": 1130496,
+          "sha256": "f9a6a01635897efbed83e33e24699167594ed78b69679c75ff9c8320ccc31317"
+        }
+      },
+      "message_count": 3217,
+      "metadata_sha256": "6fc20572da554cbec14dd764a744d0e9929a9052d59142b09529d5a5970651ca",
+      "path": "calibration_data/2026-09-16_ground/reverse_0p05_10s_repeat2_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789569899348281792,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 31,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 31,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 111,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 777,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 745,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 745,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 777,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": false
+      },
+      "duration_sec": 13.782,
+      "files": {
+        "turn_left_0p20_8s_bag_0.db3": {
+          "bytes": 983040,
+          "sha256": "d11380e8ee4c152606fe07f60bd4877757423fd52f2012c07acab087a3c9cbaf"
+        }
+      },
+      "message_count": 2815,
+      "metadata_sha256": "c21d966b801476a54eb116eae961e4140a103f2e0a17a65c6630cac83d518d75",
+      "path": "calibration_data/2026-09-16_ground/turn_left_0p20_8s_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789570196270517453,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 28,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 28,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 91,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 690,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 644,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 644,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 690,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": false
+      },
+      "duration_sec": 9.916,
+      "files": {
+        "turn_left_supplement_0p20_4s_bag_0.db3": {
+          "bytes": 741376,
+          "sha256": "18c31ab4e7e0d7629e573c47b750275929e2b66e2e1f4ba171ed7a93d290094f"
+        }
+      },
+      "message_count": 2062,
+      "metadata_sha256": "a3bb2c83dc0fb1cb287d009266326606964e9bbbb7780c050311de02c1f523f1",
+      "path": "calibration_data/2026-09-16_ground/turn_left_supplement_0p20_4s_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789570337002044738,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 20,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 19,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 51,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 497,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 489,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 489,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 497,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": false
+      },
+      "duration_sec": 17.636,
+      "files": {
+        "turn_right_0p20_12s_bag_0.db3": {
+          "bytes": 1081344,
+          "sha256": "e7fde358ff186c371542b17aadd3326666bc6fde50f1886163e4b10bd8902bf0"
+        }
+      },
+      "message_count": 3109,
+      "metadata_sha256": "db26eac38715165ffcf99c327ff402ef656262a91620914ae00271c4202e5d18",
+      "path": "calibration_data/2026-09-16_ground/turn_right_0p20_12s_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789570474941164036,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 30,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 30,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 131,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 754,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 705,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 705,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 754,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": false
+      },
+      "duration_sec": 7.945,
+      "files": {
+        "turn_right_supplement_0p20_2s_bag_0.db3": {
+          "bytes": 593920,
+          "sha256": "be235c7d4c3e3ec9b3ffcbbbf272223242efacb438a0e2f28bd8aef977c9a51e"
+        }
+      },
+      "message_count": 1607,
+      "metadata_sha256": "1d0f753646716864accb90d20c054dece0c8bf8756e151f8ac2f06f07ced1b71",
+      "path": "calibration_data/2026-09-16_ground/turn_right_supplement_0p20_2s_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789570621129234625,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 16,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 16,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 31,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 377,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 395,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 395,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 377,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": false,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 4.78,
+      "files": {
+        "custom_topics_static_bag_0.db3": {
+          "bytes": 49152,
+          "sha256": "89f5d6fcc9ac3ae75e3d8ce161b59b107240ef77f9428b6fa61765b6c1c9ceac"
+        }
+      },
+      "message_count": 246,
+      "metadata_sha256": "21c4dda59fa2973649caaa827bdc614f1a48e7f25786cda2d79a23b0b4fd35c2",
+      "path": "calibration_data/2026-09-16_lifted/custom_topics_static_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789565662976145992,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 9,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/wheel_ticks": {
+          "count": 237,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": false
+      },
+      "duration_sec": 20.915,
+      "files": {
+        "deadband_forward_bag_0.db3": {
+          "bytes": 1163264,
+          "sha256": "1a3d00a207053af77f34432746c5fa5039418d9b9b71535469af684fa28f6f07"
+        }
+      },
+      "message_count": 3380,
+      "metadata_sha256": "aba3f2704e7fc131af6f5700a6ac59d0b8ff3f0681a16c7a653f2c2769f42148",
+      "path": "calibration_data/2026-09-16_lifted/deadband_forward_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789565912228845225,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 35,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 35,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 126,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 882,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 710,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 710,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 882,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": false
+      },
+      "duration_sec": 20.882,
+      "files": {
+        "deadband_reverse_bag_0.db3": {
+          "bytes": 1277952,
+          "sha256": "ec40d940d1b14840ef440f1f76313202cd8ade5b2767facdaaa7a6d981f78817"
+        }
+      },
+      "message_count": 3728,
+      "metadata_sha256": "7dd9aa4df820abfd1b60d7d55ec9fe886099e3c89b3a0fd4be2a15715063a3a8",
+      "path": "calibration_data/2026-09-16_lifted/deadband_reverse_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789565949908497917,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 39,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 39,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 126,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 986,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 776,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 776,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 986,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": false
+      },
+      "duration_sec": 24.897,
+      "files": {
+        "deadband_sweep_bag_0.db3": {
+          "bytes": 1044480,
+          "sha256": "8673a66909b2924743336e17279947a837ae9b5c814618b1440729e85e160920"
+        }
+      },
+      "message_count": 3075,
+      "metadata_sha256": "e9b9daef31bf0b9456b675e2fff084e2bb5d253951328a355a2672da48e7c2f7",
+      "path": "calibration_data/2026-09-16_lifted/deadband_sweep_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789565827480284198,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 31,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 31,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 170,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 791,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 630,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 630,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 792,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": false,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": false
+      },
+      "duration_sec": 8.077,
+      "files": {
+        "forward_0p05_2s_bag_0.db3": {
+          "bytes": 581632,
+          "sha256": "d340a23131bae09b2820fd2888c677ffbb2dba80dcfc2f6caf55e1c446c37798"
+        }
+      },
+      "message_count": 1236,
+      "metadata_sha256": "d63bd047c83e3b7b0a227a9ffc83e05da38b8baef10f6f2d6c17d0db86ab48ec",
+      "path": "calibration_data/2026-09-16_lifted/forward_0p05_2s_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789565546850336197,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 16,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/cmd_vel": {
+          "count": 31,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 393,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 398,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 398,
+          "type": "tf2_msgs/msg/TFMessage"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": false
+      },
+      "duration_sec": 10.925,
+      "files": {
+        "forward_0p05_2s_bag_single_0.db3": {
+          "bytes": 712704,
+          "sha256": "765040a2c06c9ef6dd57036b6cc2b6132cf6c9289ab61f74d5f2073646ec9af8"
+        }
+      },
+      "message_count": 2009,
+      "metadata_sha256": "7e4a8efacd133ef517fe5b7f82948d507f907bb444a89813eb03bcc05b67e867",
+      "path": "calibration_data/2026-09-16_lifted/forward_0p05_2s_bag_single",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789565759638579460,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 21,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 21,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 31,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 529,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 439,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 439,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 529,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": false
+      },
+      "duration_sec": 10.911,
+      "files": {
+        "forward_0p05_2s_bag_v2_0.db3": {
+          "bytes": 1392640,
+          "sha256": "7d6384abbe886a4b5e32e14890b09b15c50fef5eee0e62b39dadb40caa8197fb"
+        }
+      },
+      "message_count": 3317,
+      "metadata_sha256": "08a064c36688d06336870d5370dc24674237d036c95c6884ce71cd4740922322",
+      "path": "calibration_data/2026-09-16_lifted/forward_0p05_2s_bag_v2",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789565683127297514,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 22,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 22,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 31,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 539,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 1082,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 1082,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 539,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": false
+      },
+      "duration_sec": 10.894,
+      "files": {
+        "reverse_0p05_2s_bag_0.db3": {
+          "bytes": 708608,
+          "sha256": "81279708f6f2ecb30a88dea507ebf129ce68e9b402297193f3b745bfce9619b5"
+        }
+      },
+      "message_count": 2005,
+      "metadata_sha256": "36058e1528073d27d4face8465d6d6c6e94bc5a1be83317d632e51f91e8d1c2d",
+      "path": "calibration_data/2026-09-16_lifted/reverse_0p05_2s_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789565732668279660,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 22,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 22,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 31,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 527,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 438,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 438,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 527,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 29.214,
+      "files": {
+        "carbot_forward_0p05_1m_r1_20260917_b_0.db3": {
+          "bytes": 2015232,
+          "sha256": "27125d667e13b521b568ddb6112923447a4da8a56ff991a4db9cdca1d4457a10"
+        }
+      },
+      "message_count": 4701,
+      "metadata_sha256": "c4c11f8b99e6b3c3fa5b4672473017332d7c5af9406e07fe0ec69fafdccc35e2",
+      "path": "calibration_data/2026-09-17_ground/forward_0p05_1m_r1_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789643516992532508,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 58,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 58,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 219,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 1458,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 1449,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 1459,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 28.151,
+      "files": {
+        "carbot_forward_0p05_1m_r2_20260917_0.db3": {
+          "bytes": 1933312,
+          "sha256": "74301becf6be4ca409ab37cf16babdb2fdea20f50aaeccb8105a89416899ce5d"
+        }
+      },
+      "message_count": 4555,
+      "metadata_sha256": "389726973162dbe0f3896d215d0282809cae5a0f8b1b07665f00ce9dda9ab926",
+      "path": "calibration_data/2026-09-17_ground/forward_0p05_1m_r2_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789643697859247538,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 56,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 56,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 237,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 1408,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 1391,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 1407,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 27.993,
+      "files": {
+        "carbot_forward_0p05_1m_r3_20260917_0.db3": {
+          "bytes": 1818624,
+          "sha256": "748ec00cebb4daecf56e7a693203c9b34440c13dd326910d1b8202fa10dfee57"
+        }
+      },
+      "message_count": 4409,
+      "metadata_sha256": "8389e948907155f7a32aa830881a057b81b032615f6ba718b302a9238d5a31fa",
+      "path": "calibration_data/2026-09-17_ground/forward_0p05_1m_r3_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789643873365397958,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 56,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 56,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 227,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 1399,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 1272,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 1399,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 27.796,
+      "files": {
+        "carbot_reverse_0p05_1m_r1_20260917_0.db3": {
+          "bytes": 1916928,
+          "sha256": "88432e676a9d940b6bfd4a000d71767a247318e91365d3ead69201ea807933b3"
+        }
+      },
+      "message_count": 4496,
+      "metadata_sha256": "6a5cca8767976c4f7ece755a1192140c07091d4231c6a135e52c20b731b985cc",
+      "path": "calibration_data/2026-09-17_ground/reverse_0p05_1m_r1_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789644011707771627,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 56,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 56,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 227,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 1387,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 1383,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 1387,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 26.8,
+      "files": {
+        "carbot_reverse_0p05_1m_r2_20260917_0.db3": {
+          "bytes": 1060864,
+          "sha256": "a17746fc7734cc0cf5feca1facf2de988f3a6b02ee34d48e2f94f65abbda0aee"
+        }
+      },
+      "message_count": 2615,
+      "metadata_sha256": "e5751f20354ee8a35ea3350202a951887017de704b8e690d4ac59db9ed3e4661",
+      "path": "calibration_data/2026-09-17_ground/reverse_0p05_1m_r2_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789644352874678550,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 30,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 30,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 218,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 809,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 720,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 808,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 28.124,
+      "files": {
+        "carbot_reverse_0p05_1m_r2_retry1_20260917_0.db3": {
+          "bytes": 1863680,
+          "sha256": "8215c1137ce3da5daa16a2198f45490162ee8a3ae1c4197ff83221fbf838e9a0"
+        }
+      },
+      "message_count": 4472,
+      "metadata_sha256": "e57081f0fec8af2a2e91d1fe1e23bd08cf64385c61464aa37b3bcbe0951911bd",
+      "path": "calibration_data/2026-09-17_ground/reverse_0p05_1m_r2_retry1_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789644866825174501,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 56,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 56,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 237,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 1402,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 1319,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 1402,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 27.892,
+      "files": {
+        "carbot_reverse_0p05_1m_r3_20260917_b_0.db3": {
+          "bytes": 1703936,
+          "sha256": "2a6b95e973e5674ca354deecf15912ba5a7997880274317915afe10b18a8a8e3"
+        }
+      },
+      "message_count": 4000,
+      "metadata_sha256": "a866e2d170a0cffcd832d6ce618ff1e10b0e1d6b2f47adf40e9d3fefc74ed617",
+      "path": "calibration_data/2026-09-17_ground/reverse_0p05_1m_r3_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789645520132621408,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 48,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 48,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 237,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 1224,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 1218,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 1225,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": false,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 59.059,
+      "files": {
+        "carbot_static_transport_60s_20260917_0.db3": {
+          "bytes": 1478656,
+          "sha256": "2057498334d593546d36a96847be06b2ecb0991122cceb80d7185ff6ade2a9ae"
+        }
+      },
+      "message_count": 6138,
+      "metadata_sha256": "da39bd4bd15b9b3aa79e618b990daead03bb49b8f5a5123c3addfa56ee71682e",
+      "path": "calibration_data/2026-09-17_ground/static_transport_60s_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789644744268138961,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 118,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 118,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/imu/data_raw": {
+          "count": 2951,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/wheel_ticks": {
+          "count": 2951,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": false,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 59.388,
+      "files": {
+        "carbot_static_transport_60s_ps_off_20260917_0.db3": {
+          "bytes": 1490944,
+          "sha256": "2f63d14d5bf9476a4ddb113fb0bc8c161761d9699f67f3bb2aa2a989f239a1ca"
+        }
+      },
+      "message_count": 6176,
+      "metadata_sha256": "774a8fe0f1669b52af7bc8f01bc1670ab073fe7f3c33afaf77a45c65b53ddac3",
+      "path": "calibration_data/2026-09-17_ground/static_transport_60s_ps_off_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789645403495254868,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 119,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 119,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/imu/data_raw": {
+          "count": 2969,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/wheel_ticks": {
+          "count": 2969,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 43.16,
+      "files": {
+        "carbot_postflash_left360_20260917_0.db3": {
+          "bytes": 2924544,
+          "sha256": "2424821ce506976c8573916272ef8a69b7969e3476005a5219c026b7b3f7148d"
+        }
+      },
+      "message_count": 7210,
+      "metadata_sha256": "4baafdd21fc81d9d7da2f095984313e65ee623ee25aa221d8ae6facc24cdde65",
+      "path": "calibration_data/2026-09-17_postflash/carbot_postflash_left360_20260917",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789648531136374182,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 87,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 740,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 2146,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 2089,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 2148,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 47.121,
+      "files": {
+        "carbot_postflash_left360_r2_20260917_0.db3": {
+          "bytes": 3072000,
+          "sha256": "c4e524d7b94b7bce70bcf576ea0dfd368f85975b425b6e688f26a8dd7160e1e9"
+        }
+      },
+      "message_count": 7716,
+      "metadata_sha256": "664ce6657296cbf4f70380a7fc75b602741e1fe48f89b3354dd6ed4c5b7453a6",
+      "path": "calibration_data/2026-09-17_postflash/carbot_postflash_left360_r2_20260917",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789648683121223270,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 94,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 826,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 2320,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 2150,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 2326,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 16.041,
+      "files": {
+        "carbot_postflash_left90_20260917_0.db3": {
+          "bytes": 1097728,
+          "sha256": "0114b149d27eec4c130f7e01969975d68711658910c16c94942faa74c901103b"
+        }
+      },
+      "message_count": 2552,
+      "metadata_sha256": "60678949bc5f81071addaa3d2a476eb0f8979bf771fcf79c0aa8def15b9985fc",
+      "path": "calibration_data/2026-09-17_postflash/carbot_postflash_left90_20260917",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789647846829420932,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 30,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 228,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 745,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 804,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 745,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 18.329,
+      "files": {
+        "carbot_postflash_left90_r2_20260917_0.db3": {
+          "bytes": 1265664,
+          "sha256": "82556ea26b26efb28d43356fc1631df07cf3638b18ab8468c00ab264b7839b8a"
+        }
+      },
+      "message_count": 3024,
+      "metadata_sha256": "a653a3c4544fea0acb7a0e40f8a9790148334a31310a050ab3fb5f19fa13f5ee",
+      "path": "calibration_data/2026-09-17_postflash/carbot_postflash_left90_r2_20260917",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789648034942457984,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 37,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 253,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 915,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 902,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 917,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 20.94,
+      "files": {
+        "carbot_postflash_right360_20260917_0.db3": {
+          "bytes": 1368064,
+          "sha256": "da76724b387fdab0990828c97bccec8392b021ecf900cde10632b31329f886b9"
+        }
+      },
+      "message_count": 3260,
+      "metadata_sha256": "6c85f510d316ae7cd766f7016ee7bbe2ef186340ed6c7ca369a84e6c585d22ea",
+      "path": "calibration_data/2026-09-17_postflash/carbot_postflash_right360_20260917",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789648899836579366,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 39,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 310,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 969,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 972,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 970,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 26.181,
+      "files": {
+        "carbot_postflash_right360_r2_20260917_0.db3": {
+          "bytes": 1708032,
+          "sha256": "6be59780a938368e586ae4880c39b6a5bbaace29b2ec2f831aba39b8a7b1a5e2"
+        }
+      },
+      "message_count": 4208,
+      "metadata_sha256": "3747cd20a8a10965a99f97d8a245cac74017de226721ef3965d5f0e3f526edc8",
+      "path": "calibration_data/2026-09-17_postflash/carbot_postflash_right360_r2_20260917",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789649019435699527,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 52,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 436,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 1264,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 1187,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 1269,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 44.774,
+      "files": {
+        "carbot_postflash_right360_r3_20260917_0.db3": {
+          "bytes": 2965504,
+          "sha256": "5ffd6c889611a20d0ce35eb289dcf0f4b5d4f836b82452ef8bcfcc9a75b3ed29"
+        }
+      },
+      "message_count": 7410,
+      "metadata_sha256": "aeb8bacff4a823068f4e79d49a69cb4feb662f7e43d58c77f89229351cfece6e",
+      "path": "calibration_data/2026-09-17_postflash/carbot_postflash_right360_r3_20260917",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789649150343207595,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 89,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 813,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 2211,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 2083,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 2214,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 16.123,
+      "files": {
+        "carbot_postflash_right90_20260917_0.db3": {
+          "bytes": 1105920,
+          "sha256": "28b65b53499eb9243d74cf05c32dd08bfcbbca8ff11f5def3f4d54611d0e7c0b"
+        }
+      },
+      "message_count": 2615,
+      "metadata_sha256": "d3cbbae5170f1aa655d5ace169835523627524fcb6e9dae3280a73665d64848c",
+      "path": "calibration_data/2026-09-17_postflash/carbot_postflash_right90_20260917",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789648170792142580,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 31,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 239,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 772,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 802,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 771,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 16.598,
+      "files": {
+        "carbot_postflash_right90_r2_20260917_0.db3": {
+          "bytes": 1126400,
+          "sha256": "7e833578e2d7d1c74378f01f4af6626314620198ad218ee5b98cc37ecb4a5d0f"
+        }
+      },
+      "message_count": 2677,
+      "metadata_sha256": "d01b89e23d225e13993689ec8dd75b676fc0d56724ec8a1581454cbb7a679316",
+      "path": "calibration_data/2026-09-17_postflash/carbot_postflash_right90_r2_20260917",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789648319656219289,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 33,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 191,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 821,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 808,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 824,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": false,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 59.374,
+      "files": {
+        "carbot_postflash_postagent_static_60s_20260917_0.db3": {
+          "bytes": 1482752,
+          "sha256": "9d46c9c10e21e0127d3aa633bd3ab3ab2b09f7db86da62773ecfec8a891e0ae9"
+        }
+      },
+      "message_count": 6156,
+      "metadata_sha256": "7a5d9d5ad1ab05eead47e8585ec63e1e5359b65f620b45e87f687911c143539f",
+      "path": "calibration_data/2026-09-17_postflash/postagent_static_60s_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789647467426990471,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 119,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 119,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/imu/data_raw": {
+          "count": 2957,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/wheel_ticks": {
+          "count": 2961,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": false,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 58.983,
+      "files": {
+        "carbot_postflash_static_60s_20260917_0.db3": {
+          "bytes": 1482752,
+          "sha256": "b3773a5a84311bc32831480bafe9dd8ffaeed2b0f54c7c05102c5a1ac529f8b8"
+        }
+      },
+      "message_count": 6136,
+      "metadata_sha256": "b21d10649cc76d33f36bac7f00456f2092b002817df29abd55c0971566a5458c",
+      "path": "calibration_data/2026-09-17_postflash/static_60s_bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789647274003094530,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 118,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 118,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/imu/data_raw": {
+          "count": 2950,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/wheel_ticks": {
+          "count": 2950,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 17.058,
+      "files": {
+        "carbot_forward_0p10_1m_r1_20260918_0.db3": {
+          "bytes": 1183744,
+          "sha256": "ecb293547e5c7208d779b2733c8a950aa6207fe1f3bc89cfe896011c6b76622e"
+        }
+      },
+      "message_count": 2807,
+      "metadata_sha256": "6a04ec41a53f000857b5c45ed805b873ba90be879d77fb4f16270f216f31f115",
+      "path": "calibration_data/2026-09-18_ground/carbot_forward_0p10_1m_r1_20260918",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789727799035914243,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 34,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 241,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 839,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 854,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 839,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 19.079,
+      "files": {
+        "carbot_forward_0p10_1m_r2_20260918_0.db3": {
+          "bytes": 1314816,
+          "sha256": "34686ca6816ef8e6dd6a4a5ee969593417d988f5a301ac1c44bfdc7f93d18041"
+        }
+      },
+      "message_count": 3171,
+      "metadata_sha256": "433463d1c7dbfe35586db939c4292a27d190554fa8806582f6532d93ceaee328",
+      "path": "calibration_data/2026-09-18_ground/carbot_forward_0p10_1m_r2_20260918",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789727964398989077,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 38,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 268,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 955,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 955,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 955,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 19.055,
+      "files": {
+        "carbot_forward_0p10_1m_r3_20260918_0.db3": {
+          "bytes": 1314816,
+          "sha256": "55f86367d4b0a824b61f9279281059a2de5ef248c7790505cec7aa4573232643"
+        }
+      },
+      "message_count": 3166,
+      "metadata_sha256": "81cce6c32c40d40520257eccddf0c07ab4a13e5a06faf6820f84bc068fe9495e",
+      "path": "calibration_data/2026-09-18_ground/carbot_forward_0p10_1m_r3_20260918",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789728496926333760,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 38,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 268,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 953,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 953,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 954,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 29.695,
+      "files": {
+        "carbot_postflash_reverse_0p05_1m_r3_20260918_0.db3": {
+          "bytes": 1941504,
+          "sha256": "1607aff5ede96b2c12b7d3eb7784f64a7abcf82668804c9062cf624475532770"
+        }
+      },
+      "message_count": 4817,
+      "metadata_sha256": "ef767bf29d1ef762d2011b1d83a96619deb5d87bb1279adacc2ab5ceda69a004",
+      "path": "calibration_data/2026-09-18_ground/carbot_postflash_reverse_0p05_1m_r3_20260918",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789727052086858451,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 58,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 494,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 1430,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 1399,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 1436,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 1799.392,
+      "files": {
+        "carbot_postflash_static_30m_20260918_0.db3": {
+          "bytes": 120954880,
+          "sha256": "5ab94e6f7176a7621ac7793c73524eef9c7307be6750e33d026c99c0fc86b939"
+        }
+      },
+      "message_count": 273319,
+      "metadata_sha256": "f0898d1512766ac1688b55bdfd441add7af29d126cbfcb0a20c800960edfccc9",
+      "path": "calibration_data/2026-09-18_ground/carbot_postflash_static_30m_20260918",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789729728585943349,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 3599,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/imu/data_raw": {
+          "count": 89948,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 89822,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 89950,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 17.506,
+      "files": {
+        "carbot_reverse_0p10_1m_r1_20260918_0.db3": {
+          "bytes": 1204224,
+          "sha256": "12f7d0996ae83c3b803c6396ebabace86780e4514ac3fe2d29e2dfe118cb1813"
+        }
+      },
+      "message_count": 2898,
+      "metadata_sha256": "05d185f86c4093d67fc1f77c967cb34113922fa377a3de655d21306d33e09ea6",
+      "path": "calibration_data/2026-09-18_ground/carbot_reverse_0p10_1m_r1_20260918",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789728906138088296,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 34,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 256,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 866,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 876,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 866,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 18.58,
+      "files": {
+        "carbot_reverse_0p10_1m_r2_20260918_0.db3": {
+          "bytes": 1220608,
+          "sha256": "420cbd9846bc6c3dba500cb1b707f801aa6d8403e7b7daac6c078099b5878244"
+        }
+      },
+      "message_count": 2998,
+      "metadata_sha256": "bd6947f7e8cfb2b133f967f201bc5bd5332bf4ee725833fe947a3e3329101e15",
+      "path": "calibration_data/2026-09-18_ground/carbot_reverse_0p10_1m_r2_20260918",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789729119063899832,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 37,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 268,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 914,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 866,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 913,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 19.1,
+      "files": {
+        "carbot_reverse_0p10_1m_r3_20260918_0.db3": {
+          "bytes": 1253376,
+          "sha256": "6ffaa06a905017643df28102e53e4e4c24f26511f40cae7f20bfc9f77f7d2555"
+        }
+      },
+      "message_count": 3078,
+      "metadata_sha256": "6c74a6660b8d160c8a20bd8a7266dd3a35c2ae1eaceca298aed3ea6d3f2ef126",
+      "path": "calibration_data/2026-09-18_ground/carbot_reverse_0p10_1m_r3_20260918",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789729369327690549,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 38,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 255,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 950,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 884,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 951,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 19.083,
+      "files": {
+        "carbot_reverse_0p10_1m_r4_20260918_0.db3": {
+          "bytes": 1245184,
+          "sha256": "16b133b5b98b1ea7c2fa2ee78a08e7725350edb259773a1b1975a4dbf848988c"
+        }
+      },
+      "message_count": 3055,
+      "metadata_sha256": "71400aad64e95f90e54ef02959b82bed1d59ebe23e6a3b70295bb82946ad0d64",
+      "path": "calibration_data/2026-09-18_ground/carbot_reverse_0p10_1m_r4_20260918",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1789729567385446258,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 38,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 255,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/imu/data_raw": {
+          "count": 940,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 879,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 943,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": true,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": true
+      },
+      "duration_sec": 243.046,
+      "files": {
+        "mid360_imu_time_yaw_excitation_01_0.db3": {
+          "bytes": 1308667904,
+          "sha256": "f74d948521157e032f86737ce5378b36f164a773d3d04356753c4ccdb3d83b3a"
+        }
+      },
+      "message_count": 123420,
+      "metadata_sha256": "e08f60e0384274238bccd0acfcf72427142fed56b91b4964027960af6578594c",
+      "path": "calibration_data/2026-09-21_static_mid360/mid360_imu_time_yaw_excitation_01",
+      "raw_lidar_type": "sensor_msgs/msg/PointCloud2",
+      "sidecar_sha256": {},
+      "start_ns": 1789986170464206818,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 484,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/livox/imu": {
+          "count": 48183,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/livox/lidar": {
+          "count": 2410,
+          "type": "sensor_msgs/msg/PointCloud2"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 48160,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 12107,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 12075,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": true,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": true,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 63.916,
+      "files": {
+        "mid360_static_full_65s_0.db3": {
+          "bytes": 385699840,
+          "sha256": "8aeb4297f5f74d3b61fab1be8b14a311cd802fb05ae54117b215a00acb3c6e8f"
+        }
+      },
+      "message_count": 36696,
+      "metadata_sha256": "ddf9541f44e91728b27da34edf6b9604d67da5a4f68f26bcf773a259eb9e7d9e",
+      "path": "calibration_data/2026-09-21_static_mid360/mid360_static_full_65s",
+      "raw_lidar_type": "sensor_msgs/msg/PointCloud2",
+      "sidecar_sha256": {},
+      "start_ns": 1789976559164866447,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 128,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 128,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/imu/data_raw": {
+          "count": 0,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/livox/imu": {
+          "count": 12786,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/livox/lidar": {
+          "count": 639,
+          "type": "sensor_msgs/msg/PointCloud2"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 12785,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/mid360/points_xyz": {
+          "count": 639,
+          "type": "sensor_msgs/msg/PointCloud2"
+        },
+        "/odom": {
+          "count": 3197,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 3196,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 3197,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": true,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": true,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 64.335,
+      "files": {
+        "mid360_static_pose_b_65s_0.db3": {
+          "bytes": 389095424,
+          "sha256": "4ae9d25885560641074d5bc0d84019ec5f02b338c3c07bdcdafd49ad78353c4b"
+        }
+      },
+      "message_count": 40155,
+      "metadata_sha256": "9e0f1b51d32e271d756bed4c61ecb3c5c52c535a9fe76d6646878bdd8d80cef9",
+      "path": "calibration_data/2026-09-21_static_mid360/mid360_static_pose_b_65s",
+      "raw_lidar_type": "sensor_msgs/msg/PointCloud2",
+      "sidecar_sha256": {},
+      "start_ns": 1789977822988102127,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 129,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 129,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/imu/data_raw": {
+          "count": 3218,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/livox/imu": {
+          "count": 12870,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/livox/lidar": {
+          "count": 644,
+          "type": "sensor_msgs/msg/PointCloud2"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 12868,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/mid360/points_xyz": {
+          "count": 643,
+          "type": "sensor_msgs/msg/PointCloud2"
+        },
+        "/odom": {
+          "count": 3217,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 3218,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 3218,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": true,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": true,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 63.537,
+      "files": {
+        "mid360_static_pose_c_65s_0.db3": {
+          "bytes": 377065472,
+          "sha256": "9e8076b8940ec5d26bfb57c8365ed1add5c3ad95db01977143017a812c503c99"
+        }
+      },
+      "message_count": 38963,
+      "metadata_sha256": "fad79f21631a4faea9e3d1b9809bb0ca9354840ee408170bb4892b44a7d25525",
+      "path": "calibration_data/2026-09-21_static_mid360/mid360_static_pose_c_65s",
+      "raw_lidar_type": "sensor_msgs/msg/PointCloud2",
+      "sidecar_sha256": {},
+      "start_ns": 1789978356931735017,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 127,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 127,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/imu/data_raw": {
+          "count": 3165,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/livox/imu": {
+          "count": 12444,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/livox/lidar": {
+          "count": 622,
+          "type": "sensor_msgs/msg/PointCloud2"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 12341,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/mid360/points_xyz": {
+          "count": 617,
+          "type": "sensor_msgs/msg/PointCloud2"
+        },
+        "/odom": {
+          "count": 3177,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 3177,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 3165,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": true,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": true,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 64.23,
+      "files": {
+        "mid360_wall_parallel_pose_d_65s_0.db3": {
+          "bytes": 377749504,
+          "sha256": "cae4d3ea56b08591dfcf0643d3b0c11994c7fb2b0496ff26a1a267e5d6d88578"
+        }
+      },
+      "message_count": 28541,
+      "metadata_sha256": "422e450479b6b694ae1334498922dc42252b31657edcb8add17ca270e4fd3be1",
+      "path": "calibration_data/2026-09-21_static_mid360/mid360_wall_parallel_pose_d_65s",
+      "raw_lidar_type": "sensor_msgs/msg/PointCloud2",
+      "sidecar_sha256": {},
+      "start_ns": 1789982703001217075,
+      "storage": "sqlite3",
+      "topics": {
+        "/battery_state": {
+          "count": 128,
+          "type": "sensor_msgs/msg/BatteryState"
+        },
+        "/carbot/status": {
+          "count": 128,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/imu/data_raw": {
+          "count": 3209,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/livox/imu": {
+          "count": 1758,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/livox/lidar": {
+          "count": 631,
+          "type": "sensor_msgs/msg/PointCloud2"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 12457,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/mid360/points_xyz": {
+          "count": 617,
+          "type": "sensor_msgs/msg/PointCloud2"
+        },
+        "/odom": {
+          "count": 3201,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 3202,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 3209,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": true,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 34.192,
+      "files": {
+        "compensated_visible_motion_04_0.db3": {
+          "bytes": 5914624,
+          "sha256": "51494d273d22a7fd91a21c5583b4c3c598dbfabc209adce470a429602348063b"
+        }
+      },
+      "message_count": 14220,
+      "metadata_sha256": "22fc57a6230f20a0ca88f5e4c5f412f9ec17ab882a115ea3463b5d525ddc5dd7",
+      "path": "calibration_data/2026-09-22_ekf_dynamic/compensated_visible_motion_04",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1790083395483406909,
+      "storage": "sqlite3",
+      "topics": {
+        "/calibration/segment": {
+          "count": 27,
+          "type": "std_msgs/msg/String"
+        },
+        "/carbot/status": {
+          "count": 68,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 592,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 6840,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 1710,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 1710,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel/odom": {
+          "count": 1583,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 1689,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 53.735,
+      "files": {
+        "controlled_mid360_wheel_cmd_01_0.db3": {
+          "bytes": 43855872,
+          "sha256": "4103ece4bed4f7411c9f13be5883225f7a689b344854ac5e2daf49a263e61f13"
+        }
+      },
+      "message_count": 30461,
+      "metadata_sha256": "03acef35e5ebd2562c4f468279c6e4487fcda551c91f6c832b71464aa5d99233",
+      "path": "calibration_data/2026-09-22_ekf_dynamic/controlled_mid360_wheel_cmd_01",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1790079903488273076,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 108,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 476,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/livox/imu": {
+          "count": 10707,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 10584,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/mid360/points_xyz": {
+          "count": 529,
+          "type": "sensor_msgs/msg/PointCloud2"
+        },
+        "/odom": {
+          "count": 2685,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 2685,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel_ticks": {
+          "count": 2686,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": false,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": false,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 26.028,
+      "files": {
+        "carbot_ekf_ab_complementary_0.db3": {
+          "bytes": 8114176,
+          "sha256": "12054f65be9bde7d5fa3dcfbeb2ed2725be07e74c5d62fe95b190964f70392bf"
+        }
+      },
+      "message_count": 15405,
+      "metadata_sha256": "b90b7551a81073969620857e0beeaef5a4cb4ede0c8b55414e7b521ed5beb5dc",
+      "path": "calibration_data/2026-09-22_ekf_dynamic/controlled_mid360_wheel_cmd_01_ekf_ab",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1790081944112297460,
+      "storage": "sqlite3",
+      "topics": {
+        "/ekf/odom_test": {
+          "count": 2392,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 10413,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/wheel/odom": {
+          "count": 2600,
+          "type": "nav_msgs/msg/Odometry"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": false,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": false,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 26.408,
+      "files": {
+        "carbot_ekf_ab_0.db3": {
+          "bytes": 8224768,
+          "sha256": "986398b4ef619297a294d31912882d688538de92a3dac492f94511d9f2bcbbe2"
+        }
+      },
+      "message_count": 15588,
+      "metadata_sha256": "ef7a8f7d8f55ba01ce9a3e8b6e3fc407c56dc0aa5a8993f5b4edab52808399cd",
+      "path": "calibration_data/2026-09-22_ekf_dynamic/controlled_mid360_wheel_cmd_01_ekf_ab_initial",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1790081097034563086,
+      "storage": "sqlite3",
+      "topics": {
+        "/ekf/odom_test": {
+          "count": 2397,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 10552,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/wheel/odom": {
+          "count": 2639,
+          "type": "nav_msgs/msg/Odometry"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 61.924,
+      "files": {
+        "turn_repeat_5pairs_03_0.db3": {
+          "bytes": 10719232,
+          "sha256": "a51cb63eb2c33774a04acebe226c0a2f619a778536feb9cabb84aa0a8e9a2808"
+        }
+      },
+      "message_count": 26042,
+      "metadata_sha256": "313f4d768db951df42d967bb19e7136055fe5b96c42bd0556d6cb4e34b7bfb29",
+      "path": "calibration_data/2026-09-22_ekf_dynamic/turn_repeat_5pairs_03",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1790083023263553758,
+      "storage": "sqlite3",
+      "topics": {
+        "/calibration/segment": {
+          "count": 63,
+          "type": "std_msgs/msg/String"
+        },
+        "/carbot/status": {
+          "count": 124,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 1128,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 12338,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 3097,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 3097,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel/odom": {
+          "count": 3096,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 3098,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": true,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 47.968,
+      "files": {
+        "closed_loop_30deg_4pairs_01_0.db3": {
+          "bytes": 19783680,
+          "sha256": "cc500a6149b0a9c31c4cd22739300302a2779ff7450e135df03ccd37f3794a19"
+        }
+      },
+      "message_count": 144506,
+      "metadata_sha256": "b52f09cf31cb71223ae0fe5fc6c1e66875520c17c08f1ccd40de664bf5075db0",
+      "path": "calibration_data/2026-09-23_closed_loop_yaw/closed_loop_30deg_4pairs_01",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1790151288251796473,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 95,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 61715,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 63825,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 9545,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 2284,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 2289,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel/odom": {
+          "count": 2376,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 2376,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": true,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": true,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 58.746,
+      "files": {
+        "confirm_0p896_4pairs_05_0.db3": {
+          "bytes": 10088448,
+          "sha256": "1a3b5f0853d5a3945fda4ba2ec2036e96a53d50bcef4b671376962b5ecbf5af1"
+        }
+      },
+      "message_count": 25015,
+      "metadata_sha256": "a4f9940b060fdbdec4cf50443613d0debb3ee46afb14a26cc799c39d540aecb0",
+      "path": "calibration_data/2026-09-23_cmd_comp_final/confirm_0p896_4pairs_05",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1790148813850609619,
+      "storage": "sqlite3",
+      "topics": {
+        "/calibration/segment": {
+          "count": 52,
+          "type": "std_msgs/msg/String"
+        },
+        "/carbot/status": {
+          "count": 114,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 1022,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 1022,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 11401,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 2856,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 2861,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel/odom": {
+          "count": 2837,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 2849,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": true,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": true,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 29.795,
+      "files": {
+        "ground_straight_0p04_09_0.db3": {
+          "bytes": 11968512,
+          "sha256": "b23e25d92df21bb6b73fb09cd933f5e9a9c76357fcc61342b50473a71a24a732"
+        }
+      },
+      "message_count": 88693,
+      "metadata_sha256": "75c110370d2e7cda6a3b5d477d1ae80cbb772f8bc6fcd8d7bea831e2e6ad6fa7",
+      "path": "calibration_data/2026-09-23_cmd_comp_final/ground_straight_0p04_09",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1790150273859026512,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 59,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 38806,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 39676,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 5871,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 1342,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel/odom": {
+          "count": 1480,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 1459,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": true,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": true,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 53.307,
+      "files": {
+        "ground_turn_0p40_4pairs_10_0.db3": {
+          "bytes": 21508096,
+          "sha256": "20aafe6395c23e6b6ec85e6b0b57f3b691968ba56700ce4071740c9064cce1be"
+        }
+      },
+      "message_count": 157658,
+      "metadata_sha256": "a28aac099d3c84a043664c20c494d3511bdb75b14d759da266779140eec4ebcb",
+      "path": "calibration_data/2026-09-23_cmd_comp_final/ground_turn_0p40_4pairs_10",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1790150343834852179,
+      "storage": "sqlite3",
+      "topics": {
+        "/calibration/segment": {
+          "count": 16,
+          "type": "std_msgs/msg/String"
+        },
+        "/carbot/status": {
+          "count": 101,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 67200,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 69927,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 10224,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 2563,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 2573,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel/odom": {
+          "count": 2535,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 2518,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": true,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": true,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 54.549,
+      "files": {
+        "ground_turn_candidate_0p911_4pairs_12_0.db3": {
+          "bytes": 22216704,
+          "sha256": "a8c08c0cf52817eff1a7d315e52034bde43ff29cdc61aad2fa275e5eeb2eeb25"
+        }
+      },
+      "message_count": 161954,
+      "metadata_sha256": "137305b8fcc7f2ffa1dc901dae074d5b42ee16ce227ece95a08fa76a70d053c7",
+      "path": "calibration_data/2026-09-23_cmd_comp_final/ground_turn_candidate_0p911_4pairs_12",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1790150615763147440,
+      "storage": "sqlite3",
+      "topics": {
+        "/calibration/segment": {
+          "count": 16,
+          "type": "std_msgs/msg/String"
+        },
+        "/carbot/status": {
+          "count": 101,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 68852,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 71559,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 10908,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 2728,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 2728,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel/odom": {
+          "count": 2543,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 2518,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": true,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": true,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 54.019,
+      "files": {
+        "ground_turn_candidate_0p940_4pairs_11_0.db3": {
+          "bytes": 22126592,
+          "sha256": "4fb96792f2bba5c76816a09dc29ecbdae5a3949ef5b7b26fdede81d0ba632d3a"
+        }
+      },
+      "message_count": 163840,
+      "metadata_sha256": "e2d41bd6e8a752c9962894226d013688830ef53f7c87861e07e54023c2d06067",
+      "path": "calibration_data/2026-09-23_cmd_comp_final/ground_turn_candidate_0p940_4pairs_11",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1790150532858003222,
+      "storage": "sqlite3",
+      "topics": {
+        "/calibration/segment": {
+          "count": 16,
+          "type": "std_msgs/msg/String"
+        },
+        "/carbot/status": {
+          "count": 100,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 70083,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 73052,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 10313,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 2605,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 2614,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel/odom": {
+          "count": 2541,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 2515,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": true,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": true,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": false,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": false,
+        "tf_static": false
+      },
+      "duration_sec": 84.045,
+      "files": {
+        "lifted_drive_persistent_08_0.db3": {
+          "bytes": 26451968,
+          "sha256": "633e97fea521684be7e81a840e95ee629211429b4c2a7e4b439cf8f84530a943"
+        }
+      },
+      "message_count": 257018,
+      "metadata_sha256": "b76078107826d19ab643554fb5f876d0df0ebdb09f9f877c6a2c60a3dfe49c65",
+      "path": "calibration_data/2026-09-23_cmd_comp_final/lifted_drive_persistent_08",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1790149997252910584,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 153,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 123581,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 125846,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/wheel/odom": {
+          "count": 3603,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 3835,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": false
+      },
+      "duration_sec": 25.36,
+      "files": {
+        "physical_final_01_0.db3": {
+          "bytes": 4345856,
+          "sha256": "89e83e330e3fa6d640fe09ba8a90e236f2c3b432192b9d8f50d97c468b57e38a"
+        }
+      },
+      "message_count": 9845,
+      "metadata_sha256": "882ff2634b173a559890a3d9ea4ebb00a9372bc59c8840946a053f9177816eb4",
+      "path": "calibration_data/2026-09-23_cmd_comp_final/physical_final_01",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1790138820784810646,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 49,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 0,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 0,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 4804,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 1239,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 1239,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel/odom": {
+          "count": 1245,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 1269,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": false
+      },
+      "duration_sec": 49.656,
+      "files": {
+        "physical_final_02_0.db3": {
+          "bytes": 8478720,
+          "sha256": "0d9a6146f3d98309ec64bda1784949bbe73b4bc73fb88a692d4b7168ac8c18bb"
+        }
+      },
+      "message_count": 19635,
+      "metadata_sha256": "b66eb84fad6574776bf9c36fdd09d7f03a1d9e994c635ce13bfa2cbe91775989",
+      "path": "calibration_data/2026-09-23_cmd_comp_final/physical_final_02",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1790138964012044188,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 99,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 0,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 0,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 9683,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 2455,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 2455,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel/odom": {
+          "count": 2459,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 2484,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": false,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": false
+      },
+      "duration_sec": 95.37,
+      "files": {
+        "physical_final_03_0.db3": {
+          "bytes": 16318464,
+          "sha256": "e73ae50476103e160aca39423acd5fb46ffa1b3de11001345261d7f70899f1a0"
+        }
+      },
+      "message_count": 37486,
+      "metadata_sha256": "252519a641975bf3c7aad236be860d9c01913db912eeb56fa03628a4cf079822",
+      "path": "calibration_data/2026-09-23_cmd_comp_final/physical_final_03",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1790139080816833421,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 185,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 0,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 0,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 18510,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 4696,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 4696,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel/odom": {
+          "count": 4766,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 4633,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": false,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": true,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": false
+      },
+      "duration_sec": 30.207,
+      "files": {
+        "physical_final_04_0.db3": {
+          "bytes": 12136448,
+          "sha256": "cb65797b9f85c05f5882d1d838fcdfb31081375d5e8aa52b608365bda913409f"
+        }
+      },
+      "message_count": 87741,
+      "metadata_sha256": "acb0b7ed813e4791b92d3d649a640f34b5f962f3883855c6384c5d4590c9a4fb",
+      "path": "calibration_data/2026-09-23_cmd_comp_final/physical_final_04",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1790139232075057459,
+      "storage": "sqlite3",
+      "topics": {
+        "/carbot/status": {
+          "count": 59,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 37210,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 38449,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 6051,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 1510,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 1510,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel/odom": {
+          "count": 1463,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 1489,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": true,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": true,
+        "command_chain": true,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": false,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": false,
+        "map": false,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": false,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 55.45,
+      "files": {
+        "warm_0p896_4pairs_06_0.db3": {
+          "bytes": 23748608,
+          "sha256": "09e0d10845f9c5f67ed31ae65c7a19bfd88213e877a56cb84b8eaf108d0b1afc"
+        }
+      },
+      "message_count": 177255,
+      "metadata_sha256": "c3f8041936e179a6fdc780f42a56dc34d48c6f4dd13a9714160d33037a6ece11",
+      "path": "calibration_data/2026-09-23_cmd_comp_final/warm_0p896_4pairs_06",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {},
+      "start_ns": 1790149310375891793,
+      "storage": "sqlite3",
+      "topics": {
+        "/calibration/segment": {
+          "count": 16,
+          "type": "std_msgs/msg/String"
+        },
+        "/carbot/status": {
+          "count": 110,
+          "type": "carbot_msgs/msg/CarbotStatus"
+        },
+        "/cmd_vel": {
+          "count": 76572,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 78703,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/mid360/imu/data_raw": {
+          "count": 10966,
+          "type": "sensor_msgs/msg/Imu"
+        },
+        "/odom": {
+          "count": 2768,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/tf": {
+          "count": 2768,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/wheel/odom": {
+          "count": 2600,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/wheel_ticks": {
+          "count": 2751,
+          "type": "carbot_msgs/msg/WheelTicks"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": false,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": true,
+        "stationary_search_replay": false
+      }
+    },
+    {
+      "channels": {
+        "base_status": false,
+        "command_chain": true,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": true,
+        "localization_emergency_stop": false,
+        "localization_scan": true,
+        "localization_status": true,
+        "map": true,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": true,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 219.02,
+      "files": {
+        "bag_0.db3": {
+          "bytes": 21946368,
+          "sha256": "d43edabe0e30230ab7824e120e1825b560c1f839e1bfbaf7c42b5e490dd1e11e"
+        }
+      },
+      "message_count": 18204,
+      "metadata_sha256": "ddb77e57e0445fd6f8db72e1e804b74fc1ff61c900c44b90d562b745fac57fcb",
+      "path": "calibration_data/2026-09-30_auto_activate_no_goal_04/bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {
+        "0_carbot_map_20260928_215841.yaml": "47479a635738aa0f138347ee9c045b09bb433c9fc7eade45c646491c10f96686",
+        "amcl.yaml": "d3329eafd96fa69c451a5c0107f5d176cf2d09a3e4c155eb40605956de6f22d3",
+        "automatic_localization_manager.yaml": "508c41497d8641d5bdc0b95a99e485103029a225c0dfcf449a1d2db51f01189a",
+        "git_diff.txt": "a56424f43ee86523fb048e3ad90829cda139b2e8ff02405632b1111265afd085",
+        "git_head.txt": "d2b35cacadc66b7fad8dedd1be5244e17150a6625978c9330f831bd7a9cd6b1e",
+        "git_status.txt": "d2b35cacadc66b7fad8dedd1be5244e17150a6625978c9330f831bd7a9cd6b1e",
+        "manifest.json": "d9d3325eaae527c609b0a30beba896dfe1a5b9b4346eb651b950155f8d388db0",
+        "mid360_pointcloud_to_laserscan.yaml": "4f490dd516977513b755a94800bac601fe3038518b4c82ebec30b9b775e21df1",
+        "qos.yaml": "b14c83cc97b5cbacdfd0cc55adb7bca7a8d4e631d9705454ac0ebb6ab052b036",
+        "summary.json": "40a796e6d906ed3a9e5fb81b152e767b3145d5eedc50d7846f4a2e4b6fea1228"
+      },
+      "start_ns": 1790778061958296704,
+      "storage": "sqlite3",
+      "topics": {
+        "/amcl_pose": {
+          "count": 4,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/automatic_localization/status": {
+          "count": 2189,
+          "type": "std_msgs/msg/String"
+        },
+        "/cmd_vel": {
+          "count": 1052,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 1050,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/fast_lio/imu_odom": {
+          "count": 2172,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/initialpose": {
+          "count": 0,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/map": {
+          "count": 1,
+          "type": "nav_msgs/msg/OccupancyGrid"
+        },
+        "/odom": {
+          "count": 2191,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/particle_cloud": {
+          "count": 7,
+          "type": "nav2_msgs/msg/ParticleCloud"
+        },
+        "/scan": {
+          "count": 2053,
+          "type": "sensor_msgs/msg/LaserScan"
+        },
+        "/scan_localization": {
+          "count": 2013,
+          "type": "sensor_msgs/msg/LaserScan"
+        },
+        "/tf": {
+          "count": 5471,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": true,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": true,
+        "stationary_search_replay": true
+      }
+    },
+    {
+      "channels": {
+        "base_status": false,
+        "command_chain": true,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": true,
+        "localization_emergency_stop": false,
+        "localization_scan": true,
+        "localization_status": true,
+        "map": true,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": true,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 98.214,
+      "files": {
+        "bag_0.db3": {
+          "bytes": 13291520,
+          "sha256": "3ed984d64b9fa60af47a72e89abce0c77353dd8eaa236b1a5800dd530b140c7f"
+        }
+      },
+      "message_count": 9823,
+      "metadata_sha256": "00bf3048f93447461814201cf6fd7ada4af50b5d5124811fde7d574f2a33268b",
+      "path": "calibration_data/2026-09-30_auto_rotation_fine_02/bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {
+        "0_carbot_map_20260928_215841.yaml": "47479a635738aa0f138347ee9c045b09bb433c9fc7eade45c646491c10f96686",
+        "amcl.yaml": "906f7e7a1ae8e3adf0646f6b1cba3f9faa7a5f526b2947efbaa1f857e9209685",
+        "automatic_localization_manager.yaml": "c1f6ade02def21d82369fa743857a6c77f7b83f3bfdcd01612f65455a7a94b24",
+        "bag_summary_raw.json": "26e50a3dec472bf270798106b33c7a473418394f47e9ff2252a00d5985f761ed",
+        "hypotheses.json": "ebd268d1505574f17e23c8b98e95905042a7d893beccfbc1e95bab9678c9b26a",
+        "hypothesis_comparison.json": null,
+        "hypothesis_comparison_final_refine.json": null,
+        "hypothesis_comparison_v2.json": null,
+        "hypothesis_comparison_valid_beams.json": null,
+        "manifest.json": "a5e7c7a5cfb6096fa43930633d08f4d30335c9845c5e9d3dcfbaae0c25392b5c",
+        "pose_refinement.json": null,
+        "postseed_scans.json": "54bb168511e98fbf30acb67b205a624d825a61a249cabe6788d984a458aeb7cb",
+        "summary.json": "c73870e8b79dd5770a4b7bad604316410de169f232ce132593eccaf5bee7586e",
+        "timeline.json": "0e7b34a665e0d806bfc4ac3991346910252ce601293cd47512ca91d712e5dcf9",
+        "verification_scans.json": null
+      },
+      "start_ns": 1790751229776762122,
+      "storage": "sqlite3",
+      "topics": {
+        "/amcl_pose": {
+          "count": 12,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/automatic_localization/status": {
+          "count": 981,
+          "type": "std_msgs/msg/String"
+        },
+        "/cmd_vel": {
+          "count": 978,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 978,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/fast_lio/imu_odom": {
+          "count": 980,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/initialpose": {
+          "count": 1,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/map": {
+          "count": 1,
+          "type": "nav_msgs/msg/OccupancyGrid"
+        },
+        "/odom": {
+          "count": 984,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/particle_cloud": {
+          "count": 22,
+          "type": "nav2_msgs/msg/ParticleCloud"
+        },
+        "/scan": {
+          "count": 981,
+          "type": "sensor_msgs/msg/LaserScan"
+        },
+        "/scan_localization": {
+          "count": 978,
+          "type": "sensor_msgs/msg/LaserScan"
+        },
+        "/tf": {
+          "count": 2926,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": true,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": true,
+        "stationary_search_replay": true
+      }
+    },
+    {
+      "channels": {
+        "base_status": false,
+        "command_chain": true,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": true,
+        "localization_emergency_stop": false,
+        "localization_scan": true,
+        "localization_status": true,
+        "map": true,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": true,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 108.663,
+      "files": {
+        "bag_0.db3": {
+          "bytes": 9723904,
+          "sha256": "9894639957aa75486b078d36db0dc6eae4476337de8f7473240b2354763e5785"
+        }
+      },
+      "message_count": 9612,
+      "metadata_sha256": "f2ed327bbe18b0354b8f8031fe91ede438c8b626f9441d91acdd8905acdfea2c",
+      "path": "calibration_data/2026-09-30_auto_rotation_no_nomotion_02/bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {
+        "0_carbot_map_20260928_215841.yaml": "47479a635738aa0f138347ee9c045b09bb433c9fc7eade45c646491c10f96686",
+        "amcl.yaml": "d3329eafd96fa69c451a5c0107f5d176cf2d09a3e4c155eb40605956de6f22d3",
+        "automatic_localization_manager.yaml": "39a5bdfff0aa7093c71e4fadd4591bcec953abcb402d95f18833a6dcc4b1ab75",
+        "git_diff.txt": "a56424f43ee86523fb048e3ad90829cda139b2e8ff02405632b1111265afd085",
+        "git_head.txt": "d2b35cacadc66b7fad8dedd1be5244e17150a6625978c9330f831bd7a9cd6b1e",
+        "git_status.txt": "d2b35cacadc66b7fad8dedd1be5244e17150a6625978c9330f831bd7a9cd6b1e",
+        "manifest.json": "ef60c275ed1c0e054065453b526e301dd5092e870d75c2b35541e67d0182200d",
+        "mid360_pointcloud_to_laserscan.yaml": "4f490dd516977513b755a94800bac601fe3038518b4c82ebec30b9b775e21df1",
+        "qos.yaml": "b14c83cc97b5cbacdfd0cc55adb7bca7a8d4e631d9705454ac0ebb6ab052b036",
+        "summary.json": "6d81edd4841b12f6e7f1aa491f3aa18c79956a93bda449483f4d4766de216c9a"
+      },
+      "start_ns": 1790773448597852666,
+      "storage": "sqlite3",
+      "topics": {
+        "/amcl_pose": {
+          "count": 0,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/automatic_localization/status": {
+          "count": 1085,
+          "type": "std_msgs/msg/String"
+        },
+        "/cmd_vel": {
+          "count": 1078,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 1082,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/fast_lio/imu_odom": {
+          "count": 1067,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/initialpose": {
+          "count": 0,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/map": {
+          "count": 1,
+          "type": "nav_msgs/msg/OccupancyGrid"
+        },
+        "/odom": {
+          "count": 1086,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/particle_cloud": {
+          "count": 0,
+          "type": "nav2_msgs/msg/ParticleCloud"
+        },
+        "/scan": {
+          "count": 1041,
+          "type": "sensor_msgs/msg/LaserScan"
+        },
+        "/scan_localization": {
+          "count": 1014,
+          "type": "sensor_msgs/msg/LaserScan"
+        },
+        "/tf": {
+          "count": 2157,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": true,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": true,
+        "stationary_search_replay": true
+      }
+    },
+    {
+      "channels": {
+        "base_status": false,
+        "command_chain": true,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": true,
+        "localization_emergency_stop": false,
+        "localization_scan": true,
+        "localization_status": true,
+        "map": true,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": true,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 168.921,
+      "files": {
+        "bag_0.db3": {
+          "bytes": 17088512,
+          "sha256": "fe61ca88ca45e4beb75edac3505169cbba47bfaccee17decb60c8ae30e868f55"
+        }
+      },
+      "message_count": 15822,
+      "metadata_sha256": "d77c2f248e5d9b0beb62e953b86dea28fbbea5a0e822dae1316419c3b8ed2ab7",
+      "path": "calibration_data/2026-09-30_auto_rotation_start_02/bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {
+        "0_carbot_map_20260928_215841.yaml": "47479a635738aa0f138347ee9c045b09bb433c9fc7eade45c646491c10f96686",
+        "amcl.yaml": "d3329eafd96fa69c451a5c0107f5d176cf2d09a3e4c155eb40605956de6f22d3",
+        "automatic_localization_manager.yaml": "41d8ae21442d5c41555a59726590e5bc9ee769bcd8d3d2e4591adf31a859cf4a",
+        "git_diff.txt": "a56424f43ee86523fb048e3ad90829cda139b2e8ff02405632b1111265afd085",
+        "git_head.txt": "d2b35cacadc66b7fad8dedd1be5244e17150a6625978c9330f831bd7a9cd6b1e",
+        "git_status.txt": "d2b35cacadc66b7fad8dedd1be5244e17150a6625978c9330f831bd7a9cd6b1e",
+        "manifest.json": "f77902aa623f6ec29016f8a36ab0b041aa1b0a0ed4d440e9e8da0c7d6c2f7c93",
+        "qos.yaml": "b14c83cc97b5cbacdfd0cc55adb7bca7a8d4e631d9705454ac0ebb6ab052b036",
+        "summary.json": "4699049d9f3aed232f9e5bd4ee02e41bc9532773d5aef01ecc7aea52f3acbd79"
+      },
+      "start_ns": 1790774938148250410,
+      "storage": "sqlite3",
+      "topics": {
+        "/amcl_pose": {
+          "count": 6,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/automatic_localization/status": {
+          "count": 1666,
+          "type": "std_msgs/msg/String"
+        },
+        "/cmd_vel": {
+          "count": 1669,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 1663,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/fast_lio/imu_odom": {
+          "count": 1682,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/initialpose": {
+          "count": 0,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/map": {
+          "count": 1,
+          "type": "nav_msgs/msg/OccupancyGrid"
+        },
+        "/odom": {
+          "count": 1666,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/particle_cloud": {
+          "count": 11,
+          "type": "nav2_msgs/msg/ParticleCloud"
+        },
+        "/scan": {
+          "count": 1582,
+          "type": "sensor_msgs/msg/LaserScan"
+        },
+        "/scan_localization": {
+          "count": 1575,
+          "type": "sensor_msgs/msg/LaserScan"
+        },
+        "/tf": {
+          "count": 4300,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": true,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": true,
+        "stationary_search_replay": true
+      }
+    },
+    {
+      "channels": {
+        "base_status": false,
+        "command_chain": true,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": true,
+        "localization_emergency_stop": false,
+        "localization_scan": true,
+        "localization_status": true,
+        "map": true,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": true,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 167.914,
+      "files": {
+        "bag_0.db3": {
+          "bytes": 17514496,
+          "sha256": "2aa9a0c8e81598c6b8da358383e5536c03a3178d0b381e04b1307da5cd52a39c"
+        }
+      },
+      "message_count": 15631,
+      "metadata_sha256": "cc0d5ad09ccd1beac101bde26bbe5a706f64e871f682dcf04cfdc0e4694a3812",
+      "path": "calibration_data/2026-09-30_auto_rotation_start_03/bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {
+        "0_carbot_map_20260928_215841.yaml": "47479a635738aa0f138347ee9c045b09bb433c9fc7eade45c646491c10f96686",
+        "amcl.yaml": "d3329eafd96fa69c451a5c0107f5d176cf2d09a3e4c155eb40605956de6f22d3",
+        "automatic_localization_manager.yaml": "41d8ae21442d5c41555a59726590e5bc9ee769bcd8d3d2e4591adf31a859cf4a",
+        "git_diff.txt": "a56424f43ee86523fb048e3ad90829cda139b2e8ff02405632b1111265afd085",
+        "git_head.txt": "d2b35cacadc66b7fad8dedd1be5244e17150a6625978c9330f831bd7a9cd6b1e",
+        "git_status.txt": "d2b35cacadc66b7fad8dedd1be5244e17150a6625978c9330f831bd7a9cd6b1e",
+        "manifest.json": "cc85059a58bbff9be6c8afc96600d70fb410e1d37b0f1b9866ecb766940b6e30",
+        "mid360_pointcloud_to_laserscan.yaml": "4f490dd516977513b755a94800bac601fe3038518b4c82ebec30b9b775e21df1",
+        "qos.yaml": "b14c83cc97b5cbacdfd0cc55adb7bca7a8d4e631d9705454ac0ebb6ab052b036",
+        "summary.json": "e60242977f359b852e4f6585b59b8f45c3fadb390db63a7a9d705841e5420013"
+      },
+      "start_ns": 1790775747452878753,
+      "storage": "sqlite3",
+      "topics": {
+        "/amcl_pose": {
+          "count": 4,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/automatic_localization/status": {
+          "count": 1673,
+          "type": "std_msgs/msg/String"
+        },
+        "/cmd_vel": {
+          "count": 1680,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 1670,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/fast_lio/imu_odom": {
+          "count": 1661,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/initialpose": {
+          "count": 0,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/map": {
+          "count": 1,
+          "type": "nav_msgs/msg/OccupancyGrid"
+        },
+        "/odom": {
+          "count": 1678,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/particle_cloud": {
+          "count": 7,
+          "type": "nav2_msgs/msg/ParticleCloud"
+        },
+        "/scan": {
+          "count": 1574,
+          "type": "sensor_msgs/msg/LaserScan"
+        },
+        "/scan_localization": {
+          "count": 1563,
+          "type": "sensor_msgs/msg/LaserScan"
+        },
+        "/tf": {
+          "count": 4119,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": true,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": true,
+        "stationary_search_replay": true
+      }
+    },
+    {
+      "channels": {
+        "base_status": false,
+        "command_chain": true,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": true,
+        "localization_emergency_stop": false,
+        "localization_scan": true,
+        "localization_status": true,
+        "map": true,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": true,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 148.631,
+      "files": {
+        "bag_0.db3": {
+          "bytes": 15163392,
+          "sha256": "61ecf005c4459b4ea46a505dd6c0f53c3bef9586233a08c81322023fd6432627"
+        }
+      },
+      "message_count": 13679,
+      "metadata_sha256": "fd48e8933f1de15e005dbc7afe2a85b7ffae0f5402c7c3b42b1d248dea251213",
+      "path": "calibration_data/2026-09-30_auto_rotation_three_scan_01/bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {
+        "0_carbot_map_20260928_215841.yaml": "47479a635738aa0f138347ee9c045b09bb433c9fc7eade45c646491c10f96686",
+        "amcl.yaml": "d3329eafd96fa69c451a5c0107f5d176cf2d09a3e4c155eb40605956de6f22d3",
+        "compare_reference.json": "a6c490f2b6443312e6ebc3c3279949c102d31fe6f9feb4fb113487b3ef6eb1e2",
+        "git_diff.txt": "a56424f43ee86523fb048e3ad90829cda139b2e8ff02405632b1111265afd085",
+        "git_head.txt": "d2b35cacadc66b7fad8dedd1be5244e17150a6625978c9330f831bd7a9cd6b1e",
+        "git_status.txt": "d2b35cacadc66b7fad8dedd1be5244e17150a6625978c9330f831bd7a9cd6b1e",
+        "manifest.json": "474de6663b2261567c4f733fa7c4908ca5e6683feaa72861747cc10ec51bab0c",
+        "mid360_pointcloud_to_laserscan.yaml": "4f490dd516977513b755a94800bac601fe3038518b4c82ebec30b9b775e21df1",
+        "qos.yaml": "b14c83cc97b5cbacdfd0cc55adb7bca7a8d4e631d9705454ac0ebb6ab052b036",
+        "summary.json": "bbf053ca78c651a7595e312e73083230c4a35e0406b00e95455eabe7ac02d10b"
+      },
+      "start_ns": 1790774115860819032,
+      "storage": "sqlite3",
+      "topics": {
+        "/amcl_pose": {
+          "count": 4,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/automatic_localization/status": {
+          "count": 1485,
+          "type": "std_msgs/msg/String"
+        },
+        "/cmd_vel": {
+          "count": 1487,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 1483,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/fast_lio/imu_odom": {
+          "count": 1482,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/initialpose": {
+          "count": 0,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/map": {
+          "count": 1,
+          "type": "nav_msgs/msg/OccupancyGrid"
+        },
+        "/odom": {
+          "count": 1484,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/particle_cloud": {
+          "count": 7,
+          "type": "nav2_msgs/msg/ParticleCloud"
+        },
+        "/scan": {
+          "count": 1359,
+          "type": "sensor_msgs/msg/LaserScan"
+        },
+        "/scan_localization": {
+          "count": 1415,
+          "type": "sensor_msgs/msg/LaserScan"
+        },
+        "/tf": {
+          "count": 3471,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": true,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": true,
+        "stationary_search_replay": true
+      }
+    },
+    {
+      "channels": {
+        "base_status": false,
+        "command_chain": true,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": true,
+        "localization_emergency_stop": false,
+        "localization_scan": true,
+        "localization_status": true,
+        "map": true,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": true,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 118.885,
+      "files": {
+        "bag_0.db3": {
+          "bytes": 14249984,
+          "sha256": "ec7906e8024c3ca943e99cf614d32c7af07b2b4eaebe5f72a033fe6312e3d033"
+        }
+      },
+      "message_count": 11766,
+      "metadata_sha256": "11a40ae49c657a5745f747de836ef5e78bc1b203c0d4570d6a3710f910820d18",
+      "path": "calibration_data/2026-09-30_beam_live_recheck_static_01/bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {
+        "0_carbot_map_20260928_215841.yaml": "47479a635738aa0f138347ee9c045b09bb433c9fc7eade45c646491c10f96686",
+        "2_carbot_auto_localization_real.yaml": "20243e9ad883a0987a6d9878c45ea29745ff3b656aa0a841bcde60a4467a7cb1",
+        "3_carbot_amcl_real.yaml": "e9ada78b56c6fe739ff0ed622b0f857a5db9686d512e93986012f2e3f2c470b6",
+        "amcl.yaml": "d3329eafd96fa69c451a5c0107f5d176cf2d09a3e4c155eb40605956de6f22d3",
+        "automatic_localization_manager.yaml": "00d163643f64cd8e0659f5bad012169769e865ef940f8db10058285093090ef6",
+        "git_diff.txt": "a56424f43ee86523fb048e3ad90829cda139b2e8ff02405632b1111265afd085",
+        "git_head.txt": "3f085093aab3f97edc7375ac12f77ad817aa3dcf1aa92d72fd10aa466d65a59a",
+        "git_status.txt": "3f085093aab3f97edc7375ac12f77ad817aa3dcf1aa92d72fd10aa466d65a59a",
+        "live_scans.json": "b6f602ab69ab02d9783990d172b7a63357c8fd8e6d03b4b7a2f50c1d832212a6",
+        "manifest.json": "49b8716fee1ebbfb65466f4bec0c68d8b539c7d0a959772773325913de44d2bb",
+        "mid360_pointcloud_to_laserscan.yaml": "4f490dd516977513b755a94800bac601fe3038518b4c82ebec30b9b775e21df1",
+        "qos.yaml": "b14c83cc97b5cbacdfd0cc55adb7bca7a8d4e631d9705454ac0ebb6ab052b036",
+        "refine_drift.json": "381d12653d039a960e2f1b2dbe9cf4dcd0b74c091f76a0f3b298f2e6d07fe797",
+        "refine_initial.json": "9e28cedbff2b3ecb68fb550516cc62fa5dc80ade0c831edefe0b94c1b7e0f160",
+        "summary.json": "e7b3ef820dee2717c2a06d0b29e4392f45759d232921044b9d07690eba7142fd"
+      },
+      "start_ns": 1790769377459707631,
+      "storage": "sqlite3",
+      "topics": {
+        "/amcl_pose": {
+          "count": 40,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/automatic_localization/status": {
+          "count": 1182,
+          "type": "std_msgs/msg/String"
+        },
+        "/cmd_vel": {
+          "count": 1186,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 1177,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/fast_lio/imu_odom": {
+          "count": 1182,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/initialpose": {
+          "count": 1,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/map": {
+          "count": 1,
+          "type": "nav_msgs/msg/OccupancyGrid"
+        },
+        "/odom": {
+          "count": 1182,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/particle_cloud": {
+          "count": 76,
+          "type": "nav2_msgs/msg/ParticleCloud"
+        },
+        "/scan": {
+          "count": 1137,
+          "type": "sensor_msgs/msg/LaserScan"
+        },
+        "/scan_localization": {
+          "count": 1132,
+          "type": "sensor_msgs/msg/LaserScan"
+        },
+        "/tf": {
+          "count": 3469,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": true,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": true,
+        "stationary_search_replay": true
+      }
+    },
+    {
+      "channels": {
+        "base_status": false,
+        "command_chain": true,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": true,
+        "localization_emergency_stop": false,
+        "localization_scan": true,
+        "localization_status": true,
+        "map": true,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": true,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 178.856,
+      "files": {
+        "bag_0.db3": {
+          "bytes": 39337984,
+          "sha256": "ea43d037121ec4af1b3b26902d0b257c71b9a43f76c45deca3c6f9c621b4bf76"
+        }
+      },
+      "message_count": 17811,
+      "metadata_sha256": "f6fe8afd13f6068bbf7151970b059d87a35462dd97c440a46fc960db8af01bbb",
+      "path": "calibration_data/2026-09-30_candidate_gap_fix_static_01/bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {
+        "0_carbot_map_20260928_215841.yaml": "47479a635738aa0f138347ee9c045b09bb433c9fc7eade45c646491c10f96686",
+        "2_carbot_auto_localization_real.yaml": "2eb599e6e2f457e4d855ff0524a884e34b194a634f77a232aea6f9c1175db759",
+        "3_carbot_amcl_real.yaml": "8ecdcffb6b503e9ff05dadc4bf2501bc8421f0c4bdc35aa2824f665c4d3d3579",
+        "amcl.yaml": "9bdbdee9ba0f90b410380f92cc27a39ddf48ec3a1c74d6da8f7e131aace34430",
+        "automatic_localization_manager.yaml": "14482129b5cd7a119068b13ff3ef6b9138301650ad4bce8b374b40984f46ff10",
+        "final_manual_scans.json": null,
+        "git_diff.txt": "a56424f43ee86523fb048e3ad90829cda139b2e8ff02405632b1111265afd085",
+        "git_head.txt": "3f085093aab3f97edc7375ac12f77ad817aa3dcf1aa92d72fd10aa466d65a59a",
+        "git_status.txt": "3f085093aab3f97edc7375ac12f77ad817aa3dcf1aa92d72fd10aa466d65a59a",
+        "manifest.json": "e5078554368a70193d56932a8d6468040d3f1b8afbd89cbd8a6b539131096f2e",
+        "mid360_pointcloud_to_laserscan.yaml": "4f490dd516977513b755a94800bac601fe3038518b4c82ebec30b9b775e21df1",
+        "qos.yaml": "b14c83cc97b5cbacdfd0cc55adb7bca7a8d4e631d9705454ac0ebb6ab052b036",
+        "refine_global_best.json": null,
+        "refine_user_reference.json": null,
+        "summary.json": null
+      },
+      "start_ns": 1790766965347996907,
+      "storage": "sqlite3",
+      "topics": {
+        "/amcl_pose": {
+          "count": 123,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/automatic_localization/status": {
+          "count": 1769,
+          "type": "std_msgs/msg/String"
+        },
+        "/cmd_vel": {
+          "count": 1760,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 1757,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/fast_lio/imu_odom": {
+          "count": 1781,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/initialpose": {
+          "count": 4,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/map": {
+          "count": 1,
+          "type": "nav_msgs/msg/OccupancyGrid"
+        },
+        "/odom": {
+          "count": 1789,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/particle_cloud": {
+          "count": 241,
+          "type": "nav2_msgs/msg/ParticleCloud"
+        },
+        "/scan": {
+          "count": 1673,
+          "type": "sensor_msgs/msg/LaserScan"
+        },
+        "/scan_localization": {
+          "count": 1741,
+          "type": "sensor_msgs/msg/LaserScan"
+        },
+        "/tf": {
+          "count": 5171,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": true,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": true,
+        "stationary_search_replay": true
+      }
+    },
+    {
+      "channels": {
+        "base_status": false,
+        "command_chain": true,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": true,
+        "localization_emergency_stop": false,
+        "localization_scan": true,
+        "localization_status": true,
+        "map": true,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": true,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 98.9,
+      "files": {
+        "bag_0.db3": {
+          "bytes": 10174464,
+          "sha256": "3761eaf98e0b659d2d7aaffc6b66023bdf97b6ccd7ac8f6dd791a44206fbee13"
+        }
+      },
+      "message_count": 9727,
+      "metadata_sha256": "c0c733fc9ee4daa568042293b0f4875be305fb3dc1d60714cd7d75e55e748bce",
+      "path": "calibration_data/2026-09-30_candidate_no_nomotion_static_01/bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {
+        "0_carbot_map_20260928_215841.yaml": "47479a635738aa0f138347ee9c045b09bb433c9fc7eade45c646491c10f96686",
+        "amcl.yaml": "d3329eafd96fa69c451a5c0107f5d176cf2d09a3e4c155eb40605956de6f22d3",
+        "automatic_localization_manager.yaml": "00d163643f64cd8e0659f5bad012169769e865ef940f8db10058285093090ef6",
+        "git_diff.txt": "a56424f43ee86523fb048e3ad90829cda139b2e8ff02405632b1111265afd085",
+        "git_head.txt": "d2b35cacadc66b7fad8dedd1be5244e17150a6625978c9330f831bd7a9cd6b1e",
+        "git_status.txt": "d2b35cacadc66b7fad8dedd1be5244e17150a6625978c9330f831bd7a9cd6b1e",
+        "manifest.json": "fbcbf6be755f6c306f7fbd19f958fe392ec1235c07635507d20446c16075deae",
+        "mid360_pointcloud_to_laserscan.yaml": "4f490dd516977513b755a94800bac601fe3038518b4c82ebec30b9b775e21df1",
+        "qos.yaml": "b14c83cc97b5cbacdfd0cc55adb7bca7a8d4e631d9705454ac0ebb6ab052b036",
+        "summary.json": "79f29a871f42ff7df90f64f5597481a6f7f845b5ce20d1ec95603b95e9cf4cba"
+      },
+      "start_ns": 1790770874579756598,
+      "storage": "sqlite3",
+      "topics": {
+        "/amcl_pose": {
+          "count": 0,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/automatic_localization/status": {
+          "count": 989,
+          "type": "std_msgs/msg/String"
+        },
+        "/cmd_vel": {
+          "count": 967,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 988,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/fast_lio/imu_odom": {
+          "count": 984,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/initialpose": {
+          "count": 0,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/map": {
+          "count": 1,
+          "type": "nav_msgs/msg/OccupancyGrid"
+        },
+        "/odom": {
+          "count": 990,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/particle_cloud": {
+          "count": 0,
+          "type": "nav2_msgs/msg/ParticleCloud"
+        },
+        "/scan": {
+          "count": 919,
+          "type": "sensor_msgs/msg/LaserScan"
+        },
+        "/scan_localization": {
+          "count": 935,
+          "type": "sensor_msgs/msg/LaserScan"
+        },
+        "/tf": {
+          "count": 2953,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": true,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": true,
+        "stationary_search_replay": true
+      }
+    },
+    {
+      "channels": {
+        "base_status": false,
+        "command_chain": true,
+        "fast_lio_body_cloud": false,
+        "fast_lio_odom": true,
+        "localization_emergency_stop": false,
+        "localization_scan": false,
+        "localization_status": true,
+        "map": true,
+        "odom": true,
+        "raw_lidar": false,
+        "safety_scan": true,
+        "tf": true,
+        "tf_static": true
+      },
+      "duration_sec": 118.421,
+      "files": {
+        "bag_0.db3": {
+          "bytes": 10874880,
+          "sha256": "b808a526da65141996c4f922e1cb049730fa379da3dad445f13d60e3784e953d"
+        }
+      },
+      "message_count": 9719,
+      "metadata_sha256": "d8927296ec9bb75019baa4431c2b1c8439a968ae37700da3d1751bb842498938",
+      "path": "calibration_data/2026-09-30_postsearch_static_01/bag",
+      "raw_lidar_type": null,
+      "sidecar_sha256": {
+        "0_carbot_map_20260928_215841.yaml": "47479a635738aa0f138347ee9c045b09bb433c9fc7eade45c646491c10f96686",
+        "4_carbot_auto_localization_real.yaml": "a1014109efba16b1228e6d12cf689647476783f77f064df480711ef149679ae6",
+        "amcl.yaml": "9bdbdee9ba0f90b410380f92cc27a39ddf48ec3a1c74d6da8f7e131aace34430",
+        "automatic_localization_manager.yaml": "3119113a3747e43fce0f0380736810965050b4f0266a3743d71e5d503b1a847c",
+        "git_diff.txt": "a56424f43ee86523fb048e3ad90829cda139b2e8ff02405632b1111265afd085",
+        "git_head.txt": "3f085093aab3f97edc7375ac12f77ad817aa3dcf1aa92d72fd10aa466d65a59a",
+        "git_status.txt": "3f085093aab3f97edc7375ac12f77ad817aa3dcf1aa92d72fd10aa466d65a59a",
+        "manifest.json": "9780f663b07add1e8567a6dd4143bdab6b5ddecce0db095cc960a72f4acb1cee",
+        "qos.yaml": "d51a8adfe6e9bed4659ccf6b1a4147924f3191912c6bf85ead936c90035cc485",
+        "summary.json": "745c9a1e76cf7ca5f6f9c47514d5e0fa477f3ab6941021d96941424866ab2578"
+      },
+      "start_ns": 1790762963742637376,
+      "storage": "sqlite3",
+      "topics": {
+        "/amcl_pose": {
+          "count": 7,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/automatic_localization/status": {
+          "count": 1187,
+          "type": "std_msgs/msg/String"
+        },
+        "/cmd_vel": {
+          "count": 1182,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/cmd_vel_command": {
+          "count": 1185,
+          "type": "geometry_msgs/msg/Twist"
+        },
+        "/fast_lio/imu_odom": {
+          "count": 1181,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/initialpose": {
+          "count": 1,
+          "type": "geometry_msgs/msg/PoseWithCovarianceStamped"
+        },
+        "/map": {
+          "count": 1,
+          "type": "nav_msgs/msg/OccupancyGrid"
+        },
+        "/odom": {
+          "count": 1190,
+          "type": "nav_msgs/msg/Odometry"
+        },
+        "/particle_cloud": {
+          "count": 13,
+          "type": "nav2_msgs/msg/ParticleCloud"
+        },
+        "/scan": {
+          "count": 1154,
+          "type": "sensor_msgs/msg/LaserScan"
+        },
+        "/tf": {
+          "count": 2617,
+          "type": "tf2_msgs/msg/TFMessage"
+        },
+        "/tf_static": {
+          "count": 1,
+          "type": "tf2_msgs/msg/TFMessage"
+        }
+      },
+      "usable_for": {
+        "body_cloud_near_field_audit": false,
+        "control_source_audit": false,
+        "derived_scan_near_field_audit": true,
+        "raw_near_field_audit": false,
+        "rotation_response_analysis": true,
+        "stationary_search_replay": false
+      }
+    }
+  ],
+  "coverage": {
+    "body_cloud_near_field_audit": [],
+    "control_source_audit": [],
+    "derived_scan_near_field_audit": [
+      "calibration_data/2026-09-30_auto_activate_no_goal_04/bag",
+      "calibration_data/2026-09-30_auto_rotation_fine_02/bag",
+      "calibration_data/2026-09-30_auto_rotation_no_nomotion_02/bag",
+      "calibration_data/2026-09-30_auto_rotation_start_02/bag",
+      "calibration_data/2026-09-30_auto_rotation_start_03/bag",
+      "calibration_data/2026-09-30_auto_rotation_three_scan_01/bag",
+      "calibration_data/2026-09-30_beam_live_recheck_static_01/bag",
+      "calibration_data/2026-09-30_candidate_gap_fix_static_01/bag",
+      "calibration_data/2026-09-30_candidate_no_nomotion_static_01/bag",
+      "calibration_data/2026-09-30_postsearch_static_01/bag"
+    ],
+    "raw_near_field_audit": [
+      "calibration_data/2026-09-21_static_mid360/mid360_imu_time_yaw_excitation_01",
+      "calibration_data/2026-09-21_static_mid360/mid360_static_full_65s",
+      "calibration_data/2026-09-21_static_mid360/mid360_static_pose_b_65s",
+      "calibration_data/2026-09-21_static_mid360/mid360_static_pose_c_65s",
+      "calibration_data/2026-09-21_static_mid360/mid360_wall_parallel_pose_d_65s"
+    ],
+    "rotation_response_analysis": [
+      "calibration_data/2026-09-23_closed_loop_yaw/closed_loop_30deg_4pairs_01",
+      "calibration_data/2026-09-23_cmd_comp_final/confirm_0p896_4pairs_05",
+      "calibration_data/2026-09-23_cmd_comp_final/ground_straight_0p04_09",
+      "calibration_data/2026-09-23_cmd_comp_final/ground_turn_0p40_4pairs_10",
+      "calibration_data/2026-09-23_cmd_comp_final/ground_turn_candidate_0p911_4pairs_12",
+      "calibration_data/2026-09-23_cmd_comp_final/ground_turn_candidate_0p940_4pairs_11",
+      "calibration_data/2026-09-23_cmd_comp_final/physical_final_04",
+      "calibration_data/2026-09-23_cmd_comp_final/warm_0p896_4pairs_06",
+      "calibration_data/2026-09-30_auto_activate_no_goal_04/bag",
+      "calibration_data/2026-09-30_auto_rotation_fine_02/bag",
+      "calibration_data/2026-09-30_auto_rotation_no_nomotion_02/bag",
+      "calibration_data/2026-09-30_auto_rotation_start_02/bag",
+      "calibration_data/2026-09-30_auto_rotation_start_03/bag",
+      "calibration_data/2026-09-30_auto_rotation_three_scan_01/bag",
+      "calibration_data/2026-09-30_beam_live_recheck_static_01/bag",
+      "calibration_data/2026-09-30_candidate_gap_fix_static_01/bag",
+      "calibration_data/2026-09-30_candidate_no_nomotion_static_01/bag",
+      "calibration_data/2026-09-30_postsearch_static_01/bag"
+    ],
+    "stationary_search_replay": [
+      "calibration_data/2026-09-30_auto_activate_no_goal_04/bag",
+      "calibration_data/2026-09-30_auto_rotation_fine_02/bag",
+      "calibration_data/2026-09-30_auto_rotation_no_nomotion_02/bag",
+      "calibration_data/2026-09-30_auto_rotation_start_02/bag",
+      "calibration_data/2026-09-30_auto_rotation_start_03/bag",
+      "calibration_data/2026-09-30_auto_rotation_three_scan_01/bag",
+      "calibration_data/2026-09-30_beam_live_recheck_static_01/bag",
+      "calibration_data/2026-09-30_candidate_gap_fix_static_01/bag",
+      "calibration_data/2026-09-30_candidate_no_nomotion_static_01/bag"
+    ]
+  },
+  "gaps": [
+    "body_cloud_near_field_audit",
+    "control_source_audit"
+  ],
+  "kind": "issue13_pr0_baseline_bags",
+  "raw_lidar_types": [
+    "sensor_msgs/msg/PointCloud2"
+  ],
+  "schema_version": 1,
+  "search_root": "calibration_data",
+  "storage_hashed": true
+}
