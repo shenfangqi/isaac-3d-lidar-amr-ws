@@ -721,6 +721,15 @@ def test_cancel_terminates_search_and_drops_result(stationary):
     assert stationary._state == stationary.State.SAFE_STOP
 
 
+def test_cancel_is_refused_while_nav2_activation_may_be_in_flight(
+        stationary):
+    stationary._transition(stationary.State.START_NAVIGATION)
+    response = NS(success=None, message='')
+    stationary._on_cancel_request(None, response)
+    assert response.success is False
+    assert stationary._state == stationary.State.START_NAVIGATION
+
+
 def test_stale_token_result_is_not_used(stationary):
     stationary._worker = FakeWorker([_search_result()])
     _start_to_collect(stationary)

@@ -274,6 +274,13 @@ class FastLioBaseAdapter(Node):
             self.get_parameter('max_output_silence').value
         )
         self._last_source_wall = None
+        # Wall time of the first FAST-LIO message.  The silence watchdog arms
+        # on wall time, not on source stamps: a stream that dies during the
+        # grace period would otherwise never advance the stamps and never arm.
+        self._first_source_wall = None
+        self._startup_grace_period = float(
+            self.get_parameter('startup_grace_period').value
+        )
         self._fault_latched = False
         self._pause_requested = False
         self._watchdog = self.create_timer(0.05, self._watchdog_callback)
@@ -318,6 +325,8 @@ class FastLioBaseAdapter(Node):
 
     def _on_odometry(self, source):
         self._last_source_wall = time.monotonic()
+        if self._first_source_wall is None:
+            self._first_source_wall = self._last_source_wall
         base_in_imu = self._lookup_base_in_imu()
         if base_in_imu is None:
             return
@@ -418,8 +427,7 @@ class FastLioBaseAdapter(Node):
             self._request_navigation_pause()
             return
         if (
-            self._guard.armed
-            and self._last_source_wall is not None
+            self._silence_watchdog_armed()
             and time.monotonic() - self._last_source_wall
             > self._max_output_silence
         ):
@@ -427,6 +435,14 @@ class FastLioBaseAdapter(Node):
                 'FAST-LIO odometry silent for more than '
                 f'{self._max_output_silence:.2f} s'
             )
+
+    def _silence_watchdog_armed(self):
+        return (
+            self._first_source_wall is not None
+            and self._last_source_wall is not None
+            and time.monotonic() - self._first_source_wall
+            >= self._startup_grace_period
+        )
 
     def _trip(self, reason):
         if self._fault_latched:

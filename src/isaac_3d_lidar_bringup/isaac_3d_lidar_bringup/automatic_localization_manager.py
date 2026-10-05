@@ -511,6 +511,16 @@ class AutomaticLocalizationManager(Node):
                            State.FAULT_STOPPED):
             response.message = f'nothing to cancel in {self._state.value}'
             return response
+        if self._state == State.START_NAVIGATION:
+            # The Nav2 lifecycle STARTUP request may already be in flight and
+            # cannot be withdrawn; reporting SAFE_STOP here would hide an
+            # activating controller.  Refuse; it finishes in READY or fails
+            # on its own timeout.
+            response.success = False
+            response.message = (
+                'cannot cancel during START_NAVIGATION; Nav2 activation may '
+                'already be in flight')
+            return response
         self._reject(RejectReason.CANCELED)
         response.message = 'cancel accepted; watch status for the stop'
         return response
