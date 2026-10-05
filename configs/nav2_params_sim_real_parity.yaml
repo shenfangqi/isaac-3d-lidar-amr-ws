@@ -1,6 +1,9 @@
+# Opt-in Isaac Sim profile for reproducing the accepted physical-navigation
+# policy. Isaac still owns /clock, /odom, and ground-truth localization; this
+# file aligns Nav2 behavior, not FAST-LIO or contact dynamics.
 controller_server:
   ros__parameters:
-    use_sim_time: false
+    use_sim_time: true
     controller_frequency: 10.0
     progress_checker_plugin: progress_checker
     goal_checker_plugins: [general_goal_checker]
@@ -32,7 +35,7 @@ controller_server:
 local_costmap:
   local_costmap:
     ros__parameters:
-      use_sim_time: false
+      use_sim_time: true
       global_frame: map
       robot_base_frame: base_footprint
       rolling_window: true
@@ -65,7 +68,7 @@ local_costmap:
 global_costmap:
   global_costmap:
     ros__parameters:
-      use_sim_time: false
+      use_sim_time: true
       global_frame: map
       robot_base_frame: base_footprint
       update_frequency: 5.0
@@ -97,7 +100,7 @@ global_costmap:
 
 planner_server:
   ros__parameters:
-    use_sim_time: false
+    use_sim_time: true
     planner_plugins: [GridBased]
     GridBased:
       plugin: nav2_smac_planner/SmacPlanner2D
@@ -118,7 +121,7 @@ planner_server:
 
 bt_navigator:
   ros__parameters:
-    use_sim_time: false
+    use_sim_time: true
     global_frame: map
     robot_base_frame: base_footprint
     odom_topic: /odom
@@ -126,7 +129,7 @@ bt_navigator:
 
 behavior_server:
   ros__parameters:
-    use_sim_time: false
+    use_sim_time: true
     global_frame: map
     robot_base_frame: base_footprint
     max_rotational_vel: 0.50
@@ -142,11 +145,11 @@ behavior_server:
 
 waypoint_follower:
   ros__parameters:
-    use_sim_time: false
+    use_sim_time: true
 
 velocity_smoother:
   ros__parameters:
-    use_sim_time: false
+    use_sim_time: true
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: OPEN_LOOP
@@ -161,7 +164,7 @@ velocity_smoother:
 
 lifecycle_manager_navigation:
   ros__parameters:
-    use_sim_time: false
+    use_sim_time: true
     autostart: true
     node_names:
       - controller_server

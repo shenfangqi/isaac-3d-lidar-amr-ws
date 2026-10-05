@@ -29,10 +29,15 @@ def generate_launch_description():
     automatic_localization = LaunchConfiguration('automatic_localization')
     auto_localization_validation_only = LaunchConfiguration(
         'auto_localization_validation_only')
+    localization_strategy = LaunchConfiguration('localization_strategy')
     recovery_enabled = LaunchConfiguration('bounded_recovery_enabled')
     acceptance_profile = LaunchConfiguration('recovery_acceptance_profile')
     recovery_validation_preview = LaunchConfiguration(
         'recovery_validation_preview')
+    complex_route_validation = LaunchConfiguration(
+        'complex_route_validation')
+    complex_route_braking_profile = LaunchConfiguration(
+        'complex_route_braking_profile')
     lifecycle_autostart = PythonExpression([
         "'", autostart, "' == 'true' and '",
         automatic_localization, "' == 'false'",
@@ -235,6 +240,7 @@ def generate_launch_description():
             {
                 'cmd_vel_topic': cmd_vel_output,
                 'validation_only': auto_localization_validation_only,
+                'localization_strategy': localization_strategy,
             },
         ],
         condition=IfCondition(automatic_localization),
@@ -265,6 +271,21 @@ def generate_launch_description():
             recovery_enabled, "' == 'false'"])),
         output='screen',
     )
+    complex_route_advisor = Node(
+        package='carbot_nav_recovery',
+        executable='complex_route_advisor',
+        name='carbot_complex_route_advisor',
+        parameters=[{
+            'global_frame': 'map',
+            'base_frame': 'base_footprint',
+            'braking_profile': complex_route_braking_profile,
+            'navigation_config_path': navigation_config,
+            'footprint_xy': [0.155, 0.133, 0.155, -0.133,
+                             -0.130, -0.133, -0.130, 0.133],
+        }],
+        condition=IfCondition(complex_route_validation),
+        output='screen',
+    )
 
     def configure_recovery(context):
         if recovery_enabled.perform(context) != 'true':
@@ -285,8 +306,10 @@ def generate_launch_description():
                  name='behavior_server', parameters=[navigation_config, overlay],
                  remappings=[('cmd_vel', 'cmd_vel_nav')], output='screen'),
             Node(package='nav2_bt_navigator', executable='bt_navigator',
-                 name='bt_navigator', parameters=[navigation_config, overlay,
-                   {'default_nav_to_pose_bt_xml': tree}], output='screen'),
+                 name='bt_navigator',
+                 parameters=[navigation_config, overlay,
+                             {'default_nav_to_pose_bt_xml': tree}],
+                 output='screen'),
             Node(package='carbot_nav_recovery', executable='recovery_coordinator',
                  name='carbot_recovery_runtime_observer',
                  parameters=[{'acceptance_profile': profile}], output='screen'),
@@ -336,12 +359,38 @@ def generate_launch_description():
             ),
         ),
         DeclareLaunchArgument(
+            'localization_strategy',
+            default_value='legacy_full_rotation',
+            choices=['legacy_full_rotation', 'stationary_only'],
+            description=(
+                'Issue #13 startup localization strategy. stationary_only '
+                'searches the whole map without any rotation command.'
+            ),
+        ),
+        DeclareLaunchArgument(
             'recovery_validation_preview',
             default_value='false',
             choices=['true', 'false'],
             description=(
                 'Show non-actuating rotation sweep evaluations in RViz. '
                 'This preview never publishes velocity commands.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'complex_route_validation',
+            default_value='false',
+            choices=['true', 'false'],
+            description=(
+                'Publish Issue #12 curvature/braking advice without changing '
+                'controller commands.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'complex_route_braking_profile',
+            default_value='',
+            description=(
+                'Absolute accepted physical braking profile. Empty keeps the '
+                'advisor in CALIBRATION_REQUIRED mode.'
             ),
         ),
         OpaqueFunction(function=configure_recovery),
@@ -363,4 +412,5 @@ def generate_launch_description():
         automatic_localization_manager,
         recovery_preview,
         recovery_runtime_observer,
+        complex_route_advisor,
     ])

@@ -86,7 +86,7 @@ def particle_concentration(particles, center_pose, max_xy, max_yaw):
 
 
 def scan_map_metrics(grid, scan, transform, occupied_threshold,
-                   tolerance_cells, max_beams):
+                     tolerance_cells, max_beams):
     """Score scan endpoints and free rays against an OccupancyGrid."""
     metrics = dict(score=0.0, known=0, sampled=0, endpoint_hits=0,
                    wall_conflicts=0, unknown=0, outside=0, coverage=0.0,
@@ -249,7 +249,8 @@ def deterministic_global_search(
         final_yaw_step_rad=math.radians(0.5),
         final_position_radius_m=0.04,
         final_yaw_radius_rad=math.radians(2.0)):
-    """Return ranked map-wide poses using endpoint and free-ray evidence.
+    """
+    Return ranked map-wide poses using endpoint and free-ray evidence.
 
     This deliberately uses the same interpretable metric as final validation,
     unlike AMCL's endpoint-only likelihood field.  Call it off the ROS executor
@@ -308,6 +309,7 @@ def deterministic_global_search(
             ) / len(metrics),
             'known': min(item['known'] for item in metrics),
         })
+
     def ranking_key(item):
         return (
             item['score'], -item['wall_conflict_ratio'],
@@ -379,10 +381,12 @@ def deterministic_global_search(
                     ]
                     final.append({
                         'x': x, 'y': y, 'yaw': yaw,
-                        'score': sum(item['score'] for item in metrics)
-                                 / len(metrics),
-                        'coverage': sum(item['coverage'] for item in metrics)
-                                    / len(metrics),
+                        'score': sum(
+                            item['score'] for item in metrics
+                        ) / len(metrics),
+                        'coverage': sum(
+                            item['coverage'] for item in metrics
+                        ) / len(metrics),
                         'wall_conflict_ratio': sum(
                             item['wall_conflict_ratio'] for item in metrics
                         ) / len(metrics),

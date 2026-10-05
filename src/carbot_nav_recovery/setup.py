@@ -28,6 +28,10 @@ setup(
             'carbot_nav_recovery.runtime_observer:main',
             'recovery_coordinator = '
             'carbot_nav_recovery.recovery_coordinator:main',
+            'complex_route_advisor = '
+            'carbot_nav_recovery.complex_route_advisor:main',
+            'analyze_complex_route_evidence = '
+            'carbot_nav_recovery.analyze_complex_route_evidence:main',
         ],
     },
 )

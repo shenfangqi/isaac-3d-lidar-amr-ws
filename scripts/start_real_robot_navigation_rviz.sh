@@ -25,11 +25,13 @@ health_check_only=false
 automatic_localization=true
 automatic_activation=true
 stationary_validation=false
+complex_route_validation=false
+localization_strategy=legacy_full_rotation
 map_argument_seen=false
 
 usage() {
   cat <<EOF
-Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [MAP_YAML]
+Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [--complex-route-validation] [--localization-strategy STRATEGY] [MAP_YAML]
 
 Start saved-map navigation for the physical Carbot and open RViz.
 
@@ -40,6 +42,12 @@ Options:
   --automatic-activate  Rotate, validate, then activate Nav2 without sending a goal (default).
   --validation-only  Alias for --automatic (does include rotation).
   --stationary-validation  No rotation; prepare manual reference and keep Nav2 inactive.
+  --complex-route-validation  Start the read-only Issue #12 advisory and evidence topics.
+  --localization-strategy STRATEGY
+                  legacy_full_rotation (default) or stationary_only. stationary_only
+                  searches the saved map without any rotation command; use it with
+                  --automatic or --automatic-activate. segmented_rotation is not
+                  available until the Issue #13 motion guard exists.
   -h, --help      Show this help.
 
 Environment overrides:
@@ -61,6 +69,17 @@ while (( $# > 0 )); do
       automatic_localization=true
       automatic_activation=false
       stationary_validation=true
+      ;;
+    --complex-route-validation)
+      complex_route_validation=true
+      ;;
+    --localization-strategy)
+      if (( $# < 2 )); then
+        echo "--localization-strategy needs a value." >&2
+        exit 2
+      fi
+      localization_strategy="$2"
+      shift
       ;;
     --validation-only|--automatic)
       automatic_localization=true
@@ -95,6 +114,23 @@ while (( $# > 0 )); do
   esac
   shift
 done
+
+case "${localization_strategy}" in
+  legacy_full_rotation|stationary_only) ;;
+  segmented_rotation)
+    echo "segmented_rotation needs the Issue #13 motion guard, which is not implemented yet." >&2
+    exit 2
+    ;;
+  *)
+    echo "Unknown localization strategy: ${localization_strategy}" >&2
+    exit 2
+    ;;
+esac
+if [[ "${localization_strategy}" != "legacy_full_rotation" ]] && {
+    [[ "${automatic_localization}" != "true" ]] || [[ "${stationary_validation}" == "true" ]]; }; then
+  echo "--localization-strategy requires --automatic or --automatic-activate." >&2
+  exit 2
+fi
 
 case "${initial_pose_timeout}" in
   ''|*[!0-9]*)
@@ -222,6 +258,27 @@ check_command_topology() {
   echo "PASS: velocity topology is Nav2 -> compensator -> ESP32 (1/1 at each edge)."
 }
 
+check_complex_route_advisor() {
+  if [[ "${complex_route_validation}" != "true" ]]; then
+    return 0
+  fi
+  remote docker exec carbot-nvblox bash -lc \
+    'pgrep -af "/carbot_nav_recovery/complex_route_advisor" >/dev/null'
+  local attempt
+  for attempt in 1 2 3; do
+    # Unlike topic-info, echo waits for Fast DDS discovery and proves the
+    # publisher is delivering the validation-only schema, not merely listed.
+    if remote_ros \
+        'ros2 topic list --no-daemon >/dev/null; timeout --kill-after=1s 12s ros2 topic echo /carbot_nav_recovery/complex_route_advisory --once --field data 2>/dev/null | grep -q "validation_only.*true"'; then
+      echo "PASS: Issue #12 advisor is active in read-only validation mode."
+      return 0
+    fi
+    sleep 2
+  done
+  echo "Complex-route advisor did not deliver validation-only evidence after ${attempt} attempts." >&2
+  return 1
+}
+
 check_fresh_hardware() {
   remote bash -lc "
     source /opt/ros/humble/setup.bash
@@ -262,10 +319,10 @@ clear_command_compensation_latch() {
 run_preflight_with_readiness_retry() {
   local output status failure_lines
 
-  set +e
-  output="$(remote bash /tmp/carbot_nav_preflight.sh 2>&1)"
-  status=$?
-  set -e
+  # A failing command fires the ERR trap even under set +e; only the
+  # right-hand side of || keeps it from aborting before the retry below.
+  status=0
+  output="$(remote bash /tmp/carbot_nav_preflight.sh 2>&1)" || status=$?
   printf '%s\n' "${output}"
   if ((status == 0)); then
     return 0
@@ -405,10 +462,8 @@ run_automatic_localization() {
   # every other parameter error still fails immediately.
   local attempt output status
   for attempt in {1..10}; do
-    set +e
-    output="$(remote_ros 'timeout 5s ros2 param get /automatic_localization_manager validation_only' 2>&1)"
-    status=$?
-    set -e
+    status=0
+    output="$(remote_ros 'timeout 5s ros2 param get /automatic_localization_manager validation_only' 2>&1)" || status=$?
     if (( status == 0 )); then
       validation_mode="${output}"
       break
@@ -429,6 +484,16 @@ run_automatic_localization() {
   fi
   if [[ "${validation_mode}" != *"${expected_validation}"* ]]; then
     echo "Automatic-localization activation mode does not match the requested workflow." >&2
+    return 1
+  fi
+  local deployed_strategy
+  deployed_strategy="$(remote_ros 'timeout 5s ros2 param get /automatic_localization_manager localization_strategy' 2>&1)" || {
+    printf '%s\n' "${deployed_strategy}" >&2
+    echo "The deployed manager does not report a localization strategy; rebuild the Jetson workspace." >&2
+    return 1
+  }
+  if [[ "${deployed_strategy}" != *"String value is: ${localization_strategy}"* ]]; then
+    echo "Deployed localization strategy (${deployed_strategy}) does not match ${localization_strategy}." >&2
     return 1
   fi
   local service=/automatic_localization/start
@@ -530,6 +595,10 @@ fi
 echo "Target: ${identity} (${jetson_host})"
 echo "Map: ${map_yaml}"
 echo "Localization: $(if [[ "${automatic_localization}" == "true" ]]; then echo automatic; else echo manual; fi)"
+if [[ "${automatic_localization}" == "true" ]]; then
+  echo "Localization strategy: ${localization_strategy}"
+fi
+echo "Complex-route advisor: $(if [[ "${complex_route_validation}" == "true" ]]; then echo validation-only; else echo disabled; fi)"
 remote test -f "${map_yaml}"
 
 echo "[1/8] Disabling the conflicting web teleop publisher..."
@@ -543,14 +612,19 @@ remote systemctl --user start \
 
 echo "[3/8] Recreating the inactive saved-map navigation container..."
 initialization_mode=manual
+complex_route_mode=none
 if [[ "${automatic_localization}" == "true" ]]; then
   initialization_mode=auto
 fi
 if [[ "${automatic_activation}" == "true" ]]; then
   initialization_mode=auto-activate
 fi
+if [[ "${complex_route_validation}" == "true" ]]; then
+  complex_route_mode=complex-route-validation
+fi
 remote "${jetson_workspace}/scripts/jetson_nvblox_container.sh" \
-  recreate navigation-safe "${map_yaml}" "${initialization_mode}" >/dev/null
+  recreate navigation-safe "${map_yaml}" "${initialization_mode}" "${complex_route_mode}" \
+  "${localization_strategy}" >/dev/null
 
 echo "[4/8] Running the non-motion hardware preflight..."
 run_preflight_with_readiness_retry
@@ -589,6 +663,7 @@ else
 fi
 check_rviz
 control health --timeout 15 --settle 4
+check_complex_route_advisor
 
 startup_complete=true
 trap - ERR INT TERM

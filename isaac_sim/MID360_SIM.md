@@ -29,7 +29,11 @@ the RTX profile and nvblox limits to that source. The RTX error review keeps
 explicit simulation assumptions rather than claimed MID-360 specifications.
 
 The real driver preserves the complete
-`x/y/z/intensity/tag/line/timestamp` cloud on `/livox/lidar`. The separate
+Livox `CustomMsg` point set and per-point `offset_time` on `/livox/lidar` for
+FAST-LIO deskew. Isaac RTX publishes `sensor_msgs/msg/PointCloud2` on the same
+runtime-specific topic name; `configs/carbot/real.yaml` and
+`configs/carbot/sim.yaml` record the two runtime message contracts explicitly
+without changing the geometry source used to build the USD. The separate
 `/mid360/points_xyz` stream is deliberately compacted and stride-reduced for
 the Jetson-to-workstation Wi-Fi path; it must not replace the raw topic for
 recording, calibration, return-quality analysis or timestamp analysis.

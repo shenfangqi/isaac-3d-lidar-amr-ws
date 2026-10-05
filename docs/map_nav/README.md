@@ -191,6 +191,22 @@ AMCL_INITIAL_POSE_MODE=odom_identity \
 ./start_nav_all.sh
 ```
 
+需要复现真机桌腿窄通道的规划、碰撞预测和控制策略时，显式选择
+真机策略对齐配置；它仍使用 Isaac `/clock` 和 ground-truth odom，不会启动
+FAST-LIO 或真机手动定位器：
+
+```bash
+ros2 launch \
+  /workspace/ros-humble/isaac_3d_lidar_amr_ws/launch/carbot_sim.launch.py \
+  localization_mode:=ground_truth \
+  nav2_params_file:=/workspace/ros-humble/isaac_3d_lidar_amr_ws/configs/nav2_params_sim_real_parity.yaml
+```
+
+默认的 `configs/nav2_params_sim.yaml` 保持原有快速、保守的 warehouse 回归；
+`nav2_params_sim_real_parity.yaml` 用于比较相同 footprint、Smac 路径、两秒
+碰撞预测、入口对正、padding、inflation 和真机速度/加速度策略。两者用途
+不同，不能用策略对齐结果宣称 Isaac 接触动力学已经成为真车数字孪生。
+
 使用测量好的固定地图坐标：
 
 ```bash
@@ -953,6 +969,10 @@ amcl_initial_pose_mode:=odom_identity
 - 三张栅格的机器人中心值。
 - 最后一个 Goal 的 action 终态和恢复次数。
 - 是否存在 teleop、explorer 或测试脚本等额外 `/cmd_vel` 来源。
+
+### 19.1 Issue #12 复杂弯路只读采证
+
+需要调查弯道近障提前停车时，可在维护入口增加 `--complex-route-validation`。它只启动 advisory、RViz 标记和证据快照，不会修改控制速度或自动续发目标。没有经真机验收的制动配置时不会给出数值速度建议；具体字段和采证边界见 `src/carbot_nav_recovery/README.md` 与 `docs/carbot_issue12_handoff.md`。
 
 ## 20. 当前项目结论
 

@@ -46,6 +46,34 @@ from isaac_3d_lidar_bringup.automatic_localization_quality import (
 from isaac_3d_lidar_bringup.automatic_localization_quality import (
     trim_time_window,
 )
+from isaac_3d_lidar_bringup.localization_contracts import (
+    ContractError,
+    FrameRole,
+    MotionPolicy,
+    REJECT_REASON_TEXT,
+    RejectReason,
+    SCHEMA_VERSION,
+    SE2,
+    Strategy,
+    validate_confined_parameters,
+    validate_strategy_configuration,
+)
+from isaac_3d_lidar_bringup.localization_hypotheses import (
+    grid_snapshot,
+    map_hash,
+    run_search_job,
+    run_validation_job,
+    SearchConfig,
+    SearchWorker,
+    seed_pose_at_current_time,
+    ValidationThresholds,
+)
+from isaac_3d_lidar_bringup.localization_observations import (
+    collect_keyframes,
+    make_keyframe,
+    Reject,
+    snapshot_scan,
+)
 
 
 LOCALIZATION_MANAGER = '/lifecycle_manager_localization/manage_nodes'
@@ -69,6 +97,14 @@ class State(Enum):
     WAIT_MANUAL_POSE = 'WAIT_MANUAL_POSE'
     VERIFY_MANUAL_POSE = 'VERIFY_MANUAL_POSE'
     FAULT_STOPPED = 'FAULT_STOPPED'
+    # Issue #13 strategies.  None of these states commands motion.
+    COLLECT_STATIC = 'COLLECT_STATIC'
+    SEARCH_MULTI_VIEW = 'SEARCH_MULTI_VIEW'
+    VERIFY_HYPOTHESES = 'VERIFY_HYPOTHESES'
+
+
+CONFINED_STATES = frozenset((
+    State.COLLECT_STATIC, State.SEARCH_MULTI_VIEW, State.VERIFY_HYPOTHESES))
 
 
 class AutomaticLocalizationManager(Node):
@@ -84,6 +120,8 @@ class AutomaticLocalizationManager(Node):
         # post-acceptance automatic-activation mode overrides it at startup.
         self._validation_only = bool(self._parameter('validation_only'))
         self._stationary_only = False
+        # Also immutable: no dynamic change may enable motion or relax gates.
+        self._configure_strategy()
 
         status_qos = QoSProfile(
             depth=1,
@@ -177,6 +215,9 @@ class AutomaticLocalizationManager(Node):
             Trigger, '/automatic_localization/prepare_stationary',
             self._on_prepare_request,
         )
+        self._cancel_service = self.create_service(
+            Trigger, '/automatic_localization/cancel', self._on_cancel_request,
+        )
         self._tf_buffer = Buffer(cache_time=Duration(seconds=10.0))
         self._tf_listener = TransformListener(self._tf_buffer, self)
 
@@ -243,6 +284,12 @@ class AutomaticLocalizationManager(Node):
         self._requested_initial_pose = None
         self._manual_reference_pose = None
         self._candidate_anchor_pose = None
+        self._reset_confined_session()
+        self._latest_grid = None
+        self._map_hash = ''
+        self._worker = (
+            SearchWorker() if self._strategy != Strategy.LEGACY_FULL_ROTATION
+            else None)
 
         self._timer = self.create_timer(0.1, self._tick)
         self._publish_status(force=True)
@@ -265,8 +312,9 @@ class AutomaticLocalizationManager(Node):
             'start_armed': False,
             'validation_only': True,
             'max_future_stamp_sec': 0.05,
-            # AMCL deliberately postdates map->odom by transform_tolerance.
             'max_tf_future_sec': 0.6,
+            # Must equal AMCL transform_tolerance (carbot_amcl_real.yaml).
+            'map_odom_postdate_sec': 1.5,
             'sensor_freshness_sec': 0.5,
             'localization_evidence_freshness_sec': 10.0,
             'nomotion_update_interval_sec': 1.0,
@@ -335,12 +383,147 @@ class AutomaticLocalizationManager(Node):
             'tf_window_sec': 3.0,
             'max_tf_translation_span': 0.08,
             'max_tf_yaw_span': 0.08,
+            # Issue #13.  legacy_full_rotation keeps the behaviour above.
+            'localization_strategy': Strategy.LEGACY_FULL_ROTATION.value,
+            'motion_policy': MotionPolicy.FORBID.value,
+            'motion_profile_path': '',
+            'operator_rotation_clear': False,
+            'train_frames_per_view': 3,
+            'holdout_frames_per_view': 3,
+            'max_views': 8,
+            'max_probe_segments': 6,
+            'probe_angles_rad': [
+                math.pi / 6.0, -math.pi / 6.0, math.pi / 3.0,
+                -math.pi / 3.0, math.pi / 2.0, -math.pi / 2.0],
+            'max_total_probe_yaw_rad': 2.0 * math.pi,
+            'probe_motion_timeout_sec': 45.0,
+            'motion_request_timeout_sec': 0.30,
+            'search_timeout_sec': 120.0,
+            'session_timeout_sec': 240.0,
+            'collect_static_timeout_sec': 10.0,
+            'independent_cluster_xy_m': 0.30,
+            'independent_cluster_yaw_rad': math.pi / 12.0,
+            'max_refined_clusters': 8,
         }
         for name, default in parameters.items():
             self.declare_parameter(name, default)
 
     def _parameter(self, name):
         return self.get_parameter(name).value
+
+    def _configure_strategy(self):
+        """Validate the Issue #13 strategy once; conflicts abort startup."""
+        strategy, policy = validate_strategy_configuration(
+            self._parameter('localization_strategy'),
+            self._parameter('motion_policy'),
+            self._validation_only,
+            self._parameter('motion_profile_path'),
+            bool(self._parameter('operator_rotation_clear')),
+        )
+        if strategy == Strategy.SEGMENTED_ROTATION:
+            # Rotation needs the separate motion guard; until it exists this
+            # strategy must not start rather than silently degrade.
+            raise ContractError(
+                'segmented_rotation requires the motion guard (Issue #13 '
+                'PR3); use stationary_only or legacy_full_rotation')
+        names = (
+            'train_frames_per_view', 'holdout_frames_per_view', 'max_views',
+            'max_probe_segments', 'max_refined_clusters', 'probe_angles_rad',
+            'max_total_probe_yaw_rad', 'probe_motion_timeout_sec',
+            'motion_request_timeout_sec', 'sensor_freshness_sec',
+            'search_timeout_sec', 'session_timeout_sec',
+            'independent_cluster_xy_m', 'independent_cluster_yaw_rad',
+        )
+        self._confined = validate_confined_parameters(
+            {name: self._parameter(name) for name in names})
+        self._strategy = strategy
+        self._motion_policy = policy
+
+    def _search_config(self):
+        return SearchConfig(
+            occupied_threshold=int(self._parameter('occupied_threshold')),
+            tolerance_cells=math.ceil(
+                self._parameter('scan_match_tolerance_m')
+                / self._latest_grid.info.resolution),
+            coarse_step_m=self._parameter('global_search_position_step_m'),
+            coarse_yaw_step_rad=self._parameter(
+                'global_search_yaw_step_rad'),
+            coarse_beams=int(self._parameter('global_search_coarse_beams')),
+            refine_beams=int(self._parameter('scan_score_max_beams')),
+            cluster_xy_m=self._confined['independent_cluster_xy_m'],
+            cluster_yaw_rad=self._confined['independent_cluster_yaw_rad'],
+            max_refined_clusters=self._confined['max_refined_clusters'],
+        )
+
+    def _validation_thresholds(self):
+        return ValidationThresholds(
+            min_score=self._parameter('min_scan_map_score'),
+            min_coverage=self._parameter('min_scan_map_coverage'),
+            min_known=int(self._parameter('min_valid_scan_beams')),
+            max_conflict=self._parameter(
+                'global_search_max_wall_conflict_ratio'),
+            min_margin=self._parameter('global_search_min_score_margin'),
+        )
+
+    def _reset_confined_session(self):
+        """Forget every keyframe, job and result of the previous session."""
+        self._session = ''
+        self._session_started = None
+        self._confined_scans = deque(maxlen=10)
+        self._keyframes = []
+        self._next_keyframe_id = 0
+        self._last_keyframe_stamp_ns = 0
+        self._search_result = None
+        self._validation_submitted = False
+        self._reject_reason = ''
+
+    def _cancel_worker(self):
+        worker = getattr(self, '_worker', None)
+        if worker is not None:
+            worker.cancel()
+
+    def _begin_confined_session(self, now):
+        self._cancel_worker()
+        self._reset_confined_session()
+        self._session = uuid.uuid4().hex[:16]
+        self._session_started = now
+        self._reset_evidence()
+        self._search_best = None
+        self._search_runner_up = None
+        self._transition(State.COLLECT_STATIC)
+
+    def _reject(self, reason, detail=''):
+        """Stop a confined session with an explicit contract reason."""
+        reason = RejectReason(reason)
+        self._cancel_worker()
+        self._reject_reason = reason.value
+        self._quality_failure = reason.value
+        text, manual = REJECT_REASON_TEXT[reason]
+        suffix = f' ({detail})' if detail else ''
+        self._fail(f'{reason.value}: {text}{suffix}', manual_recovery=manual)
+
+    def _on_cancel_request(self, _request, response):
+        # Idempotent: the response only acknowledges the request.  Stopping
+        # is reported through the status topic, never claimed here.
+        response.success = True
+        if self._state in (State.WAIT_FOR_START, State.READY,
+                           State.SAFE_STOP, State.WAIT_MANUAL_POSE,
+                           State.FAULT_STOPPED):
+            response.message = f'nothing to cancel in {self._state.value}'
+            return response
+        if self._state == State.START_NAVIGATION:
+            # The Nav2 lifecycle STARTUP request may already be in flight and
+            # cannot be withdrawn; reporting SAFE_STOP here would hide an
+            # activating controller.  Refuse; it finishes in READY or fails
+            # on its own timeout.
+            response.success = False
+            response.message = (
+                'cannot cancel during START_NAVIGATION; Nav2 activation may '
+                'already be in flight')
+            return response
+        self._reject(RejectReason.CANCELED)
+        response.message = 'cancel accepted; watch status for the stop'
+        return response
 
     def _accept_source(self, key, message, max_age):
         stamp = Time.from_msg(message.header.stamp).nanoseconds
@@ -383,6 +566,9 @@ class AutomaticLocalizationManager(Node):
                 self._sensors_ready_since = None
                 if self._state == State.ROTATE_AND_SCORE:
                     self._fail('odometry jumped during localization')
+                elif self._state in CONFINED_STATES:
+                    self._reject(RejectReason.ODOM_JUMP,
+                                 f'{distance:.3f} m / {yaw_step:.3f} rad')
 
         if (
             self._state == State.ROTATE_AND_SCORE
@@ -425,6 +611,8 @@ class AutomaticLocalizationManager(Node):
         self._pending_scans.append((message, received))
         if self._state == State.SEARCH_GLOBAL_POSE:
             self._stationary_search_scans.append(message)
+        elif self._state in (State.COLLECT_STATIC, State.VERIFY_HYPOTHESES):
+            self._confined_scans.append((message, received))
         self._score_pending_scans()
 
     def _on_safety_scan(self, message):
@@ -490,6 +678,16 @@ class AutomaticLocalizationManager(Node):
 
     def _on_map(self, message):
         self._latest_map = message
+        if getattr(self, '_strategy', None) in (
+                None, Strategy.LEGACY_FULL_ROTATION):
+            return
+        grid = grid_snapshot(message)
+        digest = map_hash(grid)
+        if self._map_hash and digest != self._map_hash \
+                and self._state in CONFINED_STATES:
+            self._reject(RejectReason.MAP_CHANGED)
+        self._latest_grid = grid
+        self._map_hash = digest
 
     def _on_amcl_pose(self, message):
         if not self._accept_source('amcl', message, self._parameter(
@@ -608,7 +806,9 @@ class AutomaticLocalizationManager(Node):
         now = time.monotonic()
         self._startup_started = now
         self._sensors_ready_since = None
-        self._ensure_command_publisher()
+        if self._strategy == Strategy.LEGACY_FULL_ROTATION:
+            # New strategies never own a velocity publisher in this node.
+            self._ensure_command_publisher()
         self._transition(State.WAIT_SENSORS)
         response.success = True
         response.message = 'automatic localization armed'
@@ -685,7 +885,9 @@ class AutomaticLocalizationManager(Node):
             return
         self._failure_reason = reason
         self._manual_recovery_allowed = manual_recovery
-        self._ensure_command_publisher()
+        self._cancel_worker()
+        if self._strategy == Strategy.LEGACY_FULL_ROTATION:
+            self._ensure_command_publisher()
         self.get_logger().error(reason)
         self._transition(State.SAFE_STOP)
 
@@ -709,9 +911,13 @@ class AutomaticLocalizationManager(Node):
         except TransformException:
             return
         stamp = Time.from_msg(stamped.header.stamp).nanoseconds
-        age = (self.get_clock().now().nanoseconds - stamp) / 1e9
+        # AMCL stamps map->odom transform_tolerance ahead of its scan.  Judge
+        # freshness and clock skew on the scan time it was computed from.
+        source = stamp - round(
+            self._parameter('map_odom_postdate_sec') * 1e9)
+        age = (self.get_clock().now().nanoseconds - source) / 1e9
         self._timing['map_odom'] = {
-            'source_stamp_ns': stamp, 'source_age_sec': age}
+            'source_stamp_ns': source, 'source_age_sec': age}
         if (stamp <= (self._last_tf_stamp or 0)
                 or age > self._parameter('sensor_freshness_sec')
                 or age < -self._parameter('max_tf_future_sec')):
@@ -875,7 +1081,8 @@ class AutomaticLocalizationManager(Node):
         return stable
 
     def _candidate_quality_passes(self, now):
-        """Continuously validate an already qualified stationary candidate.
+        """
+        Continuously validate an already qualified stationary candidate.
 
         Entry to CANDIDATE_READY already required fresh AMCL, particles and a
         full stable TF window.  AMCL does not promise to republish those while
@@ -997,23 +1204,26 @@ class AutomaticLocalizationManager(Node):
         ):
             return False, 'AMBIGUOUS_LOCATION'
 
+        self._publish_global_seed(best['x'], best['y'], best['yaw'])
+        return True, ''
+
+    def _publish_global_seed(self, x, y, yaw):
         message = PoseWithCovarianceStamped()
         message.header.frame_id = 'map'
-        message.pose.pose.position.x = best['x']
-        message.pose.pose.position.y = best['y']
-        message.pose.pose.orientation.z = math.sin(best['yaw'] / 2.0)
-        message.pose.pose.orientation.w = math.cos(best['yaw'] / 2.0)
+        message.pose.pose.position.x = x
+        message.pose.pose.position.y = y
+        message.pose.pose.orientation.z = math.sin(yaw / 2.0)
+        message.pose.pose.orientation.w = math.cos(yaw / 2.0)
         seed_xy_std = self._parameter('global_search_seed_xy_std_m')
         seed_yaw_std = self._parameter('global_search_seed_yaw_std_rad')
         message.pose.covariance[0] = seed_xy_std ** 2
         message.pose.covariance[7] = seed_xy_std ** 2
         message.pose.covariance[35] = seed_yaw_std ** 2
         self._reset_evidence()
-        self._requested_initial_pose = (best['x'], best['y'], best['yaw'])
+        self._requested_initial_pose = (x, y, yaw)
         self._manual_reference_pose = None
         self._awaiting_amcl_initial_pose = True
         self._pose_seed_publisher.publish(message)
-        return True, ''
 
     def _tick(self):
         now = time.monotonic()
@@ -1058,6 +1268,8 @@ class AutomaticLocalizationManager(Node):
                 elif result is True:
                     if self._stationary_only:
                         self._transition(State.WAIT_MANUAL_POSE)
+                    elif self._strategy == Strategy.STATIONARY_ONLY:
+                        self._begin_confined_session(now)
                     else:
                         # The explainable map-wide search below now owns global
                         # pose discovery.  Do not also spread AMCL particles
@@ -1226,6 +1438,10 @@ class AutomaticLocalizationManager(Node):
                     manual_recovery=True,
                 )
 
+        elif self._state in CONFINED_STATES:
+            self._publish_zero()
+            self._tick_confined(now, state_age)
+
         elif self._state == State.STOP_AND_VERIFY:
             self._publish_zero()
             stopped = (
@@ -1332,6 +1548,203 @@ class AutomaticLocalizationManager(Node):
             self._publish_zero()
 
         self._publish_status()
+
+    def _tf_se2(self, target, source, stamp_ns):
+        """Planar transform at exactly ``stamp_ns``; LookupError if absent."""
+        try:
+            transform = self._tf_buffer.lookup_transform(
+                target, source, Time(nanoseconds=stamp_ns)).transform
+        except TransformException as error:
+            raise LookupError(str(error)) from error
+        return SE2(transform.translation.x, transform.translation.y,
+                   quaternion_yaw(transform.rotation))
+
+    def _take_keyframes(self, role, now):
+        """
+        Turn buffered stopped scans into keyframes of one role.
+
+        Scans must be newer than every frame already used, so HOLDOUT frames
+        are always captured after the TRAIN frames.  A scan whose source-time
+        TF has not arrived waits for at most the sensor freshness limit.
+        """
+        freshness = self._parameter('sensor_freshness_sec')
+        pending = deque(maxlen=self._confined_scans.maxlen)
+        for message, received in self._confined_scans:
+            scan = snapshot_scan(message)
+            if scan.stamp_ns <= self._last_keyframe_stamp_ns:
+                continue
+            frame = make_keyframe(
+                scan, self._tf_se2, self._session, 0, role,
+                self._next_keyframe_id, received)
+            if isinstance(frame, Reject):
+                if now - received <= freshness:
+                    pending.append((message, received))
+                continue
+            self._keyframes.append(frame)
+            self._next_keyframe_id += 1
+            self._last_keyframe_stamp_ns = scan.stamp_ns
+        self._confined_scans = pending
+
+    def _frames(self, role, now):
+        return collect_keyframes(
+            self._keyframes, role, self._confined['max_views'],
+            self._parameter('session_timeout_sec'), now, self._session)
+
+    def _role_complete(self, role, now):
+        wanted = self._confined[
+            'train_frames_per_view' if role == FrameRole.TRAIN
+            else 'holdout_frames_per_view']
+        frames = self._frames(role, now)
+        if isinstance(frames, Reject):
+            if frames.reason == RejectReason.ODOM_JUMP:
+                self._reject(frames.reason, frames.detail)
+            return None
+        return frames if len(frames) >= wanted else None
+
+    def _gather(self, role, now):
+        """Collect frames only while verifiably stopped."""
+        if not self._stopped(now):
+            # Frames must come from one stationary view; discard partials.
+            self._keyframes = [
+                frame for frame in self._keyframes if frame.role != role]
+            self._confined_scans.clear()
+            return None
+        self._take_keyframes(role, now)
+        return self._role_complete(role, now)
+
+    def _tick_confined(self, now, state_age):
+        if now - self._session_started > self._parameter(
+                'session_timeout_sec'):
+            self._reject(RejectReason.SEARCH_INCOMPLETE, 'session timeout')
+            return
+        if self._latest_grid is None:
+            if state_age > self._parameter('collect_static_timeout_sec'):
+                self._reject(RejectReason.SENSOR_STALE, 'no map')
+            return
+
+        if self._state == State.COLLECT_STATIC:
+            train = self._gather(FrameRole.TRAIN, now)
+            if self._state != State.COLLECT_STATIC:
+                return
+            if train is None:
+                if state_age > self._parameter('collect_static_timeout_sec'):
+                    self._reject(RejectReason.SENSOR_STALE,
+                                 'no qualified stationary TRAIN frames')
+                return
+            self._worker.submit(
+                (self._session, self._map_hash), run_search_job,
+                self._latest_grid, train, self._search_config(),
+                self._parameter('search_timeout_sec'))
+            self._transition(State.SEARCH_MULTI_VIEW)
+
+        elif self._state == State.SEARCH_MULTI_VIEW:
+            outcome = self._worker.poll()
+            if outcome is None:
+                # The worker owns its own deadline; this is the backstop.
+                if state_age > self._parameter('search_timeout_sec') + 5.0:
+                    self._reject(RejectReason.SEARCH_INCOMPLETE,
+                                 'search worker deadline')
+                return
+            token, status, result = outcome
+            if token != (self._session, self._map_hash):
+                self._reject(RejectReason.MAP_CHANGED, 'stale search result')
+            elif status != 'ok':
+                self._reject(RejectReason.SEARCH_INCOMPLETE, str(result))
+            elif not result.complete:
+                self._search_result = result
+                self._reject(result.reason)
+            else:
+                self._search_result = result
+                self._validation_submitted = False
+                self._transition(State.VERIFY_HYPOTHESES)
+
+        elif self._state == State.VERIFY_HYPOTHESES:
+            if not self._validation_submitted:
+                holdout = self._gather(FrameRole.HOLDOUT, now)
+                if self._state != State.VERIFY_HYPOTHESES:
+                    return
+                if holdout is None:
+                    if state_age > self._parameter(
+                            'collect_static_timeout_sec'):
+                        self._reject(RejectReason.SENSOR_STALE,
+                                     'no qualified HOLDOUT frames')
+                    return
+                self._worker.submit(
+                    (self._session, self._map_hash), run_validation_job,
+                    self._latest_grid, self._search_result,
+                    self._frames(FrameRole.TRAIN, now), holdout,
+                    self._search_config(), self._validation_thresholds(),
+                    self._parameter('verification_timeout_sec'))
+                self._validation_submitted = True
+                return
+            outcome = self._worker.poll()
+            if outcome is None:
+                if state_age > self._parameter(
+                        'collect_static_timeout_sec') + self._parameter(
+                        'verification_timeout_sec') + 5.0:
+                    self._reject(RejectReason.SEARCH_INCOMPLETE,
+                                 'validation worker deadline')
+                return
+            token, status, decision = outcome
+            if token != (self._session, self._map_hash):
+                self._reject(RejectReason.MAP_CHANGED,
+                             'stale validation result')
+            elif status != 'ok':
+                self._reject(RejectReason.SEARCH_INCOMPLETE, str(decision))
+            elif not decision.accepted:
+                self._reject(decision.reason)
+            else:
+                self._accept_confined(decision.winner, now)
+
+    def _accept_confined(self, winner, now):
+        """Seed AMCL with the winner moved to the current odometry pose."""
+        if not self._stopped(now) or self._last_odom_pose is None:
+            self._reject(RejectReason.SENSOR_STALE,
+                         'not stopped with fresh odometry at seed time')
+            return
+        reference = self._frames(FrameRole.TRAIN, now)
+        if isinstance(reference, Reject) or not reference:
+            self._reject(reference.reason if isinstance(reference, Reject)
+                         else RejectReason.SENSOR_STALE)
+            return
+        seed = seed_pose_at_current_time(
+            SE2(winner.x, winner.y, winner.yaw), reference[0].T_odom_base,
+            SE2(*self._last_odom_pose))
+        self._search_best = {
+            'x': seed.x, 'y': seed.y, 'yaw': seed.yaw,
+            'score': winner.score, 'coverage': winner.coverage,
+            'wall_conflict_ratio': winner.conflict,
+            'cluster_id': winner.cluster_id,
+            'support_bounds': list(winner.support_bounds),
+        }
+        self._publish_global_seed(seed.x, seed.y, seed.yaw)
+        self._transition(State.STOP_AND_VERIFY)
+
+    def _confined_status(self):
+        """Issue #13 status fields; existing fields are left unchanged."""
+        result = self._search_result
+        reason = self._reject_reason
+        text, manual = (REJECT_REASON_TEXT[RejectReason(reason)]
+                        if reason else ('', None))
+        legacy = self._strategy == Strategy.LEGACY_FULL_ROTATION
+        return {
+            'schema_version': SCHEMA_VERSION,
+            'strategy': self._strategy.value,
+            'motion_policy': self._motion_policy.value,
+            'session': self._session,
+            'search_complete': None if result is None else result.complete,
+            'hypothesis_count': (
+                None if result is None else len(result.hypotheses)),
+            'ambiguity_reason': reason,
+            'reject_reason_text': text,
+            'manual_pose_allowed': manual,
+            # No guard exists before PR3; new strategies never move here.
+            'motion_guard_state': None,
+            'unknown_sweep_cells': None,
+            'total_abs_yaw': (
+                round(self._rotation_progress, 3) if legacy else 0.0),
+            'map_hash': self._map_hash,
+        }
 
     def _publish_status(self, force=False):
         now = time.monotonic()
@@ -1444,6 +1857,7 @@ class AutomaticLocalizationManager(Node):
             'manual_pose_required':
                 self._state == State.WAIT_MANUAL_POSE,
         }
+        data.update(self._confined_status())
         encoded = json.dumps(data, separators=(',', ':'), sort_keys=True)
         if force or encoded != self._last_status:
             message = String()
@@ -1462,6 +1876,7 @@ def main(args=None):
         pass
     finally:
         node._publish_zero()
+        node._cancel_worker()
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

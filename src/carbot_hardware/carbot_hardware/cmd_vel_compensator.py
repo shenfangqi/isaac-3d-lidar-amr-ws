@@ -7,6 +7,8 @@ from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import Twist
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from std_msgs.msg import Bool
 import yaml
 
 from carbot_hardware.command_compensation import compensate_angular_z
@@ -22,6 +24,9 @@ class CmdVelCompensator(Node):
         self.declare_parameter("canonical_parameters_path", default_path)
         self.declare_parameter("input_topic", "/cmd_vel_command")
         self.declare_parameter("output_topic", "/cmd_vel")
+        self.declare_parameter(
+            "emergency_stop_topic", "/localization/emergency_stop"
+        )
 
         parameter_path = self.get_parameter(
             "canonical_parameters_path"
@@ -41,12 +46,28 @@ class CmdVelCompensator(Node):
         self.subscription = self.create_subscription(
             Twist, input_topic, self.command_callback, 10
         )
+        fault_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self.emergency_subscription = self.create_subscription(
+            Bool,
+            self.get_parameter("emergency_stop_topic").value,
+            self.emergency_stop_callback,
+            fault_qos,
+        )
+        self._localization_stop_latched = False
+        self._stop_timer = self.create_timer(0.05, self._publish_latched_stop)
         self.get_logger().info(
             f"right-turn scale={self.right_turn_scale:.3f}: "
             f"{input_topic} -> {output_topic}"
         )
 
     def command_callback(self, message):
+        if self._localization_stop_latched:
+            self.publisher.publish(Twist())
+            return
         output = deepcopy(message)
         try:
             output.angular.z = compensate_angular_z(
@@ -58,6 +79,20 @@ class CmdVelCompensator(Node):
             )
             output = Twist()
         self.publisher.publish(output)
+
+    def emergency_stop_callback(self, message):
+        if not message.data or self._localization_stop_latched:
+            return
+        self._localization_stop_latched = True
+        self.get_logger().fatal(
+            "localization emergency stop latched; restart this service only "
+            "after FAST-LIO has been restarted and verified"
+        )
+        self.publisher.publish(Twist())
+
+    def _publish_latched_stop(self):
+        if self._localization_stop_latched:
+            self.publisher.publish(Twist())
 
 
 def main(args=None):

@@ -37,6 +37,7 @@ def build_navigation_actions(
     initial_x,
     initial_y,
     initial_yaw,
+    nav2_params_file=None,
 ):
     """Build description, scan, localization, and Nav2 launch actions."""
     common, profile = load_runtime_profile(runtime)
@@ -226,7 +227,7 @@ def build_navigation_actions(
         ),
         launch_arguments={
             "use_sim_time": str(use_sim_time).lower(),
-            "params_file": profile["nav2_params_file"],
+            "params_file": nav2_params_file or profile["nav2_params_file"],
         }.items(),
     )
 

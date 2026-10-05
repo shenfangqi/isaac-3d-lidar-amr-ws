@@ -1,5 +1,16 @@
 # Current authoritative project state
 
+## Issue #13 PR1 stationary localization on the real robot: 2026-10-05/06
+
+- Branch `feature/issue13-pr1-stationary` at `4ff92f3` is deployed to the Jetson with `scripts/deploy_bringup_to_jetson.sh` (source/install in sync). The four former Jetson-local files were stale drafts; they are backed up under `.carbot_deploy/backup-20261005-223524/` and replaced. AMCL on the robot now runs the committed `transform_tolerance: 1.5`.
+- `./start_real_nav.sh --automatic --localization-strategy stationary_only` reached `CANDIDATE_READY` with no motion: search 52.0 s on the Jetson (budget 120 s), holdout verify 0.9 s, AMCL verification 6.1 s. Candidate `(3.611, 2.391, -1.8 deg)`, search score 0.80/coverage 0.91, AMCL std 2.1 cm/1.0 deg, post-search drift 4 mm. The operator confirmed pose, heading and scan alignment in RViz.
+- No-motion evidence: 7 min monitor saw 0 `/cmd_vel` messages and wheel-tick deltas 0/0 over 20 913 samples; `/cmd_vel_command` had no publisher. Evidence: `calibration_data/2026-10-05_pr1_stationary_only_01` (failed run, used for replay) and `calibration_data/2026-10-05_pr1_stationary_only_candidate_ready_01`.
+- Fixes found by this validation: duplicate `std_msgs` in `package.xml` made colcon skip the ament index (`2454eaf`; `merge/nav2-safety` still contains it); launcher retry paths fired the ERR trap (`ed98680`); the search completeness floor depended on which duplicate cluster refined best (`c2f05cd`, replay 25/33 -> 33/33 windows accepted); the manager rejected AMCL's post-dated `map -> odom` as future TF, so `STOP_AND_VERIFY` always failed with `STALE_TF` (`4ff92f3`, new `map_odom_postdate_sec` must equal AMCL `transform_tolerance`). The last issue also affected `legacy_full_rotation`.
+- Deploy `--check` compares hashes only; it does not prove `ros2 pkg prefix isaac_3d_lidar_bringup` works. A command monitor must not subscribe `/cmd_vel_command` (preflight requires exactly one subscriber).
+- Observation: FAST-LIO stationary speed noise is 0.007-0.013 m/s against the 0.02 m/s stationarity threshold; one transient `NOT_STATIONARY` was seen while `CANDIDATE_READY` held.
+- 2026-10-06 `--automatic-activate --localization-strategy stationary_only` (operator on site): search 52.2 s, holdout 0.7 s, AMCL verification 6.5 s, then all eight Nav2 lifecycle nodes active and `READY` at map pose `(3.629, 2.369, -2.0 deg)`. No goal was sent; `READY` held for over 2 min (scan score 0.73-0.84, AMCL std 2.2 cm/1.0 deg). An 8 min monitor saw 0 `/cmd_vel` messages and wheel-tick deltas 0/0 over 23 858 samples; the bag also shows 0 `/cmd_vel_command`. Evidence: `calibration_data/2026-10-06_pr1_stationary_only_activate_no_goal_01`. In `READY` the manager no longer samples `map -> odom` (`tf_age_sec` grows); that is the existing 8224700 hand-over design, not a regression.
+- Final stop left Nav2/RViz down, the latch cleared and web teleop restored disarmed. PR1 is complete; next are PR2 (read-only rotation preview) and PR3.
+
 ## Automatic localization acceptance: 2026-09-30
 
 - The prior automatic-localization `READY` was a severe false positive. The repaired system scores all sampled beams, rejects unknown/outside coverage and wall-crossing rays, performs a deterministic three-scan map-wide search, and continuously rechecks the selected pose.

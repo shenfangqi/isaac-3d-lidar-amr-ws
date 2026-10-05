@@ -35,6 +35,13 @@ def test_real_nav_limits_are_conservative():
     assert controller_server['controller_frequency'] == 10.0
     assert controller['transform_tolerance'] >= 0.7
     assert controller['lookahead_dist'] <= 0.15
+    assert controller['use_regulated_linear_velocity_scaling'] is True
+    assert controller['regulated_linear_scaling_min_radius'] >= 0.40
+    assert 0.0 < controller['regulated_linear_scaling_min_speed'] <= 0.04
+    assert controller['use_cost_regulated_linear_velocity_scaling'] is True
+    assert controller['cost_scaling_dist'] <= 0.25
+    assert controller['inflation_cost_scaling_factor'] == 3.0
+    assert controller['max_allowed_time_to_collision_up_to_carrot'] >= 1.0
 
     smoother = nav['velocity_smoother']['ros__parameters']
     assert smoother['max_velocity'] == [0.10, 0.0, 0.50]
@@ -59,6 +66,17 @@ def test_real_amcl_does_not_scan_match_stationary_noise():
     assert amcl['update_min_d'] >= 0.05
     assert amcl['update_min_a'] >= 0.05
     assert amcl['transform_tolerance'] >= 1.5
+
+
+def test_localization_manager_matches_amcl_map_odom_postdating():
+    amcl = _load_yaml(
+        PACKAGE_DIR / 'config/nav2/carbot_amcl_real.yaml'
+    )['amcl']['ros__parameters']
+    manager = _load_yaml(
+        PACKAGE_DIR / 'config/nav2/carbot_auto_localization_real.yaml'
+    )['automatic_localization_manager']['ros__parameters']
+
+    assert manager['map_odom_postdate_sec'] == amcl['transform_tolerance']
 
 
 def test_legacy_real_profiles_keep_the_same_tf_timing_guards():
@@ -121,6 +139,8 @@ def test_real_table_approach_has_stable_path_without_motion_recoveries():
     assert local['obstacle_layer'].get('enabled', True) is True
     assert bt['default_nav_to_pose_bt_xml'].endswith(
         'navigate_w_replanning_only_if_path_becomes_invalid.xml')
+    assert bt['bt_loop_duration'] >= 100
+    assert bt['default_server_timeout'] >= 1000
 
 
 def test_real_nav_footprint_matches_canonical_parameters():
@@ -290,6 +310,21 @@ def test_real_lio_is_tightly_coupled_and_has_one_tf_owner():
     assert "'/fast_lio/imu_odom'" in launch_source
     assert "executable='fast_lio_base_adapter'" in launch_source
 
+    adapter_source = (
+        PACKAGE_DIR / 'isaac_3d_lidar_bringup/fast_lio_base_adapter.py'
+    ).read_text(encoding='utf-8')
+    assert "'/localization/emergency_stop'" in adapter_source
+    assert 'PosePlausibilityGuard' in adapter_source
+    assert 'ManageLifecycleNodes.Request.PAUSE' in adapter_source
+    assert "declare_parameter('max_output_silence', 2.0)" in adapter_source
+
+    compensator_source = (
+        SOURCE_DIR / 'carbot_hardware/carbot_hardware/'
+        'cmd_vel_compensator.py'
+    ).read_text(encoding='utf-8')
+    assert 'localization emergency stop latched' in compensator_source
+    assert 'self.publisher.publish(Twist())' in compensator_source
+
     nvblox_source = (
         PACKAGE_DIR / 'launch/mid360_nvblox_real.launch.py'
     ).read_text(encoding='utf-8')
@@ -306,7 +341,7 @@ def test_real_lio_is_tightly_coupled_and_has_one_tf_owner():
     assert 'mid360_fast_lio_odometry.launch.py' in navigation_source
 
 
-def test_jetson_startup_orders_localization_pose_then_navigation():
+def test_jetson_startup_waits_for_manual_pose_before_navigation():
     start_path = PROJECT_DIR / 'scripts/jetson_navigation_start.sh'
     initializer_path = (
         PROJECT_DIR / 'scripts/jetson_navigation_initialize.py')
@@ -317,12 +352,17 @@ def test_jetson_startup_orders_localization_pose_then_navigation():
     initializer_source = initializer_path.read_text(encoding='utf-8')
     assert 'jetson_nav_preflight.sh' in start_source
     assert 'jetson_navigation_initialize.py' in start_source
+    assert 'CARBOT_INITIAL_POSE_TIMEOUT' in start_source
+    assert 'systemctl --user stop carbot-web-teleop.service' in start_source
     assert 'no goal was sent' in start_source
     assert initializer_source.index('call_manager(node, LOCALIZATION_MANAGER') < (
-        initializer_source.index("message.header.frame_id = 'map'"))
-    assert initializer_source.index("message.header.frame_id = 'map'") < (
+        initializer_source.index("'WAITING_FOR_INITIAL_POSE map_server=active '"))
+    assert initializer_source.index("'WAITING_FOR_INITIAL_POSE map_server=active '") < (
         initializer_source.index('call_manager(node, NAVIGATION_MANAGER'))
     assert "'map', 'odom'" in initializer_source
+    assert "'/initialpose', initial_pose_callback" in initializer_source
+    assert "'/amcl_pose'" not in initializer_source
+    assert 'create_publisher' not in initializer_source
     assert 'LIFECYCLE_NODES' in initializer_source
 
 
@@ -357,3 +397,38 @@ def test_automatic_localization_is_armed_only_after_preflight():
             manager_source.index('def _on_start_request'),
         )
     )
+
+
+def test_jetson_freshness_probe_uses_the_real_livox_message_type():
+    probe_path = PROJECT_DIR / 'scripts/jetson_ros_freshness_check.py'
+    preflight_path = PROJECT_DIR / 'scripts/jetson_nav_preflight.sh'
+    if not probe_path.is_file() or not preflight_path.is_file():
+        pytest.skip('partial deployment has no Jetson preflight scripts')
+
+    probe_source = probe_path.read_text(encoding='utf-8')
+    preflight_source = preflight_path.read_text(encoding='utf-8')
+    assert 'from livox_ros_driver2.msg import CustomMsg' in probe_source
+    assert "('/livox/lidar', CustomMsg)" in probe_source
+    assert 'ws_livox/install/setup.bash' in preflight_source
+
+
+def test_jetson_preflight_rejects_unstable_fast_lio_odometry():
+    probe_path = PROJECT_DIR / 'scripts/jetson_lio_stability_check.py'
+    freshness_path = PROJECT_DIR / 'scripts/jetson_ros_freshness_check.py'
+    preflight_path = PROJECT_DIR / 'scripts/jetson_nav_preflight.sh'
+    if not probe_path.is_file() or not preflight_path.is_file():
+        pytest.skip('partial deployment has no Jetson preflight scripts')
+
+    probe_source = probe_path.read_text(encoding='utf-8')
+    freshness_source = freshness_path.read_text(encoding='utf-8')
+    preflight_source = preflight_path.read_text(encoding='utf-8')
+    assert "'/odom', messages.append" in probe_source
+    assert "default=0.03" in probe_source
+    assert "default=1.0" in probe_source
+    assert "default=0.01" in probe_source
+    assert 'jetson_lio_stability_check.py' in preflight_source
+    # Topology and lifecycle checks retry inside the freshness probe until a
+    # bounded deadline instead of failing on the first DDS discovery miss.
+    assert 'deadline = time.monotonic() + 35.0' in freshness_source
+    assert "GetState, '/map_server/get_state'" in freshness_source
+    assert "('map_server is inactive'" in freshness_source

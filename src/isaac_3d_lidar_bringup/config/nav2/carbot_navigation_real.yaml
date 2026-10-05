@@ -32,7 +32,23 @@ controller_server:
       min_lookahead_dist: 0.10
       max_lookahead_dist: 0.25
       use_velocity_scaled_lookahead_dist: false
+      # Issue #12: let RPP reduce translational speed before its collision arc
+      # reaches a wall on a tight bend.  The former implicit defaults were
+      # intended for substantially faster robots and, with our 0.10 m/s
+      # ceiling, effectively prevented useful curvature regulation.
+      use_regulated_linear_velocity_scaling: true
+      regulated_linear_scaling_min_radius: 0.40
+      regulated_linear_scaling_min_speed: 0.04
+      use_cost_regulated_linear_velocity_scaling: true
+      cost_scaling_dist: 0.25
+      cost_scaling_gain: 1.0
+      inflation_cost_scaling_factor: 3.0
+      min_approach_linear_velocity: 0.04
+      approach_velocity_scaling_dist: 0.30
       use_collision_detection: true
+      # Keep the existing one-second collision horizon.  The fix lowers the
+      # commanded speed before a bend; it does not weaken collision checking.
+      max_allowed_time_to_collision_up_to_carrot: 1.0
       # The real AMCL/FAST-LIO chain has measured short bursts of 0.2--0.7 s
       # transform latency. Wait for the matching map->odom sample instead of
       # aborting FollowPath and clearing both costmaps.
@@ -151,6 +167,12 @@ planner_server:
 bt_navigator:
   ros__parameters:
     use_sim_time: false
+    # The Jetson controller and odometry both run at 10 Hz.  The Humble
+    # defaults tick this tree at 100 Hz and allow only a few milliseconds for
+    # an action acknowledgement; under live costmap load that repeatedly
+    # starved compute_path_to_pose and aborted an otherwise healthy goal.
+    bt_loop_duration: 100
+    default_server_timeout: 1000
     global_frame: map
     robot_base_frame: base_footprint
     odom_topic: /odom

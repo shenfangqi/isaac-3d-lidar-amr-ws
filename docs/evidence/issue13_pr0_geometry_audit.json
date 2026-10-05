@@ -1,0 +1,234 @@
+{
+  "bags": [],
+  "conclusions": [
+    "raw_mid360: can_prove_sweep_free=False (worst unobservable fraction of the collision band 0.80)",
+    "fast_lio_cloud_registered_body: can_prove_sweep_free=False (worst unobservable fraction of the collision band 1.00)",
+    "/scan: can_prove_sweep_free=False (worst unobservable fraction of the collision band 1.00)",
+    "/scan_localization: can_prove_sweep_free=False (worst unobservable fraction of the collision band 1.00)"
+  ],
+  "declared_pointcloud_type": "sensor_msgs/msg/PointCloud2",
+  "fast_lio_preprocess": {
+    "blind_m": 0.5,
+    "body_frame": "imu_link",
+    "expected_message_type": "livox_ros_driver2/msg/CustomMsg",
+    "lid_topic": "/livox/lidar",
+    "lidar_type": 1,
+    "point_filter_num": 3
+  },
+  "geometry": {
+    "channels": {
+      "/scan": {
+        "can_prove_sweep_free": false,
+        "filters": {
+          "min_range_m": 0.5,
+          "planar_range_min": 0.5,
+          "z_max": 0.35,
+          "z_min": 0.1
+        },
+        "radii": [
+          {
+            "observable_z_m": [],
+            "radius_m": 0.13,
+            "unobservable_fraction_of_band": 1.0
+          },
+          {
+            "observable_z_m": [],
+            "radius_m": 0.1548,
+            "unobservable_fraction_of_band": 1.0
+          },
+          {
+            "observable_z_m": [],
+            "radius_m": 0.1797,
+            "unobservable_fraction_of_band": 1.0
+          },
+          {
+            "observable_z_m": [],
+            "radius_m": 0.2045,
+            "unobservable_fraction_of_band": 1.0
+          },
+          {
+            "observable_z_m": [],
+            "radius_m": 0.2294,
+            "unobservable_fraction_of_band": 1.0
+          },
+          {
+            "observable_z_m": [],
+            "radius_m": 0.2542,
+            "unobservable_fraction_of_band": 1.0
+          }
+        ]
+      },
+      "/scan_localization": {
+        "can_prove_sweep_free": false,
+        "filters": {
+          "min_range_m": 0.5,
+          "planar_range_min": 0.5,
+          "z_max": 0.35,
+          "z_min": 0.22
+        },
+        "radii": [
+          {
+            "observable_z_m": [],
+            "radius_m": 0.13,
+            "unobservable_fraction_of_band": 1.0
+          },
+          {
+            "observable_z_m": [],
+            "radius_m": 0.1548,
+            "unobservable_fraction_of_band": 1.0
+          },
+          {
+            "observable_z_m": [],
+            "radius_m": 0.1797,
+            "unobservable_fraction_of_band": 1.0
+          },
+          {
+            "observable_z_m": [],
+            "radius_m": 0.2045,
+            "unobservable_fraction_of_band": 1.0
+          },
+          {
+            "observable_z_m": [],
+            "radius_m": 0.2294,
+            "unobservable_fraction_of_band": 1.0
+          },
+          {
+            "observable_z_m": [],
+            "radius_m": 0.2542,
+            "unobservable_fraction_of_band": 1.0
+          }
+        ]
+      },
+      "fast_lio_cloud_registered_body": {
+        "can_prove_sweep_free": false,
+        "filters": {
+          "min_range_m": 0.5,
+          "planar_range_min": 0.0,
+          "z_max": null,
+          "z_min": null
+        },
+        "radii": [
+          {
+            "observable_z_m": [],
+            "radius_m": 0.13,
+            "unobservable_fraction_of_band": 1.0
+          },
+          {
+            "observable_z_m": [],
+            "radius_m": 0.1548,
+            "unobservable_fraction_of_band": 1.0
+          },
+          {
+            "observable_z_m": [],
+            "radius_m": 0.1797,
+            "unobservable_fraction_of_band": 1.0
+          },
+          {
+            "observable_z_m": [],
+            "radius_m": 0.2045,
+            "unobservable_fraction_of_band": 1.0
+          },
+          {
+            "observable_z_m": [],
+            "radius_m": 0.2294,
+            "unobservable_fraction_of_band": 1.0
+          },
+          {
+            "observable_z_m": [],
+            "radius_m": 0.2542,
+            "unobservable_fraction_of_band": 1.0
+          }
+        ]
+      },
+      "raw_mid360": {
+        "can_prove_sweep_free": false,
+        "filters": {
+          "min_range_m": 0.1,
+          "planar_range_min": 0.0,
+          "z_max": null,
+          "z_min": null
+        },
+        "radii": [
+          {
+            "observable_z_m": [
+              [
+                0.1951,
+                0.3542
+              ]
+            ],
+            "radius_m": 0.13,
+            "unobservable_fraction_of_band": 0.8047
+          },
+          {
+            "observable_z_m": [
+              [
+                0.192,
+                0.386
+              ]
+            ],
+            "radius_m": 0.1548,
+            "unobservable_fraction_of_band": 0.7914
+          },
+          {
+            "observable_z_m": [
+              [
+                0.189,
+                0.4178
+              ]
+            ],
+            "radius_m": 0.1797,
+            "unobservable_fraction_of_band": 0.7781
+          },
+          {
+            "observable_z_m": [
+              [
+                0.1859,
+                0.4496
+              ]
+            ],
+            "radius_m": 0.2045,
+            "unobservable_fraction_of_band": 0.7649
+          },
+          {
+            "observable_z_m": [
+              [
+                0.1829,
+                0.4814
+              ]
+            ],
+            "radius_m": 0.2294,
+            "unobservable_fraction_of_band": 0.7516
+          },
+          {
+            "observable_z_m": [
+              [
+                0.1798,
+                0.5132
+              ]
+            ],
+            "radius_m": 0.2542,
+            "unobservable_fraction_of_band": 0.7383
+          }
+        ]
+      }
+    },
+    "collision_z_band_m": [
+      0.01,
+      0.24
+    ],
+    "padding_m": 0.05,
+    "sensor_origin_m": [
+      0.0166,
+      -0.0001,
+      0.209
+    ],
+    "sweep_inner_radius_m": 0.13,
+    "sweep_outer_radius_m": 0.2542,
+    "vertical_fov_deg": [
+      -7.0,
+      52.0
+    ]
+  },
+  "motion_commanded": false,
+  "schema_version": 1
+}
