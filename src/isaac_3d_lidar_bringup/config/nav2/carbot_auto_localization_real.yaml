@@ -21,6 +21,10 @@ automatic_localization_manager:
     validation_only: true
     max_future_stamp_sec: 0.05
     max_tf_future_sec: 0.6
+    # AMCL stamps map->odom transform_tolerance ahead; freshness and the
+    # future-stamp check use stamp minus this value.  Must equal AMCL
+    # transform_tolerance in carbot_amcl_real.yaml.
+    map_odom_postdate_sec: 1.5
 
     sensor_freshness_sec: 0.5
     # AMCL may not republish pose/particles while stopped even after a

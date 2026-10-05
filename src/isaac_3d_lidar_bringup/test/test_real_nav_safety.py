@@ -68,6 +68,17 @@ def test_real_amcl_does_not_scan_match_stationary_noise():
     assert amcl['transform_tolerance'] >= 1.5
 
 
+def test_localization_manager_matches_amcl_map_odom_postdating():
+    amcl = _load_yaml(
+        PACKAGE_DIR / 'config/nav2/carbot_amcl_real.yaml'
+    )['amcl']['ros__parameters']
+    manager = _load_yaml(
+        PACKAGE_DIR / 'config/nav2/carbot_auto_localization_real.yaml'
+    )['automatic_localization_manager']['ros__parameters']
+
+    assert manager['map_odom_postdate_sec'] == amcl['transform_tolerance']
+
+
 def test_legacy_real_profiles_keep_the_same_tf_timing_guards():
     nav = _load_yaml(PROJECT_DIR / 'configs/nav2_params_real.yaml')
     amcl = _load_yaml(PROJECT_DIR / 'configs/amcl_params_real.yaml')

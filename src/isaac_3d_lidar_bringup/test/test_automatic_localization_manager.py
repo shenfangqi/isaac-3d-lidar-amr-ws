@@ -141,9 +141,17 @@ def test_explicit_activation_mode_calls_navigation_lifecycle(manager):
     assert len(calls) == 1
 
 
+def _postdated(manager, sec):
+    """Header stamp of an AMCL map->odom computed from a scan at ``sec``."""
+    return sec + manager.params['map_odom_postdate_sec']
+
+
 def test_cached_tf_cannot_extend_quality_window(manager):
-    stamped = NS(header=NS(stamp=NS(sec=10, nanosec=0)), transform=NS(
-        translation=NS(x=0., y=0.), rotation=NS(x=0., y=0., z=0., w=1.)))
+    stamp = _postdated(manager, 10)
+    stamped = NS(
+        header=NS(stamp=NS(sec=int(stamp), nanosec=round(stamp % 1 * 1e9))),
+        transform=NS(translation=NS(x=0., y=0.),
+                     rotation=NS(x=0., y=0., z=0., w=1.)))
     manager._tf_buffer = NS(lookup_transform=lambda *args: stamped)
     manager._record_tf(1.)
     manager._record_tf(5.)
@@ -157,8 +165,10 @@ def test_sparse_new_tf_samples_can_form_stability_window(manager):
 
     def lookup(*args):
         clock['sec'] += 1
+        stamp = _postdated(manager, clock['sec'])
         return NS(
-            header=NS(stamp=NS(sec=clock['sec'], nanosec=0)),
+            header=NS(stamp=NS(sec=int(stamp),
+                               nanosec=round(stamp % 1 * 1e9))),
             transform=NS(
                 translation=NS(x=0., y=0.),
                 rotation=NS(x=0., y=0., z=0., w=1.)))
@@ -172,6 +182,27 @@ def test_sparse_new_tf_samples_can_form_stability_window(manager):
 
     assert len(manager._tf_window) == 2
     assert manager._last_map_odom_time == 2.
+
+
+@pytest.mark.parametrize('scan_age, accepted', [
+    (0.07, True),    # live AMCL republish, post-dated by transform_tolerance
+    (0.60, False),   # computed from a scan older than sensor freshness
+    (-0.70, False),  # beyond the clock-skew limit even after post-dating
+])
+def test_map_odom_freshness_uses_amcl_scan_time(manager, scan_age, accepted):
+    # 2026-10-05: AMCL transform_tolerance=1.5 put every sample 1.4 s in
+    # the future, so the raw-stamp check rejected all of them (STALE_TF).
+    stamp = _postdated(manager, 10.0 - scan_age)
+    manager._tf_buffer = NS(lookup_transform=lambda *args: NS(
+        header=NS(stamp=NS(sec=int(stamp), nanosec=round(stamp % 1 * 1e9))),
+        transform=NS(translation=NS(x=0., y=0.),
+                     rotation=NS(x=0., y=0., z=0., w=1.))))
+
+    manager._record_tf(1.)
+
+    assert (manager._last_map_odom_time == 1.) is accepted
+    assert manager._timing['map_odom']['source_age_sec'] == pytest.approx(
+        scan_age, abs=1e-6)
 
 
 def test_old_future_duplicate_and_out_of_order_messages_rejected(manager):

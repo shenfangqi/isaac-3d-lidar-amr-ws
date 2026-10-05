@@ -312,8 +312,9 @@ class AutomaticLocalizationManager(Node):
             'start_armed': False,
             'validation_only': True,
             'max_future_stamp_sec': 0.05,
-            # AMCL deliberately postdates map->odom by transform_tolerance.
             'max_tf_future_sec': 0.6,
+            # Must equal AMCL transform_tolerance (carbot_amcl_real.yaml).
+            'map_odom_postdate_sec': 1.5,
             'sensor_freshness_sec': 0.5,
             'localization_evidence_freshness_sec': 10.0,
             'nomotion_update_interval_sec': 1.0,
@@ -900,9 +901,13 @@ class AutomaticLocalizationManager(Node):
         except TransformException:
             return
         stamp = Time.from_msg(stamped.header.stamp).nanoseconds
-        age = (self.get_clock().now().nanoseconds - stamp) / 1e9
+        # AMCL stamps map->odom transform_tolerance ahead of its scan.  Judge
+        # freshness and clock skew on the scan time it was computed from.
+        source = stamp - round(
+            self._parameter('map_odom_postdate_sec') * 1e9)
+        age = (self.get_clock().now().nanoseconds - source) / 1e9
         self._timing['map_odom'] = {
-            'source_stamp_ns': stamp, 'source_age_sec': age}
+            'source_stamp_ns': source, 'source_age_sec': age}
         if (stamp <= (self._last_tf_stamp or 0)
                 or age > self._parameter('sensor_freshness_sec')
                 or age < -self._parameter('max_tf_future_sec')):
