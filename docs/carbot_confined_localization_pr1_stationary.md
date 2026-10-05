@@ -48,10 +48,15 @@
 | 真实地图合成扫描（168×256 格） | 工作站搜索 6.4–7.2 s（旧搜索 11.7 s）；4/4 接受，误差 0.2–0.9 cm / ≤0.3° |
 | 真实 bag 离线回放（09-30 两个静止 bag 的 `/scan_localization`） | 两次都接受同一个解 (3.565, 2.125, −1.59)，HOLDOUT 0.73–0.78，第二名 ≤0.51。与当次人工 2D Pose 得到的 AMCL 位姿相差 0.17 m / 1°；新解在标准分、冲突率和尖锐分上都更好，但没有外部真值，不能宣称绝对精度 |
 
+**容器与实车验证（2026-10-05）：**
+- 容器内 `colcon build` 和完整 pytest（含 flake8/pep257）：162 通过，1 跳过（copyright）。
+- 实车只读验证 `--automatic --localization-strategy stationary_only`：到达 CANDIDATE_READY，全程无运动。Jetson 上搜索 52.0 s（预算 120 s），HOLDOUT 0.9 s，AMCL 复核 6.1 s。候选 (3.611, 2.391, −1.8°)，搜索分 0.80；AMCL 收敛到 2.1 cm / 1.0°。操作员在 RViz 确认位姿、朝向和扫描对齐。
+- 实车验证中发现并修复：
+  - 完整性门槛原来取"精化后最好的那个簇"的粗搜分，重复簇胜出时门槛从 0.65 掉到 0.375，约 23% 的帧误判 `SEARCH_INCOMPLETE`。现改为取收敛到胜者位置的所有簇中最高的粗搜分（`c2f05cd`）。真实 bag 回放 33 个窗口：25/33 → 33/33 接受。
+  - AMCL 把 `map→odom` 提前 `transform_tolerance`（1.5 s）打时间戳，manager 按未来 TF 全部拒绝，`STOP_AND_VERIFY` 必然 `STALE_TF`。新增 `map_odom_postdate_sec`（必须等于 AMCL `transform_tolerance`，有配置测试约束），新鲜度和未来时间检查都改用扣除后的时间（`4ff92f3`）。
+
 **尚未完成：**
-- 容器内 `colcon build` 和正式 pytest，包括 `test_flake8`/`test_pep257`。宿主机只检查了行长、docstring 和未使用的 import；
-- Jetson 上的耗时，按旧数据的 5.6 倍估算约 40 s，预算 120 s；
-- 实车只读验证（`--automatic` 停在 CANDIDATE_READY）。
+- `--automatic-activate` 静止实车验证（激活 Nav2，不发目标）。
 
 ## 契约补充
 
