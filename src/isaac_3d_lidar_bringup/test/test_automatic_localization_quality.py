@@ -217,6 +217,7 @@ def test_diagnostics_expose_legacy_false_positive_on_identical_scan():
             position=SimpleNamespace(x=0., y=0.), orientation=_quaternion())), data=data)
     scan = SimpleNamespace(ranges=[2.], range_min=.1, range_max=20.,
                            angle_min=0., angle_increment=1.)
+
     def at(x):
         return scan_map_metrics(grid, scan, SimpleNamespace(
             translation=SimpleNamespace(x=x, y=1.), rotation=_quaternion()), 65, 0, 120)

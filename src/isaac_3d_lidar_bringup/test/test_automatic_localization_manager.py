@@ -1,4 +1,5 @@
-"""Execute production state-machine methods with deterministic ROS test doubles.
+"""
+Execute production state-machine methods with deterministic ROS test doubles.
 
 No ROS graph, network, velocity publisher or physical robot is used.
 """
@@ -39,7 +40,8 @@ class FakeManageLifecycleNodes:
 
 @pytest.fixture
 def manager():
-    path = Path(__file__).resolve().parents[1] / 'isaac_3d_lidar_bringup/automatic_localization_manager.py'
+    path = (Path(__file__).resolve().parents[1]
+            / 'isaac_3d_lidar_bringup/automatic_localization_manager.py')
     tree = ast.parse(path.read_text())
     # Keep the real class bodies and module constants; substitute only ROS
     # import boundaries.  Pure Issue #13 modules are used unchanged.
@@ -258,6 +260,7 @@ def test_scan_queries_source_time_and_invalidates_score_on_tf_failure(manager):
     manager._latest_map = object()
     manager._last_score_time = 8.
     requested = []
+
     def lookup(target, source, stamp):
         requested.append((target, source, stamp.nanoseconds))
         raise LookupError('no transform at scan time')

@@ -1066,7 +1066,8 @@ class AutomaticLocalizationManager(Node):
         return stable
 
     def _candidate_quality_passes(self, now):
-        """Continuously validate an already qualified stationary candidate.
+        """
+        Continuously validate an already qualified stationary candidate.
 
         Entry to CANDIDATE_READY already required fresh AMCL, particles and a
         full stable TF window.  AMCL does not promise to republish those while
