@@ -1,4 +1,5 @@
-"""Versioned contracts for confined-space automatic localization (Issue #13).
+"""
+Versioned contracts for confined-space automatic localization (Issue #13).
 
 Pure Python: no ROS imports, so the manager, the motion guard, offline
 analysis scripts and tests share one definition.  Every decoder is strict:
@@ -62,6 +63,7 @@ class RejectReason(str, Enum):
     ODOM_JUMP = 'ODOM_JUMP'
     MOTION_BUDGET_EXHAUSTED = 'MOTION_BUDGET_EXHAUSTED'
     CANCELED = 'CANCELED'
+    NO_VALID_CANDIDATE = 'NO_VALID_CANDIDATE'
 
 
 # Operator-facing text.  The flag says whether a manual 2D Pose remains a
@@ -80,6 +82,7 @@ REJECT_REASON_TEXT = {
     RejectReason.ODOM_JUMP: ('里程计跳变或车辆被搬动', True),
     RejectReason.MOTION_BUDGET_EXHAUSTED: ('旋转段数、角度或时间预算已用尽', True),
     RejectReason.CANCELED: ('定位已被取消', True),
+    RejectReason.NO_VALID_CANDIDATE: ('没有候选通过独立验证帧的匹配门槛', True),
 }
 
 
@@ -103,7 +106,8 @@ class GuardState(str, Enum):
 
 
 class ProfileStatus(str, Enum):
-    """Lifecycle of a rotation motion profile.
+    """
+    Lifecycle of a rotation motion profile.
 
     Automatic analysis may produce only INSUFFICIENT or ESTIMATED.  REVIEWED
     requires an external cross-check record; ACCEPTED is a separate explicit
@@ -328,7 +332,8 @@ class SearchResult:
 
 @dataclass(frozen=True)
 class RotationAttestation:
-    """Operator statement that the startup placement can rotate in place.
+    """
+    Operator statement that the startup placement can rotate in place.
 
     The MID-360 cannot observe most of the sweep band next to the body (PR0
     audit), so the operator's placement promise is the evidence for that
@@ -354,7 +359,8 @@ class RotationAttestation:
 
 
 def attestation_covers(attestation, session, current_odom, now_mono):
-    """Return whether the attestation still applies to this placement.
+    """
+    Return whether the attestation still applies to this placement.
 
     Rotation in place is allowed to change yaw; any translation beyond the
     bound means the robot was moved or slid and the promise no longer holds.
@@ -371,7 +377,8 @@ def attestation_covers(attestation, session, current_odom, now_mono):
 
 @dataclass(frozen=True)
 class RotationDecision:
-    """Read-only verdict for one candidate in-place rotation.
+    """
+    Read-only verdict for one candidate in-place rotation.
 
     ``unknown_cells`` counts unresolved unobserved sweep cells;
     ``attested_cells`` counts unobserved cells covered by a valid
@@ -670,7 +677,8 @@ def encode_motion_status(status):
 def validate_strategy_configuration(strategy, motion_policy, validation_only,
                                     motion_profile_path,
                                     operator_rotation_clear=False):
-    """Reject conflicting launch-time strategy combinations.
+    """
+    Reject conflicting launch-time strategy combinations.
 
     ``motion_policy`` governs only the new strategies.  The legacy strategy
     keeps its existing full-rotation interlocks unchanged; requesting

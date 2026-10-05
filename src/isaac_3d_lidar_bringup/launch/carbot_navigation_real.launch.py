@@ -29,6 +29,7 @@ def generate_launch_description():
     automatic_localization = LaunchConfiguration('automatic_localization')
     auto_localization_validation_only = LaunchConfiguration(
         'auto_localization_validation_only')
+    localization_strategy = LaunchConfiguration('localization_strategy')
     recovery_enabled = LaunchConfiguration('bounded_recovery_enabled')
     acceptance_profile = LaunchConfiguration('recovery_acceptance_profile')
     recovery_validation_preview = LaunchConfiguration(
@@ -239,6 +240,7 @@ def generate_launch_description():
             {
                 'cmd_vel_topic': cmd_vel_output,
                 'validation_only': auto_localization_validation_only,
+                'localization_strategy': localization_strategy,
             },
         ],
         condition=IfCondition(automatic_localization),
@@ -352,6 +354,15 @@ def generate_launch_description():
                 'Keep Nav2 inactive after a valid automatic localization. '
                 'The maintained --automatic-activate entry is the only '
                 'physical workflow that sets this false.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'localization_strategy',
+            default_value='legacy_full_rotation',
+            choices=['legacy_full_rotation', 'stationary_only'],
+            description=(
+                'Issue #13 startup localization strategy. stationary_only '
+                'searches the whole map without any rotation command.'
             ),
         ),
         DeclareLaunchArgument(

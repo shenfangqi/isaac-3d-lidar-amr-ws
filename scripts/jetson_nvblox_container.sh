@@ -11,7 +11,7 @@ time_gate="${workspace}/scripts/wait_for_mapping_time_sync.py"
 
 usage() {
   echo "Usage: $0 {start|recreate|stop|status|logs} [compact|full|mapping]" >&2
-  echo "       $0 {start|recreate} navigation-safe MAP_YAML [manual|auto|auto-activate] [none|complex-route-validation]" >&2
+  echo "       $0 {start|recreate} navigation-safe MAP_YAML [manual|auto|auto-activate] [none|complex-route-validation] [legacy_full_rotation|stationary_only]" >&2
   echo "       $0 {start|recreate} navigation-diagnostic MAP_YAML" >&2
   echo "       Append 'auto' for validation or 'auto-activate' for guarded Nav2 activation." >&2
 }
@@ -66,11 +66,23 @@ case "${mode}" in
       echo "Complex-route validation requires navigation-safe mode." >&2
       exit 2
     fi
+    localization_strategy="${6:-legacy_full_rotation}"
+    if [[ "${localization_strategy}" != "legacy_full_rotation" && "${localization_strategy}" != "stationary_only" ]]; then
+      echo "Localization strategy must be 'legacy_full_rotation' or 'stationary_only'." >&2
+      exit 2
+    fi
+    if [[ "${localization_strategy}" != "legacy_full_rotation" && "${initialization}" == "manual" ]]; then
+      echo "A localization strategy requires automatic initialization." >&2
+      exit 2
+    fi
     auto_launch_argument=""
     if [[ "${initialization}" == "auto" ]]; then
       auto_launch_argument=" automatic_localization:=true"
     elif [[ "${initialization}" == "auto-activate" ]]; then
       auto_launch_argument=" automatic_localization:=true auto_localization_validation_only:=false"
+    fi
+    if [[ "${initialization}" != "manual" ]]; then
+      auto_launch_argument+=" localization_strategy:=${localization_strategy}"
     fi
     diagnostic_launch_argument=""
     if [[ "${diagnostic_mode}" == "complex-route-validation" ]]; then

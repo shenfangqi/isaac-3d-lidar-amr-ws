@@ -26,11 +26,12 @@ automatic_localization=true
 automatic_activation=true
 stationary_validation=false
 complex_route_validation=false
+localization_strategy=legacy_full_rotation
 map_argument_seen=false
 
 usage() {
   cat <<EOF
-Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [--complex-route-validation] [MAP_YAML]
+Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [--complex-route-validation] [--localization-strategy STRATEGY] [MAP_YAML]
 
 Start saved-map navigation for the physical Carbot and open RViz.
 
@@ -42,6 +43,11 @@ Options:
   --validation-only  Alias for --automatic (does include rotation).
   --stationary-validation  No rotation; prepare manual reference and keep Nav2 inactive.
   --complex-route-validation  Start the read-only Issue #12 advisory and evidence topics.
+  --localization-strategy STRATEGY
+                  legacy_full_rotation (default) or stationary_only. stationary_only
+                  searches the saved map without any rotation command; use it with
+                  --automatic or --automatic-activate. segmented_rotation is not
+                  available until the Issue #13 motion guard exists.
   -h, --help      Show this help.
 
 Environment overrides:
@@ -66,6 +72,14 @@ while (( $# > 0 )); do
       ;;
     --complex-route-validation)
       complex_route_validation=true
+      ;;
+    --localization-strategy)
+      if (( $# < 2 )); then
+        echo "--localization-strategy needs a value." >&2
+        exit 2
+      fi
+      localization_strategy="$2"
+      shift
       ;;
     --validation-only|--automatic)
       automatic_localization=true
@@ -100,6 +114,23 @@ while (( $# > 0 )); do
   esac
   shift
 done
+
+case "${localization_strategy}" in
+  legacy_full_rotation|stationary_only) ;;
+  segmented_rotation)
+    echo "segmented_rotation needs the Issue #13 motion guard, which is not implemented yet." >&2
+    exit 2
+    ;;
+  *)
+    echo "Unknown localization strategy: ${localization_strategy}" >&2
+    exit 2
+    ;;
+esac
+if [[ "${localization_strategy}" != "legacy_full_rotation" ]] && {
+    [[ "${automatic_localization}" != "true" ]] || [[ "${stationary_validation}" == "true" ]]; }; then
+  echo "--localization-strategy requires --automatic or --automatic-activate." >&2
+  exit 2
+fi
 
 case "${initial_pose_timeout}" in
   ''|*[!0-9]*)
@@ -457,6 +488,16 @@ run_automatic_localization() {
     echo "Automatic-localization activation mode does not match the requested workflow." >&2
     return 1
   fi
+  local deployed_strategy
+  deployed_strategy="$(remote_ros 'timeout 5s ros2 param get /automatic_localization_manager localization_strategy' 2>&1)" || {
+    printf '%s\n' "${deployed_strategy}" >&2
+    echo "The deployed manager does not report a localization strategy; rebuild the Jetson workspace." >&2
+    return 1
+  }
+  if [[ "${deployed_strategy}" != *"String value is: ${localization_strategy}"* ]]; then
+    echo "Deployed localization strategy (${deployed_strategy}) does not match ${localization_strategy}." >&2
+    return 1
+  fi
   local service=/automatic_localization/start
   if [[ "${stationary_validation}" == "true" ]]; then
     service=/automatic_localization/prepare_stationary
@@ -556,6 +597,9 @@ fi
 echo "Target: ${identity} (${jetson_host})"
 echo "Map: ${map_yaml}"
 echo "Localization: $(if [[ "${automatic_localization}" == "true" ]]; then echo automatic; else echo manual; fi)"
+if [[ "${automatic_localization}" == "true" ]]; then
+  echo "Localization strategy: ${localization_strategy}"
+fi
 echo "Complex-route advisor: $(if [[ "${complex_route_validation}" == "true" ]]; then echo validation-only; else echo disabled; fi)"
 remote test -f "${map_yaml}"
 
@@ -581,7 +625,8 @@ if [[ "${complex_route_validation}" == "true" ]]; then
   complex_route_mode=complex-route-validation
 fi
 remote "${jetson_workspace}/scripts/jetson_nvblox_container.sh" \
-  recreate navigation-safe "${map_yaml}" "${initialization_mode}" "${complex_route_mode}" >/dev/null
+  recreate navigation-safe "${map_yaml}" "${initialization_mode}" "${complex_route_mode}" \
+  "${localization_strategy}" >/dev/null
 
 echo "[4/8] Running the non-motion hardware preflight..."
 run_preflight_with_readiness_retry

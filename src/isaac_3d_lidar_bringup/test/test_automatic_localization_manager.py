@@ -12,6 +12,9 @@ import time
 
 import pytest
 
+from isaac_3d_lidar_bringup import localization_contracts
+from isaac_3d_lidar_bringup import localization_hypotheses
+from isaac_3d_lidar_bringup import localization_observations
 from isaac_3d_lidar_bringup.automatic_localization_quality import (
     angular_difference, quaternion_yaw, trim_time_window,
 )
@@ -38,9 +41,15 @@ class FakeManageLifecycleNodes:
 def manager():
     path = Path(__file__).resolve().parents[1] / 'isaac_3d_lidar_bringup/automatic_localization_manager.py'
     tree = ast.parse(path.read_text())
-    # Keep the real class bodies; substitute only ROS import boundaries.
-    tree.body = [item for item in tree.body if isinstance(item, ast.ClassDef)]
-    scope = dict(Enum=Enum, Node=object, time=time, math=math, Time=FakeTime,
+    # Keep the real class bodies and module constants; substitute only ROS
+    # import boundaries.  Pure Issue #13 modules are used unchanged.
+    tree.body = [item for item in tree.body
+                 if isinstance(item, (ast.ClassDef, ast.Assign))]
+    scope = dict(vars(localization_contracts))
+    scope.update(vars(localization_observations))
+    scope.update(vars(localization_hypotheses))
+    scope.update(Enum=Enum, Node=object, time=time, math=math, Time=FakeTime,
+                 deque=deque, uuid=__import__('uuid'),
                  ManageLifecycleNodes=FakeManageLifecycleNodes,
                  TransformException=LookupError, quaternion_yaw=quaternion_yaw,
                  angular_difference=angular_difference,
@@ -59,6 +68,13 @@ def manager():
     node._parameter = defaults.__getitem__
     node.params = defaults
     node._validation_only = True
+    node._configure_strategy()
+    node._worker = None
+    node._reset_confined_session()
+    node._latest_grid = None
+    node._map_hash = ''
+    node._stationary_only = False
+    node._rotation_progress = 0.0
     node._state = node.State.STOP_AND_VERIFY
     node._state_started = time.monotonic()
     node._quality_since = 1.
@@ -463,3 +479,257 @@ def test_qualified_candidate_uses_live_scan_when_amcl_is_quiet(manager):
 
     assert manager._candidate_quality_passes(10.0)
     assert manager._quality_failure == ''
+
+
+# --- Issue #13 PR1: stationary_only strategy -------------------------------
+
+class FakeWorker:
+    """Synchronous stand-in recording every job; results are scripted."""
+
+    def __init__(self, results):
+        self.results = list(results)
+        self.jobs = []
+        self.canceled = 0
+        self.token = None
+
+    @property
+    def busy(self):
+        return self.token is not None
+
+    def submit(self, token, function, *arguments):
+        assert not self.busy
+        self.token = token
+        self.jobs.append((function.__name__, arguments))
+
+    def poll(self):
+        if self.token is None:
+            return None
+        token, self.token = self.token, None
+        return (token, 'ok', self.results.pop(0))
+
+    def cancel(self):
+        self.canceled += 1
+        self.token = None
+
+
+def _quaternion_ns(yaw):
+    return NS(x=0.0, y=0.0, z=math.sin(yaw / 2.0), w=math.cos(yaw / 2.0))
+
+
+@pytest.fixture
+def stationary(manager):
+    manager.params['localization_strategy'] = 'stationary_only'
+    manager._configure_strategy()
+    clock = {'ns': 20 * 10**9}
+    manager.get_clock = lambda: NS(now=lambda: FakeTime(clock['ns']))
+    manager.clock = clock
+    manager.create_publisher = lambda *args: pytest.fail(
+        'stationary_only created a velocity publisher')
+    manager._command_publisher = None
+    manager._command_topic = '/cmd_vel_command'
+    manager._future = None
+    manager._startup_started = time.monotonic()
+    manager._sensors_ready_since = None
+    manager._stopped = lambda now: True
+    manager._last_odom_pose = (0.5, 0.2, 0.3)
+    manager.get_logger = lambda: NS(info=lambda msg: None,
+                                    error=lambda msg: None)
+    manager._latest_grid = localization_hypotheses.SimpleNamespace(
+        info=NS(resolution=0.05))
+    manager._map_hash = 'ab' * 32
+    manager.tf_requests = []
+
+    def lookup(target, source, stamp):
+        manager.tf_requests.append((target, source, stamp.nanoseconds))
+        pose = (0.5, 0.2, 0.3) if target == 'odom' else (0.0, 0.0, 0.0)
+        return NS(transform=NS(translation=NS(x=pose[0], y=pose[1]),
+                               rotation=_quaternion_ns(pose[2])))
+
+    manager._tf_buffer = NS(lookup_transform=lookup)
+    seeds = []
+    manager._publish_global_seed = lambda x, y, yaw: seeds.append(
+        (x, y, yaw))
+    manager.seeds = seeds
+    return manager
+
+
+def _scan(clock, manager):
+    clock['ns'] += 100_000_000
+    return NS(header=NS(frame_id='base_footprint', stamp=NS(
+        sec=clock['ns'] // 10**9, nanosec=clock['ns'] % 10**9)),
+        angle_min=-math.pi, angle_increment=0.1, range_min=0.5,
+        range_max=20.0, ranges=[1.0] * 63)
+
+
+def _feed(manager, count):
+    for _ in range(count):
+        manager._on_scan(_scan(manager.clock, manager))
+
+
+def _search_result(complete=True, reason=''):
+    winner = localization_contracts.Hypothesis(
+        1.0, 2.0, 0.5, 0.9, 0.9, 0.0, 0, (0.9,), ())
+    return localization_contracts.SearchResult(
+        'x' * 16, 'ab' * 32, complete, (winner,), 10, 0.1, reason)
+
+
+def _start_to_collect(manager):
+    response = NS(success=None, message='')
+    manager._state = manager.State.WAIT_FOR_START
+    manager._on_start_request(None, response)
+    assert response.success
+    manager._state = manager.State.START_LOCALIZATION
+    manager._state_started = time.monotonic()
+    manager._localization_client = NS(service_is_ready=lambda: True)
+    manager._future = object()
+    manager._future_succeeded = lambda: True
+    manager._tick()
+    assert manager._state == manager.State.COLLECT_STATIC
+
+
+def test_stationary_never_commands_motion(stationary):
+    # L01: the whole stationary flow, including failure, owns no publisher.
+    winner = localization_contracts.Hypothesis(
+        1.0, 2.0, 0.5, 0.9, 0.9, 0.0, 0, (0.9,), (0.05, 0.05, 0.02))
+    decision = localization_hypotheses.QualityDecision(True, '', winner)
+    stationary._worker = FakeWorker([_search_result(), decision])
+    _start_to_collect(stationary)
+    _feed(stationary, 3)
+    stationary._tick()
+    assert stationary._state == stationary.State.SEARCH_MULTI_VIEW
+    name, arguments = stationary._worker.jobs[0]
+    assert name == 'run_search_job'
+    train = arguments[1]
+    assert [frame.role.value for frame in train] == ['TRAIN'] * 3
+    # Every keyframe used TF at its own source stamp.
+    stamps = {frame.stamp_ns for frame in train}
+    assert {request[2] for request in stationary.tf_requests} >= stamps
+
+    stationary._tick()
+    assert stationary._state == stationary.State.VERIFY_HYPOTHESES
+    stationary._tick()
+    assert len(stationary._worker.jobs) == 1  # waiting for new HOLDOUT
+    _feed(stationary, 3)
+    stationary._tick()
+    name, arguments = stationary._worker.jobs[1]
+    assert name == 'run_validation_job'
+    holdout = arguments[3]
+    assert min(f.stamp_ns for f in holdout) > max(f.stamp_ns for f in train)
+    assert not {f.id for f in holdout} & {f.id for f in train}
+
+    stationary._last_odom_pose = (0.5, 0.2, 0.4)
+    stationary._tick()
+    assert stationary._state == stationary.State.STOP_AND_VERIFY
+    # L03 at the manager boundary: the seed follows the current odometry.
+    (x, y, yaw), = stationary.seeds
+    assert yaw == pytest.approx(0.6)
+    assert stationary._command_publisher is None
+
+    stationary._fail('forced failure')
+    assert stationary._command_publisher is None
+
+
+def test_incomplete_search_is_rejected_without_seed(stationary):
+    stationary._worker = FakeWorker([
+        _search_result(False, 'SEARCH_INCOMPLETE')])
+    _start_to_collect(stationary)
+    _feed(stationary, 3)
+    stationary._tick()
+    stationary._tick()
+    assert stationary._state == stationary.State.SAFE_STOP
+    assert stationary._quality_failure == 'SEARCH_INCOMPLETE'
+    assert stationary._manual_recovery_allowed
+    assert not stationary.seeds
+
+
+def test_ambiguous_validation_falls_back_to_manual_pose(stationary):
+    decision = localization_hypotheses.QualityDecision(
+        False, 'AMBIGUOUS_LOCATION')
+    stationary._worker = FakeWorker([_search_result(), decision])
+    _start_to_collect(stationary)
+    _feed(stationary, 3)
+    stationary._tick()
+    stationary._tick()
+    _feed(stationary, 3)
+    stationary._tick()
+    stationary._tick()
+    assert stationary._state == stationary.State.SAFE_STOP
+    assert stationary._confined_status()['ambiguity_reason'] == (
+        'AMBIGUOUS_LOCATION')
+    assert stationary._confined_status()['manual_pose_allowed'] is True
+    assert not stationary.seeds
+
+
+def test_moving_robot_discards_partial_frames(stationary):
+    stationary._worker = FakeWorker([])
+    _start_to_collect(stationary)
+    _feed(stationary, 2)
+    stationary._tick()
+    assert len(stationary._keyframes) == 2
+    stationary._stopped = lambda now: False
+    stationary._tick()
+    assert stationary._keyframes == []
+    assert stationary._worker.jobs == []
+
+
+def test_cancel_terminates_search_and_drops_result(stationary):
+    stationary._worker = FakeWorker([_search_result()])
+    _start_to_collect(stationary)
+    _feed(stationary, 3)
+    stationary._tick()
+    response = NS(success=None, message='')
+    stationary._on_cancel_request(None, response)
+    assert response.success
+    assert stationary._worker.canceled >= 1
+    assert stationary._state == stationary.State.SAFE_STOP
+    assert stationary._quality_failure == 'CANCELED'
+    stationary._on_cancel_request(None, response)  # idempotent
+    assert stationary._state == stationary.State.SAFE_STOP
+
+
+def test_stale_token_result_is_not_used(stationary):
+    stationary._worker = FakeWorker([_search_result()])
+    _start_to_collect(stationary)
+    _feed(stationary, 3)
+    stationary._tick()
+    stationary._worker.token = ('old-session', 'ab' * 32)
+    stationary._tick()
+    assert stationary._state == stationary.State.SAFE_STOP
+    assert stationary._quality_failure == 'MAP_CHANGED'
+    assert stationary._search_result is None
+
+
+def test_odometry_jump_rejects_confined_session(stationary):
+    stationary._worker = FakeWorker([])
+    _start_to_collect(stationary)
+    stationary._last_odom_pose = (0.0, 0.0, 0.0)
+    stationary._last_odom_yaw = 0.0
+    stationary._last_odom_time = None
+    stationary._stationary_since = None
+    stationary._moving_since = None
+    stationary._accept_source = lambda *args: True
+    stationary._on_odom(NS(
+        header=NS(stamp=NS(sec=30, nanosec=0)),
+        pose=NS(pose=NS(position=NS(x=1.0, y=0.0),
+                        orientation=_quaternion_ns(0.0))),
+        twist=NS(twist=NS(linear=NS(x=0.0, y=0.0), angular=NS(z=0.0)))))
+    assert stationary._state == stationary.State.SAFE_STOP
+    assert stationary._quality_failure == 'ODOM_JUMP'
+
+
+def test_strategy_conflicts_abort_startup(manager):
+    manager.params['localization_strategy'] = 'segmented_rotation'
+    with pytest.raises(localization_contracts.ContractError):
+        manager._configure_strategy()
+    manager.params['localization_strategy'] = 'stationary_only'
+    manager.params['motion_policy'] = 'guarded'
+    manager.params['motion_profile_path'] = '/tmp/profile.json'
+    with pytest.raises(localization_contracts.ContractError):
+        manager._configure_strategy()
+
+
+def test_legacy_status_keeps_existing_fields(manager):
+    status = manager._confined_status()
+    assert status['strategy'] == 'legacy_full_rotation'
+    assert status['motion_policy'] == 'forbid'
+    assert set(localization_contracts.STATUS_EXTENSION_FIELDS) <= set(status)
