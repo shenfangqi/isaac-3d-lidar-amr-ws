@@ -131,18 +131,20 @@ ros2 topic echo /automatic_localization/status \
 重定位；应先按 `failure_reason` 修复故障。自动物理定位只允许
 `navigation-safe`，不能使用不会驱动底盘的 `navigation-diagnostic`。
 
-已经测量出初始地图坐标时，保留固定初始位姿入口作为回退：
+自动定位不可用时，用人工定位入口作为回退，在 RViz 中点一次 2D Pose Estimate：
 
 ```bash
 scripts/jetson_navigation_start.sh \
   /home/shenfq/Projects/isaac_ros-dev/maps/real/carbot_site_route_retry_20260919.yaml \
-  fixed INITIAL_X_M INITIAL_Y_M INITIAL_YAW_RAD navigation-safe
+  manual navigation-safe
 ```
 
-固定模式执行“重建未激活容器 → 只读前置检查 → 激活 map_server/AMCL → 发布并
-确认初始位姿和 `map -> odom` → 激活导航节点 → 核对生命周期、速度拓扑与静默”
-顺序。旧的 `MAP X Y YAW [MODE]` 参数形式继续兼容。若只调控制链，末尾改为
-`navigation-diagnostic`，最终输出会被隔离到 `/cmd_vel_diagnostic`，真实
+人工模式执行“停止网页遥控 → 重建未激活容器 → 只读前置检查 → 激活 map_server →
+等待 RViz 初始位姿和 `map -> odom`（`CARBOT_INITIAL_POSE_TIMEOUT`，默认 300 s）→
+激活导航节点 → 核对生命周期、速度拓扑与静默”顺序；`MAP_YAML [MODE]` 等价于
+`manual`。原 `fixed X Y YAW` 与 `MAP X Y YAW [MODE]` 形式已移除：容器只接受
+`manual`/`auto`/`auto-activate` 初始化，这两种形式此前已无法启动。若只调控制链，
+末尾改为 `navigation-diagnostic`，最终输出会被隔离到 `/cmd_vel_diagnostic`，真实
 `/cmd_vel` 保持零发布者；自动定位的实车旋转验收必须使用 `navigation-safe`。
 
 2026-09-19 的首次移动建图发现，原 `0.30 rad/s` 实车 Nav2 转向上限低于履带

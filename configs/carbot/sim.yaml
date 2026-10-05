@@ -3,6 +3,7 @@ runtime: simulation
 use_sim_time: true
 clock_source: /clock
 odom_source: isaac_direct
+pointcloud_message_type: sensor_msgs/msg/PointCloud2
 localization_default: ground_truth
 allow_ground_truth_map_to_odom: true
 allow_chassis_odom_relay: false
