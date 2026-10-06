@@ -36,6 +36,7 @@ def generate_launch_description():
         'recovery_validation_preview')
     complex_route_validation = LaunchConfiguration(
         'complex_route_validation')
+    rotation_preview = LaunchConfiguration('rotation_preview')
     complex_route_braking_profile = LaunchConfiguration(
         'complex_route_braking_profile')
     lifecycle_autostart = PythonExpression([
@@ -287,6 +288,22 @@ def generate_launch_description():
         output='screen',
     )
 
+    # Issue #13 PR2: read-only sweep evidence; no velocity publisher.
+    localization_rotation_preview = Node(
+        package='isaac_3d_lidar_bringup',
+        executable='localization_rotation_preview',
+        name='localization_rotation_preview',
+        parameters=[{
+            'scan_topic': '/scan',
+            'odom_frame': 'odom',
+            'base_frame': 'base_footprint',
+            'footprint_xy': [0.155, 0.133, 0.155, -0.133,
+                             -0.130, -0.133, -0.130, 0.133],
+        }],
+        condition=IfCondition(rotation_preview),
+        output='screen',
+    )
+
     def configure_recovery(context):
         if recovery_enabled.perform(context) != 'true':
             return []
@@ -386,6 +403,15 @@ def generate_launch_description():
             ),
         ),
         DeclareLaunchArgument(
+            'rotation_preview',
+            default_value='false',
+            choices=['true', 'false'],
+            description=(
+                'Show Issue #13 in-place rotation sweep evidence (observed '
+                'free, occupied, unknown) in RViz. Never publishes velocity.'
+            ),
+        ),
+        DeclareLaunchArgument(
             'complex_route_braking_profile',
             default_value='',
             description=(
@@ -413,4 +439,5 @@ def generate_launch_description():
         recovery_preview,
         recovery_runtime_observer,
         complex_route_advisor,
+        localization_rotation_preview,
     ])

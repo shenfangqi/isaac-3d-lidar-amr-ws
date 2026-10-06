@@ -69,6 +69,8 @@ setup(
             'isaac_3d_lidar_bringup.fast_lio_base_adapter:main',
             'manual_map_localizer = '
             'isaac_3d_lidar_bringup.manual_map_localizer:main',
+            'localization_rotation_preview = '
+            'isaac_3d_lidar_bringup.localization_rotation_preview:main',
         ],
     },
 )
