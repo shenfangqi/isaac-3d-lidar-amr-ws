@@ -51,6 +51,7 @@ class Sim:
         self.feed_sweep = True
         self.feed_chassis = True
         self.chassis_blocked = False
+        self.noise = lambda now: 0.0      # extra odometry angular speed
         self.lease = None               # request re-sent at 10 Hz
         self.sequence = 0
         self.commands = []
@@ -83,7 +84,7 @@ class Sim:
                 self.guard.on_odom(OdomSample(
                     self.stamp, self.x, self.y,
                     math.atan2(math.sin(self.yaw), math.cos(self.yaw)),
-                    0.0, self.rate, self.now))
+                    0.0, self.rate + self.noise(self.now), self.now))
             if self.feed_chassis:
                 self.guard.on_chassis(True, self.chassis_blocked, self.now)
             query = self.guard.sweep_query()
@@ -430,3 +431,36 @@ def test_guard_crash_watchdog():
     extra = abs(sim.yaw - crash_yaw)
     assert extra <= speed * (limits.cmd_vel_timeout_s + dt) + (
         speed ** 2 / (2 * limits.max_angular_acceleration_rad_s2)) + 1e-6
+
+
+def _spikes(period=0.5, width=0.1, size=0.05):
+    """Odometry speed spikes at rest, like FAST-LIO on 2026-10-06."""
+    return lambda now: size if (now % period) < width else 0.0
+
+
+def test_release_completes_despite_odometry_spikes():
+    # 2026-10-06 real robot: RELEASE arrived during a speed spike, became a
+    # STOP, and same-sequence lease renewals never retried it.
+    sim = Sim().handshake()
+    sim.noise = lambda now: 0.05      # 0.4 s of motion: not stopped
+    sim.step(8)
+    sim.request(MotionOperation.RELEASE)
+    assert sim.guard.state != GuardState.RELEASED
+    sim.noise = _spikes()             # at rest again, with spikes
+    sim.step(30)                      # only lease renewals of that RELEASE
+    assert sim.guard.state == GuardState.RELEASED
+    assert max(abs(c) for c in sim.commands) == 0.0
+
+
+def test_short_spikes_do_not_clear_stopped():
+    sim = Sim().handshake()
+    sim.noise = _spikes(period=1.0, width=0.2)
+    sim.step(40)
+    assert sim.status.stopped
+
+
+def test_sustained_motion_clears_stopped():
+    sim = Sim().handshake()
+    sim.noise = lambda now: 0.05
+    sim.step(10)                      # 0.5 s of motion > 0.3 s grace
+    assert not sim.status.stopped

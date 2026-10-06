@@ -1095,6 +1095,34 @@ def test_handoff_no_two_publishers(segmented):
     assert len(calls) == 1
 
 
+def test_nav2_publisher_after_startup_does_not_block_activation(segmented):
+    # 2026-10-06 real robot: after STARTUP the velocity smoother became the
+    # /cmd_vel_command publisher; re-checking "no publisher" every tick hid
+    # the STARTUP result and timed out, pausing a healthy Nav2.
+    manager = segmented
+    manager._begin_confined_session(time.monotonic())
+    manager._validation_only = False
+    manager._probe.release()
+    manager._state = manager.State.START_NAVIGATION
+    manager._state_started = time.monotonic() - 1.0
+    manager._publish_zero = lambda: None
+    startup = {'done': False}
+    manager._navigation_client = NS(
+        service_is_ready=lambda: True,
+        call_async=lambda request: NS(
+            done=lambda: startup['done'],
+            result=lambda: NS(success=True)))
+    _guard(manager, 'RELEASED')
+    manager._tick()                       # released, no publisher: STARTUP
+    assert manager._future is not None
+
+    manager.publishers_on_cmd = 1         # Nav2 velocity smoother
+    startup['done'] = True
+    _guard(manager, 'RELEASED')
+    manager._tick()
+    assert manager._state == manager.State.READY
+
+
 def test_guard_that_never_releases_fails_instead_of_activating(segmented):
     manager = segmented
     manager._begin_confined_session(time.monotonic())

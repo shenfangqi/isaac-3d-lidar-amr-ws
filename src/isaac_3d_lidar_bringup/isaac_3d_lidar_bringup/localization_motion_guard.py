@@ -60,6 +60,9 @@ class GuardConfig:
     stop_linear_mps: float = 0.02
     stop_angular_rps: float = 0.03
     stopped_window_s: float = 0.5
+    # FAST-LIO odometry has short speed spikes at rest; like the manager,
+    # only motion lasting this long resets the stopped window.
+    stationary_grace_s: float = 0.3
     yaw_margin_rad: float = math.radians(5.0)
     max_odom_position_jump_m: float = 0.20
     max_odom_yaw_jump_rad: float = 0.35
@@ -131,6 +134,8 @@ class MotionGuardCore:
         self._emergency = None          # None = never received
         self._chassis = None            # (connected, blocked, receipt)
         self._still_since = None
+        self._moving_since = None
+        self._release_pending = False
         self._progress = None
         self._segment_start = None
         self._target = 0.0
@@ -164,20 +169,20 @@ class MotionGuardCore:
         self._last_request = request
         self._lease_mono = receipt_mono
         if request.operation == MotionOperation.RELEASE:
-            if self.state == GuardState.STOPPED and self._stopped(
-                    receipt_mono):
-                self.state = GuardState.RELEASED
-                self._command = 0.0
-            else:
-                self._halt(None)
+            # Repeats of this sequence only renew the lease, so remember the
+            # release and complete it in tick once stopped.
+            self._halt(None)
+            self._release_pending = True
             return
         if self.state == GuardState.ROTATING:
             self._halt(RejectReason.CONTROL_CONFLICT)
             return
         # STOPPING is fine: _try_start waits for the settle window.
+        self._release_pending = False
         self._pending = request
 
     def _on_stop(self, request, receipt_mono):
+        self._release_pending = False
         if request.session in self._dead_sessions:
             self._halt(RejectReason.CONTROL_CONFLICT)
             return
@@ -217,9 +222,15 @@ class MotionGuardCore:
         moving = (abs(sample.linear) > self.config.stop_linear_mps
                   or abs(sample.angular) > self.config.stop_angular_rps)
         if moving:
-            self._still_since = None
-        elif self._still_since is None:
-            self._still_since = sample.receipt_mono
+            if self._moving_since is None:
+                self._moving_since = sample.receipt_mono
+            if (sample.receipt_mono - self._moving_since
+                    >= self.config.stationary_grace_s):
+                self._still_since = None
+        else:
+            self._moving_since = None
+            if self._still_since is None:
+                self._still_since = sample.receipt_mono
 
     def on_sweep(self, verdict):
         self._sweep = verdict
@@ -285,6 +296,12 @@ class MotionGuardCore:
             self._check_rotation(now_mono)
         if self.state == GuardState.STOPPING and self._stopped(now_mono):
             self.state = GuardState.STOPPED
+        if (self._release_pending and self.state == GuardState.STOPPED
+                and self._stopped(now_mono)):
+            self._release_pending = False
+            self.state = GuardState.RELEASED
+            self._command = 0.0
+            return 0.0
         if self.state != GuardState.ROTATING:
             self._command = 0.0
             return 0.0
