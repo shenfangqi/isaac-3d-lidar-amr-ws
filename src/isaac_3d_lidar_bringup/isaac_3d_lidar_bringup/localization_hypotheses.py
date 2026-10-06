@@ -696,8 +696,17 @@ class SearchWorker:
         if not ready:
             if self._process.is_alive():
                 return None
-            status, payload = 'error', (
-                f'worker exited with code {self._process.exitcode}')
+            # The child may have sent its result and exited between the two
+            # checks above (#17); read the pipe before calling it an error.
+            try:
+                ready = self._connection.poll()
+                if ready:
+                    status, payload = self._connection.recv()
+            except EOFError:
+                ready = False
+            if not ready:
+                status, payload = 'error', (
+                    f'worker exited with code {self._process.exitcode}')
         token = self.token
         self._reap()
         return token, status, payload
