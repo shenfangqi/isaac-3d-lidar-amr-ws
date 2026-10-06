@@ -1,0 +1,111 @@
+"""
+Issue #13 PR5 startup closure: profile gate and guarded-rotation plumbing.
+
+The profile checker runs on the workstation without ROS; the shell scripts
+are checked statically (they need the Jetson to run).
+"""
+
+import importlib.util
+import json
+from pathlib import Path
+import subprocess
+
+import pytest
+import yaml
+
+from isaac_3d_lidar_bringup.localization_contracts import (
+    encode_motion_profile,
+    MotionProfile,
+)
+
+
+PROJECT_DIR = Path(__file__).resolve().parents[3]
+SCRIPTS = PROJECT_DIR / 'scripts'
+PARAMETERS = yaml.safe_load((
+    PROJECT_DIR / 'src/carbot_description/config/carbot_parameters.yaml'
+).read_text(encoding='utf-8'))
+
+
+def _checker():
+    spec = importlib.util.spec_from_file_location(
+        'check_motion_profile', SCRIPTS / 'check_motion_profile.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _profile(status='ACCEPTED', reviewed=True, **changes):
+    checker = _checker()
+    geometry, extrinsics, control = checker.canonical_hashes(PARAMETERS, 0.05)
+    values = dict(geometry_hash=geometry, extrinsics_hash=extrinsics,
+                  control_chain_hash=control)
+    values.update(changes)
+    return encode_motion_profile(MotionProfile(
+        1, values['geometry_hash'], values['extrinsics_hash'],
+        values['control_chain_hash'], ('bag-1', 'review:x'), 0.001, 0.015,
+        0.171, reviewed, status))
+
+
+def test_accepted_matching_profile_passes_and_reports_hashes():
+    result = _checker().check(_profile(), PARAMETERS)
+    assert set(result) == {'geometry_hash', 'extrinsics_hash',
+                           'control_chain_hash', 'profile_hash'}
+
+
+@pytest.mark.parametrize('text', [
+    'not json',
+    _profile('ESTIMATED', reviewed=False),
+    _profile('REVIEWED'),
+    _profile(control_chain_hash='0' * 64),
+    _profile(geometry_hash='1' * 64),
+])
+def test_only_accepted_profiles_for_this_robot_pass(text):
+    with pytest.raises(ValueError):
+        _checker().check(text, PARAMETERS)
+
+
+def test_repository_accepted_profile_is_still_valid():
+    # Guards against silently changing geometry/extrinsics/control without
+    # re-reviewing the motion profile.
+    profile = (PROJECT_DIR / 'docs/evidence/'
+               'issue13_motion_profile_accepted_2026-10-06.json')
+    result = subprocess.run(
+        ['python3', str(SCRIPTS / 'check_motion_profile.py'), str(profile)],
+        capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)['profile_hash']
+
+
+def test_start_script_gates_guarded_rotation():
+    source = (SCRIPTS / 'start_real_robot_navigation_rviz.sh').read_text()
+    for flag in ('--localization-motion)', '--motion-profile)',
+                 '--operator-rotation-clear)', '--operator-present)'):
+        assert flag in source
+    assert 'requires --localization-strategy segmented_rotation' in source
+    assert 'if [[ "${operator_present}" != "true" ]]; then' in source
+    assert 'check_motion_profile.py' in source
+    # The profile check happens before anything starts on the robot.
+    assert source.index('check_motion_profile.py') < source.index(
+        'echo "[1/8] Disabling the conflicting web teleop publisher..."')
+    assert 'remote_sum="$(remote sha256sum' in source
+    assert 'verify_motion_guard || return 1' in source
+    assert "grep -q 'motion guard: permitted=True'" in source
+    assert 'A motion guard is running although motion is forbidden.' in source
+
+
+def test_container_script_passes_guarded_arguments_only_when_valid():
+    source = (SCRIPTS / 'jetson_nvblox_container.sh').read_text()
+    assert 'motion_policy guarded is valid only for segmented_rotation.' in (
+        source)
+    assert 'operator_rotation_clear requires motion_policy guarded.' in source
+    assert 'motion_policy:=guarded motion_profile_path:=' in source
+    assert 'Motion profile must be inside ${workspace}' in source
+    assert '^[0-9a-f]{64}$' in source
+    # Forbid (the default) adds no motion launch arguments.
+    assert 'motion_policy="${7:-forbid}"' in source
+
+
+@pytest.mark.parametrize('script', [
+    'start_real_robot_navigation_rviz.sh', 'jetson_nvblox_container.sh'])
+def test_scripts_parse(script):
+    subprocess.run(['bash', '-n', str(SCRIPTS / script)], check=True)
