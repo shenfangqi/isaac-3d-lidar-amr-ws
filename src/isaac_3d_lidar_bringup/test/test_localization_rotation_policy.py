@@ -19,6 +19,7 @@ from isaac_3d_lidar_bringup.localization_contracts import (
 )
 from isaac_3d_lidar_bringup.localization_rotation_policy import (
     add_obstacle_points,
+    braking_extension,
     classify_sweep,
     evaluate_localization_rotation,
     evidence_from_scan,
@@ -38,7 +39,8 @@ CONTROL = 'b' * 64
 # Pure geometry: no padding, drift or braking unless a test adds them.
 EXACT = RotationGateConfig(padding_m=0.0, yaw_margin_rad=0.0,
                            unmeasured_braking_rad=0.0,
-                           unmeasured_center_drift_m=0.0)
+                           unmeasured_center_drift_m=0.0,
+                           chassis_watchdog_s=0.0)
 
 
 def _profile(config, stop_tail=0.0, latency=0.0, drift=0.0,
@@ -215,6 +217,37 @@ def test_braking_sweep():
         profile=None)
     assert unmeasured.decision.reason == 'OBSTACLE_IN_SWEEP'
     assert not unmeasured.braking_measured
+
+
+def test_sweep_covers_guard_crash_until_chassis_watchdog():
+    # 2026-10-06: with the guard dead the chassis kept the last command for
+    # 0.49-0.57 s.  A post beyond the normal stop (latency 0.171 s) but
+    # within the watchdog hold must refuse the probe.
+    import dataclasses
+
+    evidence = _grid(occupied_points=[_polar(0.195, 85.0)])
+    measured = _profile(EXACT, stop_tail=0.001, latency=0.171)
+    no_crash = _evaluate(evidence, math.radians(30), EXACT, profile=measured)
+    assert no_crash.decision.allowed, no_crash.decision
+
+    crash = dataclasses.replace(EXACT, chassis_watchdog_s=0.6)
+    result = _evaluate(evidence, math.radians(30), crash,
+                       profile=_profile(crash, stop_tail=0.001,
+                                        latency=0.171))
+    assert result.decision.reason == 'OBSTACLE_IN_SWEEP'
+    assert result.braking_rad == pytest.approx(0.4 * 0.6 + 0.001)
+
+
+def test_braking_extension_uses_the_longer_hold():
+    config = RotationGateConfig(yaw_margin_rad=0.0, chassis_watchdog_s=0.6)
+    short = _profile(config, stop_tail=0.01, latency=0.2)
+    long = _profile(config, stop_tail=0.01, latency=0.9)
+    assert braking_extension(short, config)[0] == pytest.approx(
+        0.4 * 0.6 + 0.01)
+    assert braking_extension(long, config)[0] == pytest.approx(
+        0.4 * 0.9 + 0.01)
+    unmeasured, _, flag = braking_extension(None, config)
+    assert unmeasured == pytest.approx(0.4 * 0.6 + 0.40) and not flag
 
 
 def test_sparse_3d_not_free():
