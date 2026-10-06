@@ -274,14 +274,16 @@ def advise_speed(
     stopping = stopping_distance(current_speed_mps, profile)
     tolerance = 1.0e-6
     reduction = current_speed_mps > recommended + tolerance
-    if risk.distance_to_unsafe_m <= profile.position_margin_m:
+    if risk.unsafe_reason == 'COMPUTE_BUDGET_EXCEEDED':
+        # Only the checked prefix is known: keep its braking limit, but do
+        # not report an unchecked path as a predicted collision (#18).
+        reason = 'COMPUTE_BUDGET_EXCEEDED'
+    elif risk.distance_to_unsafe_m <= profile.position_margin_m:
         reason = 'PREDICTED_COLLISION'
     elif current_speed_mps > curve_limit + tolerance:
         reason = 'CURVATURE_SPEED_UNSAFE'
     elif stopping > risk.distance_to_unsafe_m + tolerance:
         reason = 'PREDICTED_COLLISION'
-    elif risk.unsafe_reason == 'COMPUTE_BUDGET_EXCEEDED':
-        reason = 'COMPUTE_BUDGET_EXCEEDED'
     else:
         reason = 'OK'
     return SpeedAdvisory(
