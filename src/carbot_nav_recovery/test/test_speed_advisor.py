@@ -111,6 +111,32 @@ def test_advisor_requests_slowdown_before_predicted_collision():
     assert advice.motion_eligible is False
 
 
+@pytest.mark.parametrize('budget', ['expired', 'mid_path'])
+def test_compute_budget_overrun_is_not_a_predicted_collision(
+        monkeypatch, budget):
+    # Issue #18: a clear path evaluated past its budget used to be labelled
+    # PREDICTED_COLLISION, adding false collisions to the evidence.
+    import carbot_nav_recovery.speed_advisor as advisor
+
+    if budget == 'expired':
+        deadline = 0.0                    # even the start check times out
+    else:
+        calls = {'n': 0}
+        real = advisor.time.monotonic
+
+        def clock():
+            calls['n'] += 1
+            return real() + (100.0 if calls['n'] > 40 else 0.0)
+
+        monkeypatch.setattr(advisor.time, 'monotonic', clock)
+        deadline = real() + 50.0
+    advice = advise_speed(
+        snapshot(), FOOTPRINT, straight(), freshness(), 0.10,
+        accepted_profile(), deadline_monotonic=deadline)
+    assert advice.reason == 'COMPUTE_BUDGET_EXCEEDED'
+    assert advice.recommended_speed_mps <= 0.10
+
+
 def test_advisor_reports_curvature_limit_separately():
     profile = accepted_profile(max_linear_speed_mps=0.5,
                                max_angular_speed_radps=0.2)
