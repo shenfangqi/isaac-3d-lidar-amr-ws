@@ -230,6 +230,11 @@ class AutomaticLocalizationManager(Node):
         self._state_started = now
         self._startup_started = now
         self._future = None
+        # Set once a Nav2 STARTUP/RESUME request may have taken effect.  A
+        # later failure must then pause Nav2, not only report SAFE_STOP.
+        self._navigation_may_be_active = False
+        self._navigation_pause_state = None
+        self._pause_future = None
         self._nomotion_future = None
         self._last_nomotion_request = None
         self._last_raw_odom_time = None
@@ -842,7 +847,51 @@ class AutomaticLocalizationManager(Node):
             raise RuntimeError('validation_only forbids navigation activation')
         request = ManageLifecycleNodes.Request()
         request.command = ManageLifecycleNodes.Request.STARTUP
+        if client is self._navigation_client:
+            # After a confirmed pause the Nav2 nodes are configured but
+            # inactive; STARTUP would try to configure them a second time.
+            if self._navigation_pause_state == 'confirmed':
+                request.command = ManageLifecycleNodes.Request.RESUME
+            self._navigation_may_be_active = True
+            self._navigation_pause_state = None
         self._future = client.call_async(request)
+
+    def _request_navigation_pause(self):
+        """Pause Nav2 after a failure that may follow a STARTUP request."""
+        # The lifecycle manager serves requests one at a time, so a PAUSE
+        # sent while STARTUP is still running takes effect after it.
+        if not self._navigation_client.service_is_ready():
+            self._navigation_pause_state = 'service_unavailable'
+            return
+        request = ManageLifecycleNodes.Request()
+        request.command = ManageLifecycleNodes.Request.PAUSE
+        self._pause_future = self._navigation_client.call_async(request)
+        self._navigation_pause_state = 'requested'
+        self.get_logger().error(
+            'requested Nav2 lifecycle pause after failed activation')
+
+    def _tick_navigation_pause(self):
+        if self._navigation_pause_state == 'service_unavailable':
+            self._request_navigation_pause()
+            return
+        if (self._navigation_pause_state != 'requested'
+                or not self._pause_future.done()):
+            return
+        try:
+            response = self._pause_future.result()
+            paused = bool(getattr(response, 'success', response is not None))
+        except Exception as error:
+            self.get_logger().error(f'Nav2 pause request failed: {error}')
+            paused = False
+        self._pause_future = None
+        if paused:
+            self._navigation_pause_state = 'confirmed'
+            self._navigation_may_be_active = False
+        else:
+            # Reported, not retried: the lifecycle manager refuses PAUSE
+            # when STARTUP itself failed and the nodes never became active.
+            self._navigation_pause_state = 'failed'
+            self.get_logger().error('Nav2 lifecycle pause was not confirmed')
 
     def _future_succeeded(self):
         if self._future is None or not self._future.done():
@@ -889,6 +938,8 @@ class AutomaticLocalizationManager(Node):
         if self._strategy == Strategy.LEGACY_FULL_ROTATION:
             self._ensure_command_publisher()
         self.get_logger().error(reason)
+        if self._navigation_may_be_active:
+            self._request_navigation_pause()
         self._transition(State.SAFE_STOP)
 
     def _publish_zero(self):
@@ -1531,6 +1582,7 @@ class AutomaticLocalizationManager(Node):
 
         elif self._state == State.SAFE_STOP:
             self._publish_zero()
+            self._tick_navigation_pause()
             stopped_long_enough = (
                 state_age >= self._parameter('zero_command_duration_sec')
                 and self._stopped(now)
@@ -1543,9 +1595,11 @@ class AutomaticLocalizationManager(Node):
 
         elif self._state == State.WAIT_MANUAL_POSE:
             self._publish_zero()
+            self._tick_navigation_pause()
 
         elif self._state == State.FAULT_STOPPED:
             self._publish_zero()
+            self._tick_navigation_pause()
 
         self._publish_status()
 
@@ -1794,6 +1848,7 @@ class AutomaticLocalizationManager(Node):
             'candidate_ready': self._state == State.CANDIDATE_READY,
             'awaiting_amcl_initial_pose': self._awaiting_amcl_initial_pose,
             'navigation_activated': self._state == State.READY,
+            'navigation_pause': self._navigation_pause_state,
             'timing': self._timing,
             'scan_tf_error': self._scan_tf_error,
             'score_duration_sec': self._score_duration_sec,
