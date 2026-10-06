@@ -27,11 +27,15 @@ automatic_activation=true
 stationary_validation=false
 complex_route_validation=false
 localization_strategy=legacy_full_rotation
+localization_motion=forbid
+motion_profile=""
+operator_rotation_clear=false
+operator_present=false
 map_argument_seen=false
 
 usage() {
   cat <<EOF
-Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [--complex-route-validation] [--localization-strategy STRATEGY] [MAP_YAML]
+Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [--complex-route-validation] [--localization-strategy STRATEGY] [--localization-motion forbid|guarded --motion-profile JSON [--operator-rotation-clear] --operator-present] [MAP_YAML]
 
 Start saved-map navigation for the physical Carbot and open RViz.
 
@@ -44,10 +48,23 @@ Options:
   --stationary-validation  No rotation; prepare manual reference and keep Nav2 inactive.
   --complex-route-validation  Start the read-only Issue #12 advisory and evidence topics.
   --localization-strategy STRATEGY
-                  legacy_full_rotation (default) or stationary_only. stationary_only
-                  searches the saved map without any rotation command; use it with
-                  --automatic or --automatic-activate. segmented_rotation stays
-                  refused until an ACCEPTED motion profile exists (Issue #13 PR4).
+                  legacy_full_rotation (default), stationary_only or
+                  segmented_rotation; use it with --automatic or --automatic-activate.
+                  stationary_only never rotates. segmented_rotation probes only
+                  with --localization-motion guarded; with forbid (default) an
+                  ambiguous result falls back to manual 2D Pose Estimate.
+  --localization-motion forbid|guarded
+                  guarded lets the Issue #13 motion guard rotate during
+                  segmented_rotation. Requires --motion-profile, --operator-present
+                  and an ACCEPTED profile matching the current geometry,
+                  extrinsics and control chain (checked before startup).
+  --motion-profile JSON
+                  Workstation path of the ACCEPTED rotation motion profile.
+  --operator-rotation-clear
+                  Per-launch attestation that this placement can rotate in place;
+                  covers only unobserved sweep cells (the MID-360 blind zone).
+  --operator-present
+                  Confirms an operator is at the robot with the stop in reach.
   -h, --help      Show this help.
 
 Environment overrides:
@@ -80,6 +97,28 @@ while (( $# > 0 )); do
       fi
       localization_strategy="$2"
       shift
+      ;;
+    --localization-motion)
+      if (( $# < 2 )); then
+        echo "--localization-motion needs a value." >&2
+        exit 2
+      fi
+      localization_motion="$2"
+      shift
+      ;;
+    --motion-profile)
+      if (( $# < 2 )); then
+        echo "--motion-profile needs a path." >&2
+        exit 2
+      fi
+      motion_profile="$2"
+      shift
+      ;;
+    --operator-rotation-clear)
+      operator_rotation_clear=true
+      ;;
+    --operator-present)
+      operator_present=true
       ;;
     --validation-only|--automatic)
       automatic_localization=true
@@ -116,11 +155,7 @@ while (( $# > 0 )); do
 done
 
 case "${localization_strategy}" in
-  legacy_full_rotation|stationary_only) ;;
-  segmented_rotation)
-    echo "segmented_rotation can rotate only with an ACCEPTED motion profile (Issue #13 PR4), which does not exist yet." >&2
-    exit 2
-    ;;
+  legacy_full_rotation|stationary_only|segmented_rotation) ;;
   *)
     echo "Unknown localization strategy: ${localization_strategy}" >&2
     exit 2
@@ -129,6 +164,36 @@ esac
 if [[ "${localization_strategy}" != "legacy_full_rotation" ]] && {
     [[ "${automatic_localization}" != "true" ]] || [[ "${stationary_validation}" == "true" ]]; }; then
   echo "--localization-strategy requires --automatic or --automatic-activate." >&2
+  exit 2
+fi
+
+case "${localization_motion}" in
+  forbid|guarded) ;;
+  *)
+    echo "--localization-motion must be forbid or guarded." >&2
+    exit 2
+    ;;
+esac
+motion_hashes_json=""
+if [[ "${localization_motion}" == "guarded" ]]; then
+  if [[ "${localization_strategy}" != "segmented_rotation" ]]; then
+    echo "--localization-motion guarded requires --localization-strategy segmented_rotation." >&2
+    exit 2
+  fi
+  if [[ -z "${motion_profile}" || ! -f "${motion_profile}" ]]; then
+    echo "--localization-motion guarded requires an existing --motion-profile." >&2
+    exit 2
+  fi
+  if [[ "${operator_present}" != "true" ]]; then
+    echo "受保护旋转会让小车原地转动：确认有人在车旁、可随时急停后，加 --operator-present。" >&2
+    echo "Guarded rotation moves the robot: add --operator-present only with an operator at the robot." >&2
+    exit 2
+  fi
+  # ACCEPTED status and hash binding are checked here, before anything
+  # starts; the manager and guard check them again on the Jetson.
+  motion_hashes_json="$(python3 "${script_dir}/check_motion_profile.py" "${motion_profile}")" || exit 2
+elif [[ -n "${motion_profile}" || "${operator_rotation_clear}" == "true" ]]; then
+  echo "--motion-profile and --operator-rotation-clear require --localization-motion guarded." >&2
   exit 2
 fi
 
@@ -453,6 +518,38 @@ activate_navigation() {
   control activate-navigation --timeout 90
 }
 
+verify_motion_guard() {
+  # The manager's motion policy must match the request.  Guarded rotation
+  # also needs a running guard that accepted the profile; forbid needs none.
+  local policy nodes
+  policy="$(remote_ros 'timeout 5s ros2 param get /automatic_localization_manager motion_policy' 2>&1)" || {
+    printf '%s\n' "${policy}" >&2
+    return 1
+  }
+  if [[ "${policy}" != *"String value is: ${localization_motion}"* ]]; then
+    echo "Deployed motion policy (${policy}) does not match ${localization_motion}." >&2
+    return 1
+  fi
+  nodes="$(remote_ros 'timeout 10s ros2 node list' 2>&1)" || return 1
+  if [[ "${localization_motion}" != "guarded" ]]; then
+    if grep -qx '/localization_motion_guard' <<<"${nodes}"; then
+      echo "A motion guard is running although motion is forbidden." >&2
+      return 1
+    fi
+    return 0
+  fi
+  if ! grep -qx '/localization_motion_guard' <<<"${nodes}"; then
+    echo "Guarded rotation was requested but no motion guard is running." >&2
+    return 1
+  fi
+  if ! remote docker logs carbot-nvblox 2>&1 | grep -q 'motion guard: permitted=True'; then
+    echo "运动守护拒绝放行（配置、哈希或 carbot_msgs 不满足），不启动受保护旋转。" >&2
+    echo "The motion guard does not permit motion (profile, hashes or carbot_msgs)." >&2
+    return 1
+  fi
+  echo "PASS: motion guard is running and permits guarded rotation."
+}
+
 run_automatic_localization() {
   # Refuse to arm an older deployed manager that can still activate Nav2.
   local validation_mode=""
@@ -496,6 +593,7 @@ run_automatic_localization() {
     echo "Deployed localization strategy (${deployed_strategy}) does not match ${localization_strategy}." >&2
     return 1
   fi
+  verify_motion_guard || return 1
   local service=/automatic_localization/start
   if [[ "${stationary_validation}" == "true" ]]; then
     service=/automatic_localization/prepare_stationary
@@ -597,6 +695,11 @@ echo "Map: ${map_yaml}"
 echo "Localization: $(if [[ "${automatic_localization}" == "true" ]]; then echo automatic; else echo manual; fi)"
 if [[ "${automatic_localization}" == "true" ]]; then
   echo "Localization strategy: ${localization_strategy}"
+  echo "Localization motion: ${localization_motion}"
+fi
+if [[ "${localization_motion}" == "guarded" ]]; then
+  echo "受保护旋转已开启：定位有歧义时小车可能原地转动，现场必须有人看护、可随时急停。"
+  echo "Placement attestation (operator_rotation_clear): ${operator_rotation_clear}"
 fi
 echo "Complex-route advisor: $(if [[ "${complex_route_validation}" == "true" ]]; then echo validation-only; else echo disabled; fi)"
 remote test -f "${map_yaml}"
@@ -622,9 +725,30 @@ fi
 if [[ "${complex_route_validation}" == "true" ]]; then
   complex_route_mode=complex-route-validation
 fi
+remote_profile=""
+extrinsics_hash=""
+control_chain_hash=""
+if [[ "${localization_motion}" == "guarded" ]]; then
+  json_field() {
+    python3 -c 'import json, sys; print(json.loads(sys.argv[1])[sys.argv[2]])' \
+      "${motion_hashes_json}" "$1"
+  }
+  extrinsics_hash="$(json_field extrinsics_hash)"
+  control_chain_hash="$(json_field control_chain_hash)"
+  remote_profile="${jetson_workspace}/motion_profiles/$(basename "${motion_profile}")"
+  remote mkdir -p "${jetson_workspace}/motion_profiles"
+  scp "${ssh_options[@]}" "${motion_profile}" "${jetson_host}:${remote_profile}" >/dev/null
+  local_sum="$(sha256sum "${motion_profile}" | cut -d' ' -f1)"
+  remote_sum="$(remote sha256sum "${remote_profile}" | cut -d' ' -f1)"
+  if [[ "${local_sum}" != "${remote_sum}" ]]; then
+    echo "Motion profile copy on the Jetson does not match the local file." >&2
+    false
+  fi
+fi
 remote "${jetson_workspace}/scripts/jetson_nvblox_container.sh" \
   recreate navigation-safe "${map_yaml}" "${initialization_mode}" "${complex_route_mode}" \
-  "${localization_strategy}" >/dev/null
+  "${localization_strategy}" "${localization_motion}" "${remote_profile}" \
+  "${extrinsics_hash}" "${control_chain_hash}" "${operator_rotation_clear}" >/dev/null
 
 echo "[4/8] Running the non-motion hardware preflight..."
 run_preflight_with_readiness_retry

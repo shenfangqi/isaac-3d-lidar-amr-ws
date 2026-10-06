@@ -11,7 +11,7 @@ time_gate="${workspace}/scripts/wait_for_mapping_time_sync.py"
 
 usage() {
   echo "Usage: $0 {start|recreate|stop|status|logs} [compact|full|mapping]" >&2
-  echo "       $0 {start|recreate} navigation-safe MAP_YAML [manual|auto|auto-activate] [none|complex-route-validation] [legacy_full_rotation|stationary_only]" >&2
+  echo "       $0 {start|recreate} navigation-safe MAP_YAML [manual|auto|auto-activate] [none|complex-route-validation] [legacy_full_rotation|stationary_only|segmented_rotation] [forbid|guarded PROFILE_JSON EXTRINSICS_HASH CONTROL_CHAIN_HASH true|false]" >&2
   echo "       $0 {start|recreate} navigation-diagnostic MAP_YAML" >&2
   echo "       Append 'auto' for validation or 'auto-activate' for guarded Nav2 activation." >&2
 }
@@ -67,8 +67,57 @@ case "${mode}" in
       exit 2
     fi
     localization_strategy="${6:-legacy_full_rotation}"
-    if [[ "${localization_strategy}" != "legacy_full_rotation" && "${localization_strategy}" != "stationary_only" ]]; then
-      echo "Localization strategy must be 'legacy_full_rotation' or 'stationary_only'." >&2
+    case "${localization_strategy}" in
+      legacy_full_rotation|stationary_only|segmented_rotation) ;;
+      *)
+        echo "Localization strategy must be legacy_full_rotation, stationary_only or segmented_rotation." >&2
+        exit 2
+        ;;
+    esac
+    motion_policy="${7:-forbid}"
+    motion_profile="${8:-}"
+    extrinsics_hash="${9:-}"
+    control_chain_hash="${10:-}"
+    operator_rotation_clear="${11:-false}"
+    if [[ "${motion_policy}" != "forbid" && "${motion_policy}" != "guarded" ]]; then
+      echo "Motion policy must be 'forbid' or 'guarded'." >&2
+      exit 2
+    fi
+    if [[ "${operator_rotation_clear}" != "true" && "${operator_rotation_clear}" != "false" ]]; then
+      echo "operator_rotation_clear must be 'true' or 'false'." >&2
+      exit 2
+    fi
+    motion_launch_argument=""
+    if [[ "${motion_policy}" == "guarded" ]]; then
+      # The workstation already checked ACCEPTED status and hashes; the
+      # manager and guard re-check them, so a mismatch never moves.
+      if [[ "${localization_strategy}" != "segmented_rotation" ]]; then
+        echo "motion_policy guarded is valid only for segmented_rotation." >&2
+        exit 2
+      fi
+      motion_profile="$(realpath -m "${motion_profile}")"
+      case "${motion_profile}" in
+        "${workspace}/"*) ;;
+        *)
+          echo "Motion profile must be inside ${workspace}: ${motion_profile}" >&2
+          exit 2
+          ;;
+      esac
+      if [[ ! -f "${motion_profile}" ]]; then
+        echo "Motion profile does not exist: ${motion_profile}" >&2
+        exit 2
+      fi
+      for value in "${extrinsics_hash}" "${control_chain_hash}"; do
+        if [[ ! "${value}" =~ ^[0-9a-f]{64}$ ]]; then
+          echo "Guarded rotation needs 64-hex extrinsics and control-chain hashes." >&2
+          exit 2
+        fi
+      done
+      container_profile="/workspaces/isaac_ros-dev${motion_profile#${workspace}}"
+      printf -v quoted_container_profile '%q' "${container_profile}"
+      motion_launch_argument=" motion_policy:=guarded motion_profile_path:=${quoted_container_profile} extrinsics_hash:=${extrinsics_hash} control_chain_hash:=${control_chain_hash} operator_rotation_clear:=${operator_rotation_clear}"
+    elif [[ "${operator_rotation_clear}" == "true" ]]; then
+      echo "operator_rotation_clear requires motion_policy guarded." >&2
       exit 2
     fi
     if [[ "${localization_strategy}" != "legacy_full_rotation" && "${initialization}" == "manual" ]]; then
@@ -82,7 +131,7 @@ case "${mode}" in
       auto_launch_argument=" automatic_localization:=true auto_localization_validation_only:=false"
     fi
     if [[ "${initialization}" != "manual" ]]; then
-      auto_launch_argument+=" localization_strategy:=${localization_strategy}"
+      auto_launch_argument+=" localization_strategy:=${localization_strategy}${motion_launch_argument}"
     fi
     diagnostic_launch_argument=""
     if [[ "${diagnostic_mode}" == "complex-route-validation" ]]; then
