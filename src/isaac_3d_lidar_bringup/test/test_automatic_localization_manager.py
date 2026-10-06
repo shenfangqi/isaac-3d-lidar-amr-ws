@@ -32,7 +32,9 @@ class FakeTime:
 
 class FakeManageLifecycleNodes:
     class Request:
-        STARTUP = 1
+        STARTUP = 0
+        PAUSE = 1
+        RESUME = 2
 
         def __init__(self):
             self.command = None
@@ -96,6 +98,10 @@ def manager():
     node._requested_initial_pose = None
     node._manual_reference_pose = None
     node._candidate_anchor_pose = None
+    node._future = None
+    node._navigation_may_be_active = False
+    node._navigation_pause_state = None
+    node._pause_future = None
     node._pose_seed_publisher = NS(publish=lambda message: None)
     node.get_clock = lambda: NS(now=lambda: FakeTime(10 * 10**9))
     node._publish_status = lambda **kwargs: None
@@ -139,6 +145,124 @@ def test_explicit_activation_mode_calls_navigation_lifecycle(manager):
     manager._tick()
 
     assert len(calls) == 1
+
+
+class FakeFuture:
+    def __init__(self, response=None, done=True):
+        self._response = response
+        self._done = done
+
+    def done(self):
+        return self._done
+
+    def result(self):
+        return self._response
+
+
+def _activating(manager, startup_future, ready=True):
+    """Put the manager in START_NAVIGATION with Nav2 calls recorded."""
+    manager._validation_only = False
+    manager._state = manager.State.START_NAVIGATION
+    manager._state_started = time.monotonic() - 1.0
+    manager._command_publisher = None
+    manager._manual_recovery_allowed = False
+    manager._publish_zero = lambda: None
+    # Legacy SAFE_STOP recreates its zero-velocity publisher.
+    manager._ensure_command_publisher = lambda: None
+    manager._stopped = lambda now: True
+    manager.get_logger = lambda: NS(info=lambda msg: None,
+                                    error=lambda msg: None)
+    calls = []
+
+    def call(request):
+        calls.append(request.command)
+        return startup_future if len(calls) == 1 else manager._next_future
+
+    manager._navigation_client = NS(service_is_ready=lambda: ready,
+                                    call_async=call)
+    manager._next_future = FakeFuture(NS(success=True))
+    return calls
+
+
+@pytest.mark.parametrize('startup, expire', [
+    (FakeFuture(done=False), True),           # STARTUP timed out
+    (FakeFuture(NS(success=False)), False),   # STARTUP reported failure
+])
+def test_failed_nav2_activation_pauses_navigation(manager, startup, expire):
+    # Review of PR #16: SAFE_STOP was reported while the in-flight STARTUP
+    # could still activate Nav2.  The failure must now pause Nav2.
+    calls = _activating(manager, startup)
+    manager._tick()                       # sends STARTUP
+    assert calls == [FakeManageLifecycleNodes.Request.STARTUP]
+    if expire:
+        manager._state_started -= manager.params['service_timeout_sec']
+    manager._tick()                       # timeout or failure -> SAFE_STOP
+
+    assert manager._state == manager.State.SAFE_STOP
+    assert calls[-1] == FakeManageLifecycleNodes.Request.PAUSE
+    assert manager._navigation_pause_state == 'requested'
+
+    manager._tick()                       # PAUSE acknowledged
+    assert manager._navigation_pause_state == 'confirmed'
+    assert manager._navigation_may_be_active is False
+
+
+def test_failure_before_startup_request_does_not_pause(manager):
+    calls = _activating(manager, FakeFuture(done=False), ready=False)
+    manager._state_started -= manager.params['service_timeout_sec'] + 1.0
+    manager._tick()                       # service never ready -> fail
+
+    assert manager._state == manager.State.SAFE_STOP
+    assert calls == []
+    assert manager._navigation_pause_state is None
+
+
+def test_unconfirmed_pause_is_reported_not_hidden(manager):
+    calls = _activating(manager, FakeFuture(NS(success=False)))
+    manager._next_future = FakeFuture(NS(success=False))
+    manager._tick()
+    manager._tick()
+    manager._tick()
+
+    assert calls[-1] == FakeManageLifecycleNodes.Request.PAUSE
+    assert manager._navigation_pause_state == 'failed'
+    assert manager._navigation_may_be_active is True
+
+
+def test_pause_waits_for_lifecycle_service_then_is_sent(manager):
+    ready = {'value': True}
+    calls = _activating(manager, FakeFuture(NS(success=False)))
+    client = manager._navigation_client
+    manager._navigation_client = NS(
+        service_is_ready=lambda: ready['value'],
+        call_async=client.call_async)
+    manager._tick()                       # STARTUP sent
+    ready['value'] = False                # lifecycle manager disappears
+    manager._state_started -= manager.params['service_timeout_sec']
+    manager._tick()                       # 'service unavailable' failure
+    assert manager._state == manager.State.SAFE_STOP
+    assert manager._navigation_pause_state == 'service_unavailable'
+    assert calls == [FakeManageLifecycleNodes.Request.STARTUP]
+
+    ready['value'] = True
+    manager._tick()
+    assert calls[-1] == FakeManageLifecycleNodes.Request.PAUSE
+    assert manager._navigation_pause_state == 'requested'
+
+
+def test_activation_after_confirmed_pause_uses_resume(manager):
+    calls = _activating(manager, FakeFuture(NS(success=False)))
+    manager._tick()
+    manager._tick()
+    manager._tick()
+    assert manager._navigation_pause_state == 'confirmed'
+
+    manager._future = None
+    manager._call_lifecycle(manager._navigation_client)
+
+    assert calls[-1] == FakeManageLifecycleNodes.Request.RESUME
+    assert manager._navigation_may_be_active is True
+    assert manager._navigation_pause_state is None
 
 
 def _postdated(manager, sec):
