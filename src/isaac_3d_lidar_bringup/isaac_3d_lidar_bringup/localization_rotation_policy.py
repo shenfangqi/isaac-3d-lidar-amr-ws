@@ -234,10 +234,14 @@ class RotationGateConfig:
     # 0.40 rad/s probe speed.
     unmeasured_braking_rad: float = 0.40
     unmeasured_center_drift_m: float = 0.02
+    # If the guard process dies, the chassis keeps the last command until
+    # its own watchdog.  Measured 2026-10-06: wheels stopped 0.49-0.57 s
+    # after the last command (canonical cmd_vel_timeout_s 0.50).
+    chassis_watchdog_s: float = 0.60
 
     def __post_init__(self):
         for name in ('padding_m', 'yaw_margin_rad', 'unmeasured_braking_rad',
-                     'unmeasured_center_drift_m'):
+                     'unmeasured_center_drift_m', 'chassis_watchdog_s'):
             value = getattr(self, name)
             if not (math.isfinite(value) and value >= 0.0):
                 raise ContractError(f'{name} must be finite and >= 0')
@@ -246,14 +250,25 @@ class RotationGateConfig:
 
 
 def braking_extension(profile, config):
-    """Return ``(extra_rad, center_drift_m, measured)`` past the target."""
-    if profile is not None and None not in (
-            profile.stop_tail_rad, profile.center_drift_m, profile.latency_s):
-        return (config.speed_rad_s * profile.latency_s
-                + profile.stop_tail_rad + config.yaw_margin_rad,
-                profile.center_drift_m, True)
-    return (config.unmeasured_braking_rad + config.yaw_margin_rad,
-            config.unmeasured_center_drift_m, False)
+    """
+    Return ``(extra_rad, center_drift_m, measured)`` past the target.
+
+    Normally the guard zeroes after the profile's stop latency.  If the
+    guard itself dies, the last command runs until the chassis watchdog
+    instead, so the sweep covers the longer of the two holds at the
+    commanded rate, plus the stop tail and the yaw margin.
+    """
+    measured = profile is not None and None not in (
+        profile.stop_tail_rad, profile.center_drift_m, profile.latency_s)
+    if measured:
+        latency, tail, drift = (profile.latency_s, profile.stop_tail_rad,
+                                profile.center_drift_m)
+    else:
+        latency, tail, drift = (0.0, config.unmeasured_braking_rad,
+                                config.unmeasured_center_drift_m)
+    hold = max(latency, config.chassis_watchdog_s)
+    return (config.speed_rad_s * hold + tail + config.yaw_margin_rad,
+            drift, measured)
 
 
 def _transform(footprint, x, y, yaw):

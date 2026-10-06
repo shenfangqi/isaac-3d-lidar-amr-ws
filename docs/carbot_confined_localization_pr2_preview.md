@@ -21,7 +21,7 @@ ros2 run isaac_3d_lidar_bringup localization_rotation_preview
    - 有效回波落点为障碍格；3D 点只能增加障碍（`add_obstacle_points`），点之间的空隙不会变成自由；
    - 静态地图不是输入，`range_min`/盲区内的格子保持未知，窗口外按未知处理。
    - 完整一圈的扫描另用半圈错位的副本计算一次，两份结果取并集。原因是 `scan_visibility` 对跨越扫描接缝（±π，车体正后方）的格子一律判未知；两份都只用真实光束，取并集仍然保守。
-2. **扫掠区**：旋转角 = 目标角 + 制动余转。余转来自 motion profile（`速度×延迟 + stop_tail + yaw 余量`）；没有实测值时用保守默认 0.40 rad + 5°（参考 2026-09 实车停车尾段 0.57–0.92 s）。车体外扩 `padding 0.05 m + 中心漂移`。采样间隔保证最远顶点每步位移不超过半格，并把半个间隔计入余量。
+2. **扫掠区**：旋转角 = 目标角 + 制动余转。余转 = `指令角速度 × max(停止延迟, 底盘 watchdog 时间) + stop_tail + yaw 余量`：停止延迟和 stop_tail 来自 motion profile，没有实测值时延迟按 0、尾角用保守默认 0.40 rad；底盘 watchdog 时间默认 0.60 s，覆盖 guard 进程崩溃后底盘继续执行最后一条指令的情况（2026-10-06 实测 0.49–0.57 s）。车体外扩 `padding 0.05 m + 中心漂移`。采样间隔保证最远顶点每步位移不超过半格，并把半个间隔计入余量。
 3. **自身掩膜**：四个角都在当前车体（不加 padding）内部的格子不检查；车体外的 padding 环照常检查。
 4. **结论优先级**：扫掠区有已观测障碍 → `OBSTACLE_IN_SWEEP`；有未被操作员承诺覆盖的未知格 → `UNKNOWN_SWEEP`；profile 缺失、未 ACCEPTED 或 hash 不匹配 → `PROFILE_INVALID`；否则放行。`RotationAttestation` 只覆盖未知格，计入 `attested_cells`，已观测障碍永远不能被承诺抵消。
 
