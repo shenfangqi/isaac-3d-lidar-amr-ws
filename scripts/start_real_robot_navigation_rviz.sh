@@ -518,11 +518,34 @@ activate_navigation() {
   control activate-navigation --timeout 90
 }
 
+remote_param_get() {
+  # Restarting the workstation DDS anchor for RViz can briefly invalidate
+  # the CLI discovery graph although the node runs.  Retry only "node not
+  # found" or a CLI timeout (exit 124), at most 10 times; any other error
+  # fails immediately.
+  local node="$1" name="$2" attempt output status
+  for attempt in {1..10}; do
+    status=0
+    output="$(remote_ros "timeout 5s ros2 param get ${node} ${name}" 2>&1)" || status=$?
+    if (( status == 0 )); then
+      printf '%s\n' "${output}"
+      return 0
+    fi
+    if [[ "${output}" != *"Node not found"* ]] && (( status != 124 )); then
+      printf '%s\n' "${output}"
+      return "${status}"
+    fi
+    sleep 1
+  done
+  echo "Timed out waiting for ${node} parameter ${name}."
+  return 1
+}
+
 verify_motion_guard() {
   # The manager's motion policy must match the request.  Guarded rotation
   # also needs a running guard that accepted the profile; forbid needs none.
-  local policy nodes
-  policy="$(remote_ros 'timeout 5s ros2 param get /automatic_localization_manager motion_policy' 2>&1)" || {
+  local policy nodes attempt
+  policy="$(remote_param_get /automatic_localization_manager motion_policy)" || {
     printf '%s\n' "${policy}" >&2
     return 1
   }
@@ -538,6 +561,11 @@ verify_motion_guard() {
     fi
     return 0
   fi
+  for attempt in {1..10}; do
+    grep -qx '/localization_motion_guard' <<<"${nodes}" && break
+    sleep 1
+    nodes="$(remote_ros 'timeout 10s ros2 node list' 2>&1)" || true
+  done
   if ! grep -qx '/localization_motion_guard' <<<"${nodes}"; then
     echo "Guarded rotation was requested but no motion guard is running." >&2
     return 1
@@ -552,29 +580,11 @@ verify_motion_guard() {
 
 run_automatic_localization() {
   # Refuse to arm an older deployed manager that can still activate Nav2.
-  local validation_mode=""
-  # Restarting the workstation DDS anchor for RViz can briefly invalidate the
-  # CLI discovery graph even though the manager is already running.  Treat
-  # only the expected "node not found" result as bounded readiness and retry;
-  # every other parameter error still fails immediately.
-  local attempt output status
-  for attempt in {1..10}; do
-    status=0
-    output="$(remote_ros 'timeout 5s ros2 param get /automatic_localization_manager validation_only' 2>&1)" || status=$?
-    if (( status == 0 )); then
-      validation_mode="${output}"
-      break
-    fi
-    if [[ "${output}" != *"Node not found"* ]]; then
-      printf '%s\n' "${output}" >&2
-      return "${status}"
-    fi
-    sleep 1
-  done
-  if [[ -z "${validation_mode}" ]]; then
-    echo "Timed out waiting for /automatic_localization_manager discovery." >&2
+  local validation_mode
+  validation_mode="$(remote_param_get /automatic_localization_manager validation_only)" || {
+    printf '%s\n' "${validation_mode}" >&2
     return 1
-  fi
+  }
   local expected_validation='Boolean value is: True'
   if [[ "${automatic_activation}" == "true" ]]; then
     expected_validation='Boolean value is: False'
@@ -584,7 +594,7 @@ run_automatic_localization() {
     return 1
   fi
   local deployed_strategy
-  deployed_strategy="$(remote_ros 'timeout 5s ros2 param get /automatic_localization_manager localization_strategy' 2>&1)" || {
+  deployed_strategy="$(remote_param_get /automatic_localization_manager localization_strategy)" || {
     printf '%s\n' "${deployed_strategy}" >&2
     echo "The deployed manager does not report a localization strategy; rebuild the Jetson workspace." >&2
     return 1

@@ -1934,6 +1934,8 @@ class AutomaticLocalizationManager(Node):
                          'probes did not reduce the hypotheses')
             return
         self._probe_reason = reason
+        self.get_logger().info(
+            f'{reason}: planning a probe rotation (segmented_rotation)')
         self._transition(State.PLAN_PROBE)
 
     def _plan_probe(self, now, state_age):
