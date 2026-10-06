@@ -35,11 +35,14 @@ ros2 run isaac_3d_lidar_bringup localization_rotation_preview
 | 预览节点 | 源码无 Twist、无 `cmd_vel`，只有 String 和 MarkerArray 两个发布者；launch 默认关闭；用替身 TF 驱动时，TF 缺失报 `TF_AT_SOURCE_MISSING` 且不评估 |
 | 容器全套 | `isaac_3d_lidar_bringup` 197 passed, 1 skipped（copyright），含 flake8/pep257；`carbot_nav_recovery` 51 passed |
 | 真车 bag 离线回放（`2026-10-06_main_2b13795_recheck_01`，`/scan` range_min 0.5 m） | 6 个探测角全部 `UNKNOWN_SWEEP`，每个约 100 个扫掠格未知、0 个已观测自由；车体内部 20 格按掩膜扣除；最近障碍约 0.64 m，不在扫掠区。工作站每次评估（6 个角）约 26 ms |
+| Jetson 实车运行（2026-10-06，只读栈 `--automatic`，Nav2 未激活） | 预览节点约 1.1 Hz 发布，每帧 11 个 Marker；6 个探测角全部 `UNKNOWN_SWEEP`，扫掠区 0 个已观测自由格；`/cmd_vel_command` 发布者为 0；6 分钟监视 `/cmd_vel` 0 条、轮编码器增量 0/0 |
+| Jetson 计算耗时（同一 bag，容器内） | 每次评估 6 个探测角中位 146 ms、最大 149 ms（预算 0.5 s）；单个角约 25 ms |
 
 真车结果与 PR0 审计一致：只靠现有传感器，车体旁的扫掠环全部是未知。要让旋转放行，只能依靠操作员承诺（`RotationAttestation`）覆盖这些未知格，且 profile 必须是 ACCEPTED。
 
 ## 尚未完成
 
-- 在 Jetson 上实际运行预览节点，看 RViz 显示和耗时（只读，不需要人在现场）；
+- RViz 显示效果还没有人工看过（话题和 Marker 内容已确认）；
+- 单个探测角在 Jetson 上约 25 ms，超过 guard 每 50 ms 周期 ≤20 ms 的预算，所以 PR3 的 guard 必须按扫描帧异步计算扫掠，控制周期只检查最近判定是否新鲜并覆盖剩余角度；
 - `choose_probe`（按候选差异选择探测角）和运动预算属于 PR3，与 motion guard 一起实现；
 - 启动脚本还没有 `--rotation-preview` 选项，目前用 launch 参数或 `ros2 run`。
