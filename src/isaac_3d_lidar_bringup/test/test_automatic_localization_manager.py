@@ -15,7 +15,9 @@ import pytest
 
 from isaac_3d_lidar_bringup import localization_contracts
 from isaac_3d_lidar_bringup import localization_hypotheses
+from isaac_3d_lidar_bringup import localization_motion_guard
 from isaac_3d_lidar_bringup import localization_observations
+from isaac_3d_lidar_bringup import localization_rotation_policy
 from isaac_3d_lidar_bringup.automatic_localization_quality import (
     angular_difference, quaternion_yaw, trim_time_window,
 )
@@ -52,6 +54,8 @@ def manager():
     scope = dict(vars(localization_contracts))
     scope.update(vars(localization_observations))
     scope.update(vars(localization_hypotheses))
+    scope.update(vars(localization_motion_guard))
+    scope.update(vars(localization_rotation_policy))
     scope.update(Enum=Enum, Node=object, time=time, math=math, Time=FakeTime,
                  deque=deque, uuid=__import__('uuid'),
                  ManageLifecycleNodes=FakeManageLifecycleNodes,
@@ -73,6 +77,7 @@ def manager():
     node.params = defaults
     node._validation_only = True
     node._configure_strategy()
+    node._configure_probe_link()
     node._worker = None
     node._reset_confined_session()
     node._latest_grid = None
@@ -884,13 +889,34 @@ def test_odometry_jump_rejects_confined_session(stationary):
     assert stationary._quality_failure == 'ODOM_JUMP'
 
 
-def test_strategy_conflicts_abort_startup(manager):
+@pytest.mark.parametrize('validation_only', [True, False])
+@pytest.mark.parametrize('policy', ['forbid', 'guarded'])
+@pytest.mark.parametrize('strategy', [
+    'legacy_full_rotation', 'stationary_only', 'segmented_rotation'])
+def test_strategy_matrix(manager, strategy, policy, validation_only):
+    # C09: guarded is valid only for segmented_rotation (with a profile);
+    # forbid is valid everywhere; validation_only is orthogonal.
+    manager.params['localization_strategy'] = strategy
+    manager.params['motion_policy'] = policy
+    manager.params['motion_profile_path'] = '/tmp/profile.json'
+    manager._validation_only = validation_only
+    if policy == 'guarded' and strategy != 'segmented_rotation':
+        with pytest.raises(localization_contracts.ContractError):
+            manager._configure_strategy()
+        return
+    manager._configure_strategy()
+    assert manager._segmented is (strategy == 'segmented_rotation')
+    assert manager._motion_policy.value == policy
+
+
+def test_guarded_needs_profile_and_attestation_needs_guarded(manager):
     manager.params['localization_strategy'] = 'segmented_rotation'
+    manager.params['motion_policy'] = 'guarded'
+    manager.params['motion_profile_path'] = ''
     with pytest.raises(localization_contracts.ContractError):
         manager._configure_strategy()
-    manager.params['localization_strategy'] = 'stationary_only'
-    manager.params['motion_policy'] = 'guarded'
-    manager.params['motion_profile_path'] = '/tmp/profile.json'
+    manager.params['motion_policy'] = 'forbid'
+    manager.params['operator_rotation_clear'] = True
     with pytest.raises(localization_contracts.ContractError):
         manager._configure_strategy()
 
@@ -900,3 +926,245 @@ def test_legacy_status_keeps_existing_fields(manager):
     assert status['strategy'] == 'legacy_full_rotation'
     assert status['motion_policy'] == 'forbid'
     assert set(localization_contracts.STATUS_EXTENSION_FIELDS) <= set(status)
+
+
+# --- segmented_rotation: probing through the motion guard (PR3) -------------
+
+EXTRINSICS, CONTROL = 'a' * 64, 'b' * 64
+
+
+def _accepted_profile():
+    footprint = ((0.155, 0.133), (0.155, -0.133),
+                 (-0.130, -0.133), (-0.130, 0.133))
+    return localization_contracts.MotionProfile(
+        1, localization_rotation_policy.footprint_geometry_hash(
+            footprint, 0.05), EXTRINSICS, CONTROL, ('bag-1',),
+        0.05, 0.03, 0.1, True, 'ACCEPTED')
+
+
+def _room_scan(manager, range_min=0.5):
+    stamp = manager.clock['ns']
+    ranges = []
+    for index in range(360):
+        angle = -math.pi + index * 2 * math.pi / 360
+        ranges.append(1.2 / max(abs(math.cos(angle)), abs(math.sin(angle))))
+    return NS(header=NS(frame_id='base_footprint', stamp=NS(
+        sec=stamp // 10**9, nanosec=stamp % 10**9)),
+        angle_min=-math.pi, angle_increment=2 * math.pi / 360,
+        range_min=range_min, range_max=8.0, ranges=ranges)
+
+
+@pytest.fixture
+def segmented(stationary, tmp_path):
+    from geometry_msgs.msg import Twist
+    from std_msgs.msg import String
+
+    manager = stationary
+    # The fixture executes the manager without its imports; add the ROS
+    # message types the segmented path uses.
+    scope = type(manager)._configure_probe_link.__globals__
+    scope.update(String=String, Twist=Twist)
+    profile = tmp_path / 'profile.json'
+    profile.write_text(localization_contracts.encode_motion_profile(
+        _accepted_profile()))
+    manager.params.update({
+        'localization_strategy': 'segmented_rotation',
+        'motion_policy': 'guarded',
+        'motion_profile_path': str(profile),
+        'extrinsics_hash': EXTRINSICS,
+        'control_chain_hash': CONTROL,
+        'operator_rotation_clear': True,
+    })
+    manager._configure_strategy()
+    manager.requests = []
+
+    def create_publisher(kind, topic, qos):
+        assert kind is not scope['Twist'] and 'cmd_vel' not in topic, (
+            'segmented_rotation manager created a velocity publisher')
+        return NS(publish=lambda msg: manager.requests.append(
+            localization_contracts.decode_motion_request(msg.data)))
+
+    manager.create_publisher = create_publisher
+    manager.create_subscription = lambda *args, **kwargs: None
+    manager.publishers_on_cmd = 0
+    manager.count_publishers = lambda topic: manager.publishers_on_cmd
+    manager._configure_probe_link()
+    return manager
+
+
+def _guard(manager, state, sequence=None, reason='', stopped=None,
+           travel=0.0):
+    status = localization_contracts.MotionStatus(
+        1, manager._probe.session,
+        manager._probe.sequence if sequence is None else sequence,
+        localization_contracts.GuardState(state), reason, 0.0, travel,
+        state != 'ROTATING' if stopped is None else stopped, ())
+    manager._guard_status = (status, time.monotonic())
+
+
+def _ambiguous_session(manager):
+    manager._begin_confined_session(time.monotonic())
+    manager._search_result = _search_result()
+    manager._latest_safety_scan = _room_scan(manager)
+    manager._reject_or_probe('AMBIGUOUS_LOCATION', time.monotonic())
+    assert manager._state == manager.State.PLAN_PROBE
+
+
+def test_ambiguity_probes_through_the_guard_then_releases(segmented):
+    manager = segmented
+    rejected = localization_hypotheses.QualityDecision(
+        False, 'AMBIGUOUS_LOCATION')
+    winner = localization_contracts.Hypothesis(
+        1.0, 2.0, 0.5, 0.9, 0.9, 0.0, 0, (0.9,), (0.05, 0.05, 0.02))
+    accepted = localization_hypotheses.QualityDecision(True, '', winner)
+    manager._worker = FakeWorker([_search_result(), rejected,
+                                  _search_result(), accepted])
+    _start_to_collect(manager)
+    assert manager.requests[-1].operation.value == 'STOP'   # handshake
+    _feed(manager, 3)
+    manager._tick()
+    manager._tick()
+    _feed(manager, 3)
+    manager._tick()
+    manager._latest_safety_scan = _room_scan(manager)
+    _guard(manager, 'STOPPED')
+    manager._tick()                       # validation -> ambiguous
+    assert manager._state == manager.State.PLAN_PROBE
+
+    _guard(manager, 'STOPPED')
+    manager._tick()                       # read-only plan -> ROTATE
+    assert manager._state == manager.State.EXECUTE_PROBE
+    rotate = manager.requests[-1]
+    assert rotate.operation.value == 'ROTATE'
+    assert rotate.profile_hash == localization_motion_guard.profile_hash(
+        _accepted_profile())
+    assert manager._confined_status()['unknown_sweep_cells'] == 0
+
+    _guard(manager, 'ROTATING', travel=0.3)
+    manager._tick()
+    _guard(manager, 'STOPPED')
+    manager._tick()                       # segment done -> STOP, settle
+    assert manager._state == manager.State.SETTLE_PROBE
+    assert manager.requests[-1].operation.value == 'STOP'
+    _guard(manager, 'STOPPED', stopped=True)
+    manager._state_started -= manager.params['probe_settle_sec']
+    manager._tick()
+    assert manager._state == manager.State.COLLECT_STATIC
+    assert manager._view_id == 1
+    assert all(f.role.value == 'TRAIN' for f in manager._keyframes)
+
+    _feed(manager, 3)
+    manager._tick()                       # second search uses two views
+    name, arguments = manager._worker.jobs[-1]
+    assert name == 'run_search_job'
+    assert {frame.view_id for frame in arguments[1]} == {0, 1}
+
+    manager._tick()
+    _feed(manager, 3)
+    manager._tick()
+    manager._tick()                       # accepted -> RELEASE the guard
+    assert manager._state == manager.State.STOP_AND_VERIFY
+    assert manager.requests[-1].operation.value == 'RELEASE'
+    assert manager._command_publisher is None
+
+
+def test_handoff_no_two_publishers(segmented):
+    # C07: Nav2 STARTUP only after the guard reports RELEASED and no
+    # publisher remains on /cmd_vel_command.
+    manager = segmented
+    manager._begin_confined_session(time.monotonic())
+    manager._validation_only = False
+    manager._probe.release()
+    manager._state = manager.State.START_NAVIGATION
+    manager._state_started = time.monotonic() - 1.0
+    manager._publish_zero = lambda: None
+    calls = []
+    manager._navigation_client = NS(
+        service_is_ready=lambda: True,
+        call_async=lambda request: calls.append(request) or object())
+
+    _guard(manager, 'STOPPED')
+    manager._tick()
+    assert calls == []
+    _guard(manager, 'RELEASED')
+    manager.publishers_on_cmd = 1             # guard publisher still alive
+    manager._tick()
+    assert calls == []
+    manager.publishers_on_cmd = 0
+    manager._tick()
+    assert len(calls) == 1
+
+
+def test_guard_that_never_releases_fails_instead_of_activating(segmented):
+    manager = segmented
+    manager._begin_confined_session(time.monotonic())
+    manager._validation_only = False
+    manager._state = manager.State.START_NAVIGATION
+    manager._state_started = (time.monotonic()
+                              - manager.params['service_timeout_sec'] - 1)
+    manager._publish_zero = lambda: None
+    manager._navigation_client = NS(
+        service_is_ready=lambda: True,
+        call_async=lambda request: pytest.fail('Nav2 activated'))
+    _guard(manager, 'STOPPED')
+    manager._tick()
+    assert manager._state == manager.State.SAFE_STOP
+
+
+def test_search_worker_stall_only_leases_stop(segmented):
+    # C02: a stuck search never produces a ROTATE; the lease keeps STOP.
+    manager = segmented
+
+    class Stuck(FakeWorker):
+        def poll(self):
+            return None
+
+    manager._worker = Stuck([])
+    _start_to_collect(manager)
+    _feed(manager, 3)
+    manager._tick()
+    assert manager._state == manager.State.SEARCH_MULTI_VIEW
+    for _ in range(20):
+        manager._tick()
+    assert {r.operation.value for r in manager.requests} == {'STOP'}
+
+
+@pytest.mark.parametrize('setup, reason', [
+    ('guard_refuses', 'UNKNOWN_SWEEP'),
+    ('guard_silent', 'CONTROL_CONFLICT'),
+])
+def test_probe_failures_reject_and_stop(segmented, setup, reason):
+    manager = segmented
+    _ambiguous_session(manager)
+    _guard(manager, 'STOPPED')
+    manager._tick()
+    assert manager._state == manager.State.EXECUTE_PROBE
+    if setup == 'guard_refuses':
+        _guard(manager, 'STOPPED', reason='UNKNOWN_SWEEP')
+    else:
+        manager._guard_status = None
+    manager._tick()
+    assert manager._state == manager.State.SAFE_STOP
+    assert manager._reject_reason == reason
+    assert manager.requests[-1].operation.value == 'STOP'
+
+
+def test_blind_zone_without_attestation_never_requests_rotation(segmented):
+    manager = segmented
+    manager.params['operator_rotation_clear'] = False
+    _ambiguous_session(manager)
+    _guard(manager, 'STOPPED')
+    manager._tick()
+    assert manager._reject_reason == 'UNKNOWN_SWEEP'
+    assert all(r.operation.value != 'ROTATE' for r in manager.requests)
+
+
+def test_forbid_policy_rejects_probe_planning(segmented):
+    manager = segmented
+    manager.params['motion_policy'] = 'forbid'
+    manager.params['operator_rotation_clear'] = False
+    manager._configure_strategy()
+    _ambiguous_session(manager)
+    manager._tick()
+    assert manager._reject_reason == 'PROFILE_INVALID'
+    assert all(r.operation.value != 'ROTATE' for r in manager.requests)

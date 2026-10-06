@@ -48,10 +48,16 @@ from isaac_3d_lidar_bringup.automatic_localization_quality import (
 )
 from isaac_3d_lidar_bringup.localization_contracts import (
     ContractError,
+    decode_motion_profile,
+    decode_motion_status,
+    encode_motion_request,
     FrameRole,
+    GuardState,
+    MotionOperation,
     MotionPolicy,
     REJECT_REASON_TEXT,
     RejectReason,
+    RotationAttestation,
     SCHEMA_VERSION,
     SE2,
     Strategy,
@@ -68,11 +74,22 @@ from isaac_3d_lidar_bringup.localization_hypotheses import (
     seed_pose_at_current_time,
     ValidationThresholds,
 )
+from isaac_3d_lidar_bringup.localization_motion_guard import (
+    ProbeLink,
+    profile_hash,
+)
 from isaac_3d_lidar_bringup.localization_observations import (
     collect_keyframes,
     make_keyframe,
     Reject,
     snapshot_scan,
+)
+from isaac_3d_lidar_bringup.localization_rotation_policy import (
+    choose_probe,
+    evaluate_localization_rotation,
+    evidence_from_scan,
+    footprint_geometry_hash,
+    RotationGateConfig,
 )
 
 
@@ -101,10 +118,23 @@ class State(Enum):
     COLLECT_STATIC = 'COLLECT_STATIC'
     SEARCH_MULTI_VIEW = 'SEARCH_MULTI_VIEW'
     VERIFY_HYPOTHESES = 'VERIFY_HYPOTHESES'
+    # segmented_rotation only: the guard, not this node, drives the robot.
+    PLAN_PROBE = 'PLAN_PROBE'
+    EXECUTE_PROBE = 'EXECUTE_PROBE'
+    SETTLE_PROBE = 'SETTLE_PROBE'
 
 
 CONFINED_STATES = frozenset((
-    State.COLLECT_STATIC, State.SEARCH_MULTI_VIEW, State.VERIFY_HYPOTHESES))
+    State.COLLECT_STATIC, State.SEARCH_MULTI_VIEW, State.VERIFY_HYPOTHESES,
+    State.PLAN_PROBE, State.EXECUTE_PROBE, State.SETTLE_PROBE))
+
+# A new viewpoint can resolve these; data and map failures it cannot.
+PROBE_RESOLVABLE = frozenset((
+    RejectReason.SEARCH_INCOMPLETE.value,
+    RejectReason.AMBIGUOUS_LOCATION.value,
+    RejectReason.UNOBSERVABLE_AXIS.value,
+    RejectReason.NO_VALID_CANDIDATE.value,
+))
 
 
 class AutomaticLocalizationManager(Node):
@@ -151,6 +181,7 @@ class AutomaticLocalizationManager(Node):
         )
         self._command_topic = self._parameter('cmd_vel_topic')
         self._command_publisher = None
+        self._configure_probe_link()
         self._raw_odom_subscription = self.create_subscription(
             Odometry,
             self._parameter('fast_lio_odom_topic'),
@@ -409,12 +440,87 @@ class AutomaticLocalizationManager(Node):
             'independent_cluster_xy_m': 0.30,
             'independent_cluster_yaw_rad': math.pi / 12.0,
             'max_refined_clusters': 8,
+            # segmented_rotation (PR3).  The guard re-checks everything.
+            'motion_request_topic': '/automatic_localization/motion_request',
+            'motion_status_topic': '/automatic_localization/motion_status',
+            'extrinsics_hash': '',
+            'control_chain_hash': '',
+            'footprint_xy': [0.155, 0.133, 0.155, -0.133,
+                             -0.130, -0.133, -0.130, 0.133],
+            'rotation_padding_m': 0.05,
+            'probe_speed_rad_s': 0.40,
+            'attestation_max_translation_m': 0.05,
+            'attestation_max_age_sec': 240.0,
+            'probe_plan_timeout_sec': 2.0,
+            'probe_settle_sec': 1.0,
+            'probe_settle_timeout_sec': 5.0,
+            'guard_status_freshness_sec': 0.5,
         }
         for name, default in parameters.items():
             self.declare_parameter(name, default)
 
     def _parameter(self, name):
         return self.get_parameter(name).value
+
+    def _configure_probe_link(self):
+        """Wire the guard lease topics; segmented_rotation only."""
+        self._probe = None
+        self._guard_status = None
+        self._latest_safety_scan = None
+        self._view_id = 0
+        if not self._segmented:
+            return
+        self._motion_request_publisher = self.create_publisher(
+            String, self._parameter('motion_request_topic'), 10)
+        self.create_subscription(
+            String, self._parameter('motion_status_topic'),
+            self._on_motion_status, 10)
+        flat = list(self._parameter('footprint_xy'))
+        self._footprint = tuple(zip(flat[0::2], flat[1::2]))
+        self._rotation_gate = RotationGateConfig(
+            padding_m=float(self._parameter('rotation_padding_m')))
+        self._probe_hashes = (
+            footprint_geometry_hash(self._footprint,
+                                    self._rotation_gate.padding_m),
+            self._parameter('extrinsics_hash'),
+            self._parameter('control_chain_hash'))
+        self._motion_profile = None
+        path = self._parameter('motion_profile_path')
+        try:
+            with open(path, encoding='utf-8') as stream:
+                self._motion_profile = decode_motion_profile(stream.read())
+        except (OSError, ContractError) as error:
+            # Every probe then reports PROFILE_INVALID; nothing moves.
+            self.get_logger().error(f'motion profile rejected: {error}')
+
+    def _on_motion_status(self, message):
+        try:
+            status = decode_motion_status(message.data)
+        except ContractError as error:
+            self.get_logger().warning(f'invalid motion status: {error}')
+            return
+        self._guard_status = (status, time.monotonic())
+
+    def _fresh_guard_status(self, now):
+        """Return the guard's fresh status for our session, or None."""
+        if self._guard_status is None or self._probe is None:
+            return None
+        status, received = self._guard_status
+        if (now - received > self._parameter('guard_status_freshness_sec')
+                or status.session != self._probe.session):
+            return None
+        return status
+
+    def _refresh_probe_lease(self):
+        if self._probe is not None:
+            self._motion_request_publisher.publish(String(
+                data=encode_motion_request(self._probe.request())))
+
+    def _guard_released(self, now):
+        status = self._fresh_guard_status(now)
+        return (status is not None and self._probe.owns(status)
+                and status.state == GuardState.RELEASED
+                and self.count_publishers(self._command_topic) == 0)
 
     def _configure_strategy(self):
         """Validate the Issue #13 strategy once; conflicts abort startup."""
@@ -425,12 +531,9 @@ class AutomaticLocalizationManager(Node):
             self._parameter('motion_profile_path'),
             bool(self._parameter('operator_rotation_clear')),
         )
-        if strategy == Strategy.SEGMENTED_ROTATION:
-            # Rotation needs the separate motion guard; until it exists this
-            # strategy must not start rather than silently degrade.
-            raise ContractError(
-                'segmented_rotation requires the motion guard (Issue #13 '
-                'PR3); use stationary_only or legacy_full_rotation')
+        # segmented_rotation probes through the separate motion guard; this
+        # node never creates a velocity publisher for it.
+        self._segmented = strategy == Strategy.SEGMENTED_ROTATION
         names = (
             'train_frames_per_view', 'holdout_frames_per_view', 'max_views',
             'max_probe_segments', 'max_refined_clusters', 'probe_angles_rad',
@@ -493,6 +596,19 @@ class AutomaticLocalizationManager(Node):
         self._session = uuid.uuid4().hex[:16]
         self._session_started = now
         self._reset_evidence()
+        if self._segmented:
+            self._view_id = 0
+            self._probe = ProbeLink(self._session)    # STOP handshake
+            self._refresh_probe_lease()
+            self._probe_hypothesis_counts = []
+            self._probe_unknown_cells = None
+            self._attestation = None
+            if (self._parameter('operator_rotation_clear')
+                    and self._last_odom_pose is not None):
+                self._attestation = RotationAttestation(
+                    self._session, SE2(*self._last_odom_pose), now,
+                    float(self._parameter('attestation_max_translation_m')),
+                    float(self._parameter('attestation_max_age_sec')))
         self._search_best = None
         self._search_runner_up = None
         self._transition(State.COLLECT_STATIC)
@@ -627,6 +743,7 @@ class AutomaticLocalizationManager(Node):
             return
         received = time.monotonic()
         self._last_safety_scan_time = received
+        self._latest_safety_scan = message
         finite_ranges = [
             value for value in message.ranges
             if (
@@ -937,6 +1054,10 @@ class AutomaticLocalizationManager(Node):
         self._cancel_worker()
         if self._strategy == Strategy.LEGACY_FULL_ROTATION:
             self._ensure_command_publisher()
+        if (self._probe is not None
+                and self._probe.operation != MotionOperation.RELEASE):
+            self._probe.stop()
+            self._refresh_probe_lease()      # do not wait for the next tick
         self.get_logger().error(reason)
         if self._navigation_may_be_active:
             self._request_navigation_pause()
@@ -1284,6 +1405,7 @@ class AutomaticLocalizationManager(Node):
         # scan permanently.
         if self._pending_scans:
             self._score_pending_scans()
+        self._refresh_probe_lease()
         state_age = now - self._state_started
         if self._state == State.WAIT_FOR_START:
             pass
@@ -1319,7 +1441,9 @@ class AutomaticLocalizationManager(Node):
                 elif result is True:
                     if self._stationary_only:
                         self._transition(State.WAIT_MANUAL_POSE)
-                    elif self._strategy == Strategy.STATIONARY_ONLY:
+                    elif self._strategy != Strategy.LEGACY_FULL_ROTATION:
+                        # Both new strategies start stationary; only
+                        # segmented_rotation may later probe via the guard.
                         self._begin_confined_session(now)
                     else:
                         # The explainable map-wide search below now owns global
@@ -1562,6 +1686,13 @@ class AutomaticLocalizationManager(Node):
             elif self._command_publisher is not None:
                 self.destroy_publisher(self._command_publisher)
                 self._command_publisher = None
+            elif self._probe is not None and not self._guard_released(now):
+                # Nav2 never activates while the guard can still publish.
+                if self._probe.operation != MotionOperation.RELEASE:
+                    self._probe.release()
+                    self._refresh_probe_lease()
+                if state_age > self._parameter('service_timeout_sec'):
+                    self._fail('motion guard did not release control')
             elif not self._navigation_client.service_is_ready():
                 if state_age > self._parameter('service_timeout_sec'):
                     self._fail('navigation lifecycle service unavailable')
@@ -1628,7 +1759,7 @@ class AutomaticLocalizationManager(Node):
             if scan.stamp_ns <= self._last_keyframe_stamp_ns:
                 continue
             frame = make_keyframe(
-                scan, self._tf_se2, self._session, 0, role,
+                scan, self._tf_se2, self._session, self._view_id, role,
                 self._next_keyframe_id, received)
             if isinstance(frame, Reject):
                 if now - received <= freshness:
@@ -1653,7 +1784,11 @@ class AutomaticLocalizationManager(Node):
             if frames.reason == RejectReason.ODOM_JUMP:
                 self._reject(frames.reason, frames.detail)
             return None
-        return frames if len(frames) >= wanted else None
+        # Each new view must contribute its own TRAIN frames.
+        current = [frame for frame in frames
+                   if role != FrameRole.TRAIN
+                   or frame.view_id == self._view_id]
+        return frames if len(current) >= wanted else None
 
     def _gather(self, role, now):
         """Collect frames only while verifiably stopped."""
@@ -1706,7 +1841,7 @@ class AutomaticLocalizationManager(Node):
                 self._reject(RejectReason.SEARCH_INCOMPLETE, str(result))
             elif not result.complete:
                 self._search_result = result
-                self._reject(result.reason)
+                self._reject_or_probe(result.reason, now)
             else:
                 self._search_result = result
                 self._validation_submitted = False
@@ -1746,9 +1881,119 @@ class AutomaticLocalizationManager(Node):
             elif status != 'ok':
                 self._reject(RejectReason.SEARCH_INCOMPLETE, str(decision))
             elif not decision.accepted:
-                self._reject(decision.reason)
+                self._reject_or_probe(decision.reason, now)
             else:
                 self._accept_confined(decision.winner, now)
+
+        elif self._state == State.PLAN_PROBE:
+            self._plan_probe(now, state_age)
+
+        elif self._state == State.EXECUTE_PROBE:
+            status = self._fresh_guard_status(now)
+            if status is None:
+                self._reject(RejectReason.CONTROL_CONFLICT,
+                             'motion guard status missing')
+            elif not self._probe.owns(status):
+                if state_age > self._parameter('guard_status_freshness_sec'):
+                    self._reject(RejectReason.CONTROL_CONFLICT,
+                                 'motion guard ignored the probe request')
+            elif status.reason and status.state != GuardState.ROTATING:
+                self._reject(status.reason, 'refused by motion guard')
+            elif status.state == GuardState.ROTATING:
+                self._probe_moved = True
+            elif self._probe_moved:
+                self._probe.stop()
+                self._refresh_probe_lease()
+                self._transition(State.SETTLE_PROBE)
+            elif state_age > self._parameter('probe_motion_timeout_sec'):
+                self._reject(RejectReason.MOTION_BUDGET_EXHAUSTED,
+                             'probe never started')
+
+        elif self._state == State.SETTLE_PROBE:
+            status = self._fresh_guard_status(now)
+            settled = (status is not None and self._probe.owns(status)
+                       and status.stopped and self._stopped(now))
+            if settled and state_age >= self._parameter('probe_settle_sec'):
+                self._start_next_view()
+            elif state_age > self._parameter('probe_settle_timeout_sec'):
+                self._fail('probe rotation did not settle',
+                           manual_recovery=False)
+
+    def _reject_or_probe(self, reason, now):
+        """Ambiguity in segmented_rotation plans a probe; else reject."""
+        if not self._segmented or reason not in PROBE_RESOLVABLE:
+            self._reject(reason)
+            return
+        counts = self._probe_hypothesis_counts
+        result = self._search_result
+        counts.append(None if result is None else len(result.hypotheses))
+        # Two probes in a row without fewer hypotheses: stop exploring.
+        if len(counts) >= 3 and None not in counts[-3:] and (
+                counts[-1] >= counts[-2] >= counts[-3]):
+            self._reject(RejectReason.AMBIGUOUS_LOCATION,
+                         'probes did not reduce the hypotheses')
+            return
+        self._probe_reason = reason
+        self._transition(State.PLAN_PROBE)
+
+    def _plan_probe(self, now, state_age):
+        """Read-only choice of the next probe; the guard re-checks it."""
+        if self._motion_policy != MotionPolicy.GUARDED:
+            self._reject(RejectReason.PROFILE_INVALID, 'motion_policy=forbid')
+            return
+        if state_age > self._parameter('probe_plan_timeout_sec'):
+            self._reject(RejectReason.SENSOR_STALE, 'probe planning timed out')
+            return
+        if self._fresh_guard_status(now) is None:
+            if state_age > self._parameter('guard_status_freshness_sec'):
+                self._reject(RejectReason.CONTROL_CONFLICT,
+                             'motion guard is not responding')
+            return
+        scan = self._latest_safety_scan
+        if scan is None or self._last_odom_pose is None:
+            return
+        try:
+            sensor = self._tf_se2('odom', scan.header.frame_id,
+                                  Time.from_msg(scan.header.stamp).nanoseconds)
+            base = self._tf_se2('odom', 'base_footprint',
+                                Time.from_msg(scan.header.stamp).nanoseconds)
+            evidence = evidence_from_scan(
+                scan, sensor, (base.x, base.y), frame_id='odom',
+                deadline=time.monotonic() + 0.5)
+            decisions = [
+                evaluate_localization_rotation(
+                    evidence, self._footprint, base, angle,
+                    profile=self._motion_profile, hashes=self._probe_hashes,
+                    config=self._rotation_gate,
+                    attestation=self._attestation, session=self._session,
+                    now_mono=now).decision
+                for angle in self._confined['probe_angles_rad']]
+        except (LookupError, ContractError):
+            return                     # retried until the plan timeout
+        self._probe_unknown_cells = min(d.unknown_cells for d in decisions)
+        views = self._frames(FrameRole.TRAIN, now)
+        headings = sorted({frame.T_odom_base.yaw for frame in views}
+                          if not isinstance(views, Reject) else set())
+        choice, reason = choose_probe(decisions, headings, base.yaw)
+        if choice is None:
+            self._reject(reason, 'no admissible probe rotation')
+            return
+        self._probe.rotate(choice.delta_yaw,
+                           float(self._parameter('probe_speed_rad_s')),
+                           profile_hash(self._motion_profile))
+        self._refresh_probe_lease()
+        self._probe_moved = False
+        self._transition(State.EXECUTE_PROBE)
+
+    def _start_next_view(self):
+        """After a settled probe: drop used HOLDOUT frames, collect anew."""
+        self._view_id += 1
+        self._keyframes = [frame for frame in self._keyframes
+                           if frame.role == FrameRole.TRAIN]
+        self._confined_scans.clear()
+        self._search_result = None
+        self._validation_submitted = False
+        self._transition(State.COLLECT_STATIC)
 
     def _accept_confined(self, winner, now):
         """Seed AMCL with the winner moved to the current odometry pose."""
@@ -1772,6 +2017,10 @@ class AutomaticLocalizationManager(Node):
             'support_bounds': list(winner.support_bounds),
         }
         self._publish_global_seed(seed.x, seed.y, seed.yaw)
+        if self._probe is not None:
+            # No probe follows an accepted candidate: hand control back.
+            self._probe.release()
+            self._refresh_probe_lease()
         self._transition(State.STOP_AND_VERIFY)
 
     def _confined_status(self):
@@ -1781,6 +2030,9 @@ class AutomaticLocalizationManager(Node):
         text, manual = (REJECT_REASON_TEXT[RejectReason(reason)]
                         if reason else ('', None))
         legacy = self._strategy == Strategy.LEGACY_FULL_ROTATION
+        guard = getattr(self, '_guard_status', None)
+        guard_state = None if guard is None else guard[0].state.value
+        guard_travel = 0.0 if guard is None else guard[0].abs_travel_rad
         return {
             'schema_version': SCHEMA_VERSION,
             'strategy': self._strategy.value,
@@ -1792,11 +2044,12 @@ class AutomaticLocalizationManager(Node):
             'ambiguity_reason': reason,
             'reject_reason_text': text,
             'manual_pose_allowed': manual,
-            # No guard exists before PR3; new strategies never move here.
-            'motion_guard_state': None,
-            'unknown_sweep_cells': None,
+            'motion_guard_state': guard_state,
+            'unknown_sweep_cells': getattr(
+                self, '_probe_unknown_cells', None),
             'total_abs_yaw': (
-                round(self._rotation_progress, 3) if legacy else 0.0),
+                round(self._rotation_progress, 3) if legacy
+                else round(guard_travel, 3)),
             'map_hash': self._map_hash,
         }
 

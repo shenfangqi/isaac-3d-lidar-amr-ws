@@ -37,6 +37,19 @@ def generate_launch_description():
     complex_route_validation = LaunchConfiguration(
         'complex_route_validation')
     rotation_preview = LaunchConfiguration('rotation_preview')
+    motion_policy = LaunchConfiguration('motion_policy')
+    motion_profile_path = LaunchConfiguration('motion_profile_path')
+    extrinsics_hash = LaunchConfiguration('extrinsics_hash')
+    control_chain_hash = LaunchConfiguration('control_chain_hash')
+    operator_rotation_clear = LaunchConfiguration('operator_rotation_clear')
+    probe_parameters = {
+        'motion_policy': motion_policy,
+        'motion_profile_path': motion_profile_path,
+        'extrinsics_hash': extrinsics_hash,
+        'control_chain_hash': control_chain_hash,
+        'operator_rotation_clear': PythonExpression([
+            "'", operator_rotation_clear, "' == 'true'"]),
+    }
     complex_route_braking_profile = LaunchConfiguration(
         'complex_route_braking_profile')
     lifecycle_autostart = PythonExpression([
@@ -242,6 +255,7 @@ def generate_launch_description():
                 'cmd_vel_topic': cmd_vel_output,
                 'validation_only': auto_localization_validation_only,
                 'localization_strategy': localization_strategy,
+                **probe_parameters,
             },
         ],
         condition=IfCondition(automatic_localization),
@@ -285,6 +299,24 @@ def generate_launch_description():
                              -0.130, -0.133, -0.130, 0.133],
         }],
         condition=IfCondition(complex_route_validation),
+        output='screen',
+    )
+
+    # Issue #13 PR3: the only startup velocity source for segmented
+    # rotation.  Launched only for segmented_rotation with motion_policy
+    # guarded; the manager validates that combination at startup.
+    localization_motion_guard = Node(
+        package='isaac_3d_lidar_bringup',
+        executable='localization_motion_guard',
+        name='localization_motion_guard',
+        parameters=[{
+            'cmd_vel_topic': cmd_vel_output,
+            **probe_parameters,
+        }],
+        condition=IfCondition(PythonExpression([
+            "'", automatic_localization, "' == 'true' and '",
+            localization_strategy, "' == 'segmented_rotation' and '",
+            motion_policy, "' == 'guarded'"])),
         output='screen',
     )
 
@@ -378,10 +410,33 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'localization_strategy',
             default_value='legacy_full_rotation',
-            choices=['legacy_full_rotation', 'stationary_only'],
+            choices=['legacy_full_rotation', 'stationary_only',
+                     'segmented_rotation'],
             description=(
                 'Issue #13 startup localization strategy. stationary_only '
-                'searches the whole map without any rotation command.'
+                'searches the whole map without any rotation command; '
+                'segmented_rotation may probe only with motion_policy '
+                'guarded and an ACCEPTED motion profile.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'motion_policy',
+            default_value='forbid',
+            choices=['forbid', 'guarded'],
+            description='Whether segmented_rotation may rotate at all.',
+        ),
+        DeclareLaunchArgument(
+            'motion_profile_path', default_value='',
+            description='ACCEPTED rotation motion profile (JSON).'),
+        DeclareLaunchArgument('extrinsics_hash', default_value=''),
+        DeclareLaunchArgument('control_chain_hash', default_value=''),
+        DeclareLaunchArgument(
+            'operator_rotation_clear',
+            default_value='false',
+            choices=['true', 'false'],
+            description=(
+                'Per-launch operator attestation that the placement can '
+                'rotate in place; covers unobserved sweep cells only.'
             ),
         ),
         DeclareLaunchArgument(
@@ -440,4 +495,5 @@ def generate_launch_description():
         recovery_runtime_observer,
         complex_route_advisor,
         localization_rotation_preview,
+        localization_motion_guard,
     ])

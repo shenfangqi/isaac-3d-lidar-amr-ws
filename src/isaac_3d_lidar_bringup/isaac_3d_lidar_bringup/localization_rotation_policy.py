@@ -454,3 +454,153 @@ def preview_payload(evaluations, *, geometry_hash, profile_state):
         'motion_commanded': False,
         'probes': probes,
     }
+
+
+def _wrap(angle):
+    return math.atan2(math.sin(angle), math.cos(angle))
+
+
+class RotationProgress:
+    """
+    Continuous yaw bookkeeping for one probe segment.
+
+    Yaw is unwrapped sample to sample, so +pi/-pi crossings are continuous.
+    ``signed_progress`` is the net change since the segment started; it
+    decides completion.  ``abs_travel`` accumulates |d yaw| including noise
+    and reversals; it is what the motion budget is charged.  Positive noise
+    alone therefore never completes a segment, and back-and-forth jitter
+    still spends budget.
+    """
+
+    def __init__(self, start_yaw):
+        if not math.isfinite(start_yaw):
+            raise ContractError('start yaw must be finite')
+        self._last = start_yaw
+        self.signed_progress = 0.0
+        self.abs_travel = 0.0
+
+    def update(self, yaw):
+        if not math.isfinite(yaw):
+            raise ContractError('yaw must be finite')
+        step = _wrap(yaw - self._last)
+        self._last = yaw
+        self.signed_progress += step
+        self.abs_travel += abs(step)
+        return step
+
+
+def predicted_stop_angle(measured_rate, latency_s, stop_tail_rad,
+                         yaw_margin_rad):
+    """Angle still travelled after a zero command: rate*latency + tail."""
+    return (abs(measured_rate) * latency_s + stop_tail_rad
+            + yaw_margin_rad)
+
+
+@dataclass(frozen=True)
+class ProbeBudgetLimits:
+    """Session limits from spec 6.3; all monotonic."""
+
+    max_segments: int = 6
+    max_total_abs_yaw_rad: float = 2.0 * math.pi
+    max_motion_time_s: float = 45.0
+    max_session_s: float = 240.0
+
+    def __post_init__(self):
+        if isinstance(self.max_segments, bool) or self.max_segments < 1:
+            raise ContractError('max_segments must be a positive integer')
+        for name in ('max_total_abs_yaw_rad', 'max_motion_time_s',
+                     'max_session_s'):
+            value = getattr(self, name)
+            if not (math.isfinite(value) and value > 0.0):
+                raise ContractError(f'{name} must be positive')
+        if self.max_total_abs_yaw_rad > 2.0 * math.pi + 1e-9:
+            raise ContractError('max_total_abs_yaw_rad cannot exceed 2*pi')
+
+
+class ProbeBudget:
+    """
+    Spend-only budget for one localization session.
+
+    Segments, absolute yaw and nonzero-command time only grow.  A session
+    started at ``started_mono`` never resets; a new session needs a new
+    budget object (and, at the guard, a fresh STOP handshake).
+    """
+
+    def __init__(self, limits, started_mono):
+        if not math.isfinite(started_mono):
+            raise ContractError('started_mono must be finite')
+        self.limits = limits
+        self.started_mono = started_mono
+        self.segments = 0
+        self.abs_yaw = 0.0
+        self.motion_time = 0.0
+
+    def admit(self, delta_yaw, now_mono):
+        """Return '' if a new segment of ``delta_yaw`` fits, else a reason."""
+        limits = self.limits
+        if not math.isfinite(now_mono) or now_mono < self.started_mono:
+            return RejectReason.MOTION_BUDGET_EXHAUSTED.value
+        if (self.segments >= limits.max_segments
+                or self.abs_yaw + abs(delta_yaw)
+                > limits.max_total_abs_yaw_rad + 1e-9
+                or self.motion_time >= limits.max_motion_time_s
+                or now_mono - self.started_mono >= limits.max_session_s):
+            return RejectReason.MOTION_BUDGET_EXHAUSTED.value
+        return ''
+
+    def start_segment(self):
+        self.segments += 1
+
+    def charge(self, abs_yaw_step, motion_dt):
+        if abs_yaw_step < 0.0 or motion_dt < 0.0:
+            raise ContractError('budget charges are non-negative')
+        self.abs_yaw += abs_yaw_step
+        self.motion_time += motion_dt
+
+    def exhausted(self, now_mono):
+        limits = self.limits
+        return (self.abs_yaw > limits.max_total_abs_yaw_rad + 1e-9
+                or self.motion_time >= limits.max_motion_time_s
+                or not math.isfinite(now_mono)
+                or now_mono < self.started_mono
+                or now_mono - self.started_mono >= limits.max_session_s)
+
+
+# Most specific first: an observed obstacle outranks missing evidence.
+_REFUSAL_PRIORITY = (RejectReason.OBSTACLE_IN_SWEEP.value,
+                     RejectReason.UNKNOWN_SWEEP.value,
+                     RejectReason.PROFILE_INVALID.value)
+
+
+def choose_probe(decisions, view_headings, current_heading,
+                 min_view_separation_rad=math.radians(20.0)):
+    """
+    Pick the next probe rotation, or explain why there is none.
+
+    Only allowed decisions are candidates.  A probe whose resulting heading
+    lies within ``min_view_separation_rad`` of an already collected view
+    adds no new view and is skipped.  Among the rest the largest distance
+    to every collected view wins; ties prefer the smaller rotation.
+    Returns ``(decision, '')`` or ``(None, reason)``.
+    """
+    allowed = [item for item in decisions if item.allowed]
+    if not allowed:
+        reasons = {item.reason for item in decisions}
+        for reason in _REFUSAL_PRIORITY:
+            if reason in reasons:
+                return None, reason
+        return None, (sorted(reasons)[0] if reasons
+                      else RejectReason.UNKNOWN_SWEEP.value)
+    best = None
+    for item in allowed:
+        heading = current_heading + item.delta_yaw
+        novelty = min((abs(_wrap(heading - seen)) for seen in view_headings),
+                      default=math.pi)
+        if novelty < min_view_separation_rad:
+            continue
+        key = (novelty, -abs(item.delta_yaw))
+        if best is None or key > best[0]:
+            best = (key, item)
+    if best is None:
+        return None, RejectReason.AMBIGUOUS_LOCATION.value
+    return best[1], ''
