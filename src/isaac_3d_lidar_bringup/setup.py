@@ -71,6 +71,8 @@ setup(
             'isaac_3d_lidar_bringup.manual_map_localizer:main',
             'localization_rotation_preview = '
             'isaac_3d_lidar_bringup.localization_rotation_preview:main',
+            'localization_motion_guard = '
+            'isaac_3d_lidar_bringup.localization_motion_guard_node:main',
         ],
     },
 )

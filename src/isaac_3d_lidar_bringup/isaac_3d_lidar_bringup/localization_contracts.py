@@ -64,6 +64,8 @@ class RejectReason(str, Enum):
     MOTION_BUDGET_EXHAUSTED = 'MOTION_BUDGET_EXHAUSTED'
     CANCELED = 'CANCELED'
     NO_VALID_CANDIDATE = 'NO_VALID_CANDIDATE'
+    LOCALIZATION_FAULT = 'LOCALIZATION_FAULT'
+    CHASSIS_BLOCKED = 'CHASSIS_BLOCKED'
 
 
 # Operator-facing text.  The flag says whether a manual 2D Pose remains a
@@ -83,6 +85,8 @@ REJECT_REASON_TEXT = {
     RejectReason.MOTION_BUDGET_EXHAUSTED: ('旋转段数、角度或时间预算已用尽', True),
     RejectReason.CANCELED: ('定位已被取消', True),
     RejectReason.NO_VALID_CANDIDATE: ('没有候选通过独立验证帧的匹配门槛', True),
+    RejectReason.LOCALIZATION_FAULT: ('定位急停已触发或状态未知，需排查并重启后才能运动', False),
+    RejectReason.CHASSIS_BLOCKED: ('底盘报告运动锁止、连接中断，或底盘状态缺失/过期', True),
 }
 
 

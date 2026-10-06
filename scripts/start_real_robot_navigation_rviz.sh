@@ -46,8 +46,8 @@ Options:
   --localization-strategy STRATEGY
                   legacy_full_rotation (default) or stationary_only. stationary_only
                   searches the saved map without any rotation command; use it with
-                  --automatic or --automatic-activate. segmented_rotation is not
-                  available until the Issue #13 motion guard exists.
+                  --automatic or --automatic-activate. segmented_rotation stays
+                  refused until an ACCEPTED motion profile exists (Issue #13 PR4).
   -h, --help      Show this help.
 
 Environment overrides:
@@ -118,7 +118,7 @@ done
 case "${localization_strategy}" in
   legacy_full_rotation|stationary_only) ;;
   segmented_rotation)
-    echo "segmented_rotation needs the Issue #13 motion guard, which is not implemented yet." >&2
+    echo "segmented_rotation can rotate only with an ACCEPTED motion profile (Issue #13 PR4), which does not exist yet." >&2
     exit 2
     ;;
   *)
