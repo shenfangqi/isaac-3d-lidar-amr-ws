@@ -62,8 +62,11 @@ ROS 层测试在独立 DDS 域（87）和 `/test_confined/*` 话题上运行，�
 
 ## PR4 之前必须完成
 
-1. 导航容器的工作区里编入 `carbot_msgs`。现在容器里没有这个包，guard 会因此一直判定"不允许运动"。
-2. 用当前链路录制左右各 ≥3 次、0.40 rad/s 的停车数据，并做一次外部交叉核对（视频或目视），之后才能生成 REVIEWED；ACCEPTED 需要你单独决定。
-3. ESP32 指令超时 watchdog 的实车验收（C04 只是模拟）。
-4. 启动脚本透传 `--localization-strategy segmented_rotation --localization-motion guarded`、配置路径和三个哈希（规格第 8 节；可在 PR5 收口）。
-5. 实车运动测试必须单独授权，现场可急停（规格第 9 节）。
+2026-10-06 进展（用户授权、现场有人看护）：
+
+1. ~~导航容器编入 `carbot_msgs`~~：已完成，容器可解析 `/carbot/status`。
+2. 用当前链路录制停车数据：已完成，左右各 4 次 0.40 rad/s、60°，得到 ESTIMATED（`docs/evidence/issue13_pr4_rotation_profile_2026-10-06.*`）。实测角速度为指令的约 64%，轮编码器与 FAST-LIO 一致，不是打滑。**还差**：一次外部交叉核对（视频或目视）才能标 REVIEWED；ACCEPTED 需要你单独决定。
+3. ~~ESP32 watchdog 实车验收~~：4/4 通过，停发指令后 0.49–0.57 s 停下，多转 8.4–8.9°（`docs/evidence/issue13_pr4_esp32_watchdog_2026-10-06.md`）。
+4. 新发现：guard 崩溃时底盘还会多转约 0.15 rad，当前扫掠检查没有覆盖这一段。PR4 应在扫掠角里加入"实测角速度 × 底盘 watchdog 超时"。
+5. 启动脚本参数透传（规格第 8 节；可在 PR5 收口）。
+6. 之后的每次实车运动测试仍须单独授权、现场可急停。

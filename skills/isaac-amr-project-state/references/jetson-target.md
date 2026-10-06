@@ -101,7 +101,10 @@ The deployed Isaac ROS workspace is
 `/home/shenfq/Projects/isaac_ros-dev`; its project package is
 `/home/shenfq/Projects/isaac_ros-dev/src/isaac_3d_lidar_bringup`, and the
 official ROS 2 FAST-LIO2 source is
-`/home/shenfq/Projects/isaac_ros-dev/src/FAST_LIO`. Inspect the live source,
+`/home/shenfq/Projects/isaac_ros-dev/src/FAST_LIO`. Since 2026-10-06 the same
+workspace also builds `src/carbot_msgs` (copied from this repository; hashes
+identical to the host carbot-ros2 copy) so the navigation container can
+decode `/carbot/status` and `/wheel_ticks` for the Issue #13 motion guard. Inspect the live source,
 install overlay, container and hardware before replacing a deployment.
 
 The tracked-base host integration is maintained in `/home/shenfq/Projects/carbot-ros2`. Its Agent and the completed ESP32 firmware use `ROS_DOMAIN_ID=0`. Isaac simulation also uses Domain 0 but remains isolated by the workstation's loopback-only DDS profile; physical operation requires explicitly loading the LAN DDS profile. The ESP32 performs the differential-track conversion and subscribes to standard `/cmd_vel`. The deployed `carbot_msgs` and `carbot_hardware` packages support `carbot-wheel-odometry.service`, which publishes raw `/wheel/odom` without TF. During mapping/navigation, the `carbot-nvblox` container's FAST-LIO base adapter is the sole `/odom` and `odom -> base_footprint` owner; the legacy `carbot-state-estimation.service` must remain disabled and inactive. Do not start the legacy `carbot_driver` alongside Nav2 because it publishes its own nonzero `/cmd_vel` stream.

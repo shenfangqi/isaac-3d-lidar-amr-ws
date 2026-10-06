@@ -1,5 +1,16 @@
 # Current authoritative project state
 
+## Issue #13 PR4 prerequisites on the real robot: 2026-10-06
+
+- Jetson runs main `09ba915` (PR0-PR3 plus fixes #24/#25); a read-only `--automatic --localization-strategy stationary_only` recheck reached `CANDIDATE_READY` with no guard launched (`motion_policy` default forbid) and `/cmd_vel_command` 0 publishers.
+- `carbot_msgs` (identical hashes to the host carbot-ros2 copy) is now built in the navigation workspace `/home/shenfq/Projects/isaac_ros-dev`, so the container decodes `/carbot/status` (2 Hz) and the guard's chassis gate can run.
+- Supervised motion (operator present, cleared area, user-authorized) on the guard chain `/cmd_vel_command -> compensator -> /cmd_vel -> ESP32` with `scripts/jetson_rotation_profile_capture.py`:
+  - stops: 8 alternating 60 deg turns at a 0.40 rad/s command, no abort; FAST-LIO profile ESTIMATED (`docs/evidence/issue13_pr4_rotation_profile_2026-10-06.*`): stop latency max 0.171 s, stop tail max 0.001 rad, centre drift max 15 mm; overshoot after zero 1.2-2.2 deg.
+  - measured yaw rate 0.25-0.26 rad/s for a 0.40 command, identical from wheel ticks and FAST-LIO: no slip; the wheels track about 64 % (matches the known low-speed tracking/deadband item in `hardware_calibration_backlog.yaml`).
+  - ESP32 watchdog: 4/4 cut-offs without a zero command stopped 0.49-0.57 s after the last command, extra rotation 8.4-8.9 deg (`docs/evidence/issue13_pr4_esp32_watchdog_2026-10-06.md`). The guard sweep check does not yet include this crash-case extension.
+- Evidence bags: `calibration_data/2026-10-06_issue13_rotation_stops_01`, `..._esp32_watchdog_02` (watchdog_01 aborted in preflight, no motion). The stack was stopped afterwards; web teleop restored disarmed.
+- Remaining before guarded rotation: external cross-check of a representative stop for REVIEWED, an explicit human ACCEPTED decision, the crash-case sweep extension, and start-script plumbing (PR5).
+
 ## Issue #13 PR1 stationary localization on the real robot: 2026-10-05/06
 
 - Branch `feature/issue13-pr1-stationary` at `4ff92f3` is deployed to the Jetson with `scripts/deploy_bringup_to_jetson.sh` (source/install in sync). The four former Jetson-local files were stale drafts; they are backed up under `.carbot_deploy/backup-20261005-223524/` and replaced. AMCL on the robot now runs the committed `transform_tolerance: 1.5`.
