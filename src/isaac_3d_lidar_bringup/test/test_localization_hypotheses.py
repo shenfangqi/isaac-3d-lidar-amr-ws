@@ -404,3 +404,56 @@ def test_worker_returns_token_and_result():
         time.sleep(0.05)
     assert outcome[0] == ('s1', 'abc') and outcome[1] == 'ok'
     assert len(outcome[2]) == 64
+
+
+class _ExitedProcess:
+    exitcode = 0
+
+    def is_alive(self):
+        return False
+
+    def join(self, timeout=None):
+        pass
+
+
+class _LatePipe:
+    """Empty on the first poll; the result lands before the second."""
+
+    def __init__(self, result):
+        self.result = result
+        self.polls = 0
+
+    def poll(self):
+        self.polls += 1
+        return self.polls > 1
+
+    def recv(self):
+        return self.result
+
+    def close(self):
+        pass
+
+
+def test_worker_result_sent_just_before_exit_is_not_lost():
+    # Issue #17: result sent and process exited between poll() and
+    # is_alive(); it used to be reported as 'worker exited with code 0'.
+    worker = SearchWorker()
+    worker._process = _ExitedProcess()
+    worker._connection = _LatePipe(('ok', 'search result'))
+    worker.token = ('s1', 'abc')
+    assert worker.poll() == (('s1', 'abc'), 'ok', 'search result')
+    assert not worker.busy
+
+
+def test_worker_exit_without_result_is_still_an_error():
+    worker = SearchWorker()
+    worker._process = _ExitedProcess()
+
+    class Empty(_LatePipe):
+        def poll(self):
+            return False
+
+    worker._connection = Empty(None)
+    worker.token = ('s1', 'abc')
+    token, status, payload = worker.poll()
+    assert status == 'error' and 'exited with code 0' in payload
