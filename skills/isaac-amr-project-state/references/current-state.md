@@ -1,5 +1,12 @@
 # Current authoritative project state
 
+## Issue #13 guarded startup, in-place validation: 2026-10-06/07
+
+- `--localization-strategy segmented_rotation --localization-motion guarded --motion-profile docs/evidence/issue13_motion_profile_accepted_2026-10-06.json --operator-present` (no `--operator-rotation-clear`, so the guard could not rotate) on branch `fix/issue13-startup-discovery-retry` (`c227f66`, deployed). Every run had zero motion: `/cmd_vel` carried only the guard's zero commands, wheel-tick deltas 0/0.
+- Findings fixed in that branch: (1) a RELEASE arriving during a FAST-LIO speed spike was lost because same-sequence renewals never retried it; the guard now keeps a pending release and, like the manager, ignores motion shorter than 0.3 s; (2) the launcher's parameter reads failed on a CLI timeout during DDS rediscovery; bounded retries now cover them; (3) PLAN_PROBE now logs the ambiguity reason; (4) the manager re-checked "no /cmd_vel_command publisher" after Nav2 STARTUP, where the velocity smoother is that publisher, timed out and paused Nav2; the confirmed release is now latched.
+- Final results: `--automatic` reached `CANDIDATE_READY` with the guard RELEASED and no publisher left; `--automatic-activate` reached `READY` with all eight Nav2 lifecycle nodes active, the velocity smoother the only `/cmd_vel_command` publisher and no goal. One earlier attempt at this placement was ambiguous after validation (`stationary_only` succeeded minutes before), entered PLAN_PROBE and was refused with `UNKNOWN_SWEEP` in 0.3 s for lack of an attestation, as designed. Nav2 PAUSE after a failed activation (#19) was exercised on the robot.
+- `CARBOT_INITIAL_POSE_TIMEOUT` bounds the whole automatic localization wait, not only the manual pose; keep it above the 240 s session (a 60 s value aborted a run).
+
 ## Issue #13 PR4 prerequisites on the real robot: 2026-10-06
 
 - Jetson runs main `09ba915` (PR0-PR3 plus fixes #24/#25); a read-only `--automatic --localization-strategy stationary_only` recheck reached `CANDIDATE_READY` with no guard launched (`motion_policy` default forbid) and `/cmd_vel_command` 0 publishers.

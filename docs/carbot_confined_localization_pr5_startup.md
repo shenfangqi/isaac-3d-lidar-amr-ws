@@ -81,4 +81,5 @@
 
 - `test_issue13_startup.py`：校验工具只放行 ACCEPTED 且哈希匹配的配置（ESTIMATED、REVIEWED、哈希不符、格式错误都拒绝）；仓库里的 ACCEPTED 配置与当前参数仍匹配；启动脚本和容器脚本的组合规则、启动前校验顺序、sha256 核对、guard 核对都在。
 - 离线运行启动脚本（不可达主机）确认五种错误组合都在连接 Jetson 前被拒绝。
-- 第一次真正的受保护旋转需要单独授权、现场可急停。
+- 实车原位置验证（2026-10-06/07，不加 `--operator-rotation-clear`，guard 不可能转动）：`--automatic` 到达 CANDIDATE_READY 且 guard 已释放、无残留发布者；`--automatic-activate` 到达 READY，Nav2 全部激活，`/cmd_vel_command` 只有 velocity_smoother 一个发布者，没有发目标；全程 `/cmd_vel` 只有零速、轮编码器增量为 0。验证中发现并修复了四个问题（guard 释放丢失、启动器参数读取偶发超时、PLAN_PROBE 不记原因、Nav2 激活后误判 guard 未释放）。
+- 第一次真正的受保护旋转（探测转动）需要放到静止定位有歧义的位置，并单独授权、现场可急停。
