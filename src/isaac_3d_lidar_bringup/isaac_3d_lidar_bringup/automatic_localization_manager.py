@@ -465,6 +465,7 @@ class AutomaticLocalizationManager(Node):
     def _configure_probe_link(self):
         """Wire the guard lease topics; segmented_rotation only."""
         self._probe = None
+        self._guard_release_confirmed = False
         self._guard_status = None
         self._latest_safety_scan = None
         self._view_id = 0
@@ -518,9 +519,12 @@ class AutomaticLocalizationManager(Node):
 
     def _guard_released(self, now):
         status = self._fresh_guard_status(now)
-        return (status is not None and self._probe.owns(status)
-                and status.state == GuardState.RELEASED
-                and self.count_publishers(self._command_topic) == 0)
+        released = (status is not None and self._probe.owns(status)
+                    and status.state == GuardState.RELEASED
+                    and self.count_publishers(self._command_topic) == 0)
+        if released:
+            self._guard_release_confirmed = True
+        return released
 
     def _configure_strategy(self):
         """Validate the Issue #13 strategy once; conflicts abort startup."""
@@ -599,6 +603,7 @@ class AutomaticLocalizationManager(Node):
         if self._segmented:
             self._view_id = 0
             self._probe = ProbeLink(self._session)    # STOP handshake
+            self._guard_release_confirmed = False
             self._refresh_probe_lease()
             self._probe_hypothesis_counts = []
             self._probe_unknown_cells = None
@@ -1686,8 +1691,12 @@ class AutomaticLocalizationManager(Node):
             elif self._command_publisher is not None:
                 self.destroy_publisher(self._command_publisher)
                 self._command_publisher = None
-            elif self._probe is not None and not self._guard_released(now):
+            elif (self._probe is not None
+                  and not self._guard_release_confirmed
+                  and not self._guard_released(now)):
                 # Nav2 never activates while the guard can still publish.
+                # Checked only before STARTUP: once Nav2 runs, its velocity
+                # smoother is the /cmd_vel_command publisher by design.
                 if self._probe.operation != MotionOperation.RELEASE:
                     self._probe.release()
                     self._refresh_probe_lease()
