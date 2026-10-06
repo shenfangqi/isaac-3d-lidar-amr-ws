@@ -14,16 +14,18 @@ from rclpy.qos import qos_profile_sensor_data
 
 
 class Monitor:
-    def __init__(self, node):
+    def __init__(self, node, upstream=True):
         self.node = node
         self.started = time.monotonic()
         self.commands = {"upstream": [], "output": []}
         self.ticks = []
         self.odom = []
         self.statuses = []
-        node.create_subscription(
-            Twist, "/cmd_vel_command", lambda msg: self._command("upstream", msg), 10
-        )
+        if upstream:
+            node.create_subscription(
+                Twist, "/cmd_vel_command",
+                lambda msg: self._command("upstream", msg), 10
+            )
         node.create_subscription(
             Twist, "/cmd_vel", lambda msg: self._command("output", msg), 10
         )
@@ -71,10 +73,14 @@ def command_summary(samples):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--seconds", type=float, default=45.0)
+    parser.add_argument(
+        "--skip-upstream", action="store_true",
+        help="do not subscribe /cmd_vel_command; the navigation preflight "
+             "requires the compensator to be its only subscriber")
     args = parser.parse_args()
     rclpy.init()
     node = rclpy.create_node("carbot_nav_command_monitor")
-    monitor = Monitor(node)
+    monitor = Monitor(node, upstream=not args.skip_upstream)
     deadline = time.monotonic() + args.seconds
     try:
         while time.monotonic() < deadline:
