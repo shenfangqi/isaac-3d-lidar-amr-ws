@@ -36,6 +36,13 @@ from .localization_contracts import (
 )
 
 
+# The profile's centre drift is measured on 60 deg stop trials.  The base
+# origin moves on a small circle around the true rotation centre, so its
+# displacement grows with sin(angle / 2); twice the measured value covers
+# sweeps up to 180 deg (2026-10-07: 15.4 mm at 60 deg, 17 mm at 56 deg of
+# a 90 deg probe).  The guard's drift limit uses the same factor.
+CENTER_DRIFT_MARGIN = 2.0
+
 FREE = 'OBSERVED_FREE'
 OCCUPIED = 'OBSERVED_OCCUPIED'
 UNKNOWN = 'UNKNOWN'
@@ -262,7 +269,7 @@ def braking_extension(profile, config):
         profile.stop_tail_rad, profile.center_drift_m, profile.latency_s)
     if measured:
         latency, tail, drift = (profile.latency_s, profile.stop_tail_rad,
-                                profile.center_drift_m)
+                                profile.center_drift_m * CENTER_DRIFT_MARGIN)
     else:
         latency, tail, drift = (0.0, config.unmeasured_braking_rad,
                                 config.unmeasured_center_drift_m)

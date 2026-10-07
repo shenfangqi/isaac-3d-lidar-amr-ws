@@ -37,6 +37,7 @@ from .localization_contracts import (
     SCHEMA_VERSION,
 )
 from .localization_rotation_policy import (
+    CENTER_DRIFT_MARGIN,
     predicted_stop_angle,
     ProbeBudget,
     RotationProgress,
@@ -369,7 +370,9 @@ class MotionGuardCore:
             return
         drift = math.hypot(self._odom.x - self._segment_start[0],
                            self._odom.y - self._segment_start[1])
-        if drift > self.permission.center_drift_m:
+        # Same margin as the sweep padding: the base origin circles the
+        # rotation centre, so the measured drift scales with the angle.
+        if drift > self.permission.center_drift_m * CENTER_DRIFT_MARGIN:
             self._halt(RejectReason.ODOM_JUMP)
             return
         remaining = self._target - self._progress.signed_progress

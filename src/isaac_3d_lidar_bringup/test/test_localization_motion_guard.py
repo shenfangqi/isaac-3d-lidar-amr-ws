@@ -376,7 +376,7 @@ def test_translation_beyond_profile_drift_stops():
     sim = Sim().handshake()
     sim.request(MotionOperation.ROTATE, math.radians(90))
     sim.step(5)
-    sim.x = 0.05                             # robot slid sideways
+    sim.x = 0.07                             # beyond 2 x 0.03 m drift
     sim.step(1)
     assert sim.commands[-1] == 0.0
     assert sim.guard.reason == 'ODOM_JUMP'
@@ -501,3 +501,15 @@ def test_backward_motion_beyond_tolerance_still_halts():
     sim.step(1)
     assert sim.commands[-1] == 0.0
     assert sim.guard.reason == 'SENSOR_STALE'
+
+
+def test_drift_within_twice_the_profile_value_continues():
+    # 2026-10-07: a 90 deg probe stopped at 56 deg with ODOM_JUMP because
+    # the base origin, circling the rotation centre, moved 17 mm against a
+    # 15.4 mm profile value measured on 60 deg turns.
+    sim = Sim().handshake()
+    sim.request(MotionOperation.ROTATE, math.radians(90))
+    sim.step(5)
+    sim.x = 0.045                            # 1.5 x the 0.03 m profile
+    sim.step(1)
+    assert sim.guard.state == GuardState.ROTATING, sim.guard.reason
