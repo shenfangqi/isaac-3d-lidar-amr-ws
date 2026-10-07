@@ -93,6 +93,14 @@ def test_start_script_gates_guarded_rotation():
     assert 'A motion guard is running although motion is forbidden.' in source
 
 
+def test_lost_start_response_falls_back_to_manager_state():
+    # 2026-10-07: the start request took effect but its response was lost,
+    # and the launcher tore down a localization already in progress.
+    source = (SCRIPTS / 'start_real_robot_navigation_rviz.sh').read_text()
+    assert 'response was lost, but the manager is already in' in source
+    assert '"${state}" == "WAIT_FOR_START"' in source
+
+
 def test_container_script_passes_guarded_arguments_only_when_valid():
     source = (SCRIPTS / 'jetson_nvblox_container.sh').read_text()
     assert 'motion_policy guarded is valid only for segmented_rotation.' in (

@@ -608,8 +608,20 @@ run_automatic_localization() {
   if [[ "${stationary_validation}" == "true" ]]; then
     service=/automatic_localization/prepare_stationary
   fi
-  remote_ros \
-    "timeout --kill-after=1s 30s ros2 service call ${service} std_srvs/srv/Trigger '{}'" || return 1
+  if ! remote_ros \
+      "timeout --kill-after=1s 30s ros2 service call ${service} std_srvs/srv/Trigger '{}'"; then
+    # The request can take effect while its response is lost in DDS.
+    # Continue only if the manager's latched status shows it has left
+    # WAIT_FOR_START; otherwise this is a real failure.
+    local state
+    state="$(remote_ros "timeout 10s ros2 topic echo --once --full-length /automatic_localization/status std_msgs/msg/String --field data" 2>/dev/null \
+      | python3 -c 'import json, sys; text = sys.stdin.read().strip().splitlines(); print(json.loads(text[0]).get("state", "") if text else "")' 2>/dev/null || true)"
+    if [[ -z "${state}" || "${state}" == "WAIT_FOR_START" ]]; then
+      echo "${service} failed and the manager did not start (state: ${state:-unknown})." >&2
+      return 1
+    fi
+    echo "NOTICE: ${service} response was lost, but the manager is already in ${state}; continuing."
+  fi
   remote docker exec carbot-nvblox bash -lc \
     "source /opt/ros/humble/setup.bash; source /workspaces/isaac_ros-dev/install/setup.bash; exec python3 /tmp/jetson_navigation_wait.py --timeout ${initial_pose_timeout}"
 }
