@@ -88,7 +88,10 @@ class Sim:
             if self.feed_chassis:
                 self.guard.on_chassis(True, self.chassis_blocked, self.now)
             query = self.guard.sweep_query()
-            if self.feed_sweep and query is not None:
+            # Like the node: evaluate_localization_rotation refuses angles
+            # beyond pi/2, so no verdict is produced for them.
+            if (self.feed_sweep and query is not None
+                    and abs(query) <= math.pi / 2 + 1e-9):
                 self.guard.on_sweep(SweepVerdict(
                     query, self.sweep_allowed,
                     '' if self.sweep_allowed else self.sweep_reason,
@@ -464,3 +467,37 @@ def test_sustained_motion_clears_stopped():
     sim.noise = lambda now: 0.05
     sim.step(10)                      # 0.5 s of motion > 0.3 s grace
     assert not sim.status.stopped
+
+
+def test_backward_wobble_does_not_void_the_verdict():
+    # 2026-10-07 real robot: odometry moved -0.002 rad before the tracks
+    # responded; target - progress exceeded the covered angle (and pi/2), so
+    # the guard halted with SENSOR_STALE.  Wobble mid-turn must not either.
+    sim = Sim().handshake()
+    target = 1.5707963268                  # the configured 90 deg probe
+    sim.request(MotionOperation.ROTATE, target)
+    sim.step(1)
+    assert sim.guard.state == GuardState.ROTATING
+    sim.yaw -= 0.01                        # wobble before any real motion
+    sim.step(1)
+    assert sim.guard.state == GuardState.ROTATING, sim.guard.reason
+    query = sim.guard.sweep_query()
+    assert query is not None and abs(query) <= abs(target)
+    sim.step(10)
+    sim.yaw -= 0.01                        # and again mid-turn
+    sim.step(1)
+    assert sim.guard.state == GuardState.ROTATING, sim.guard.reason
+    sim.step(120)
+    assert sim.guard.state == GuardState.STOPPED
+    assert sim.guard.reason == ''
+
+
+def test_backward_motion_beyond_tolerance_still_halts():
+    sim = Sim().handshake()
+    sim.request(MotionOperation.ROTATE, math.radians(60))
+    sim.step(10)
+    sim.feed_sweep = False                 # no new verdicts from here
+    sim.yaw -= 0.2                         # far more than the tolerance
+    sim.step(1)
+    assert sim.commands[-1] == 0.0
+    assert sim.guard.reason == 'SENSOR_STALE'
