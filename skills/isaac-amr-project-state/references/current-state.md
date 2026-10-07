@@ -1,5 +1,11 @@
 # Current authoritative project state
 
+## Issue #13 probe rotation on the real robot: 2026-10-07
+
+- The full segmented-rotation probe ran on the robot: manager PLAN_PROBE → guard rotation (≈85 deg of a 90 deg probe, 3.7 deg after zero) → settle → second view → CANDIDATE_READY with the guard RELEASED; the operator confirmed both poses. Evidence: `docs/evidence/issue13_probe_rotation_2026-10-07.md`, bags `calibration_data/2026-10-07_issue13_{probe_rotation_01..04,forced_probe_01..04}`.
+- No placement produced natural ambiguity (2 placements, 4 runs, all stationary passes), so the probe was exercised with the validation-only `--force-probe-once` test mode.
+- Fixes found on the robot (branch `fix/issue13-start-service-ack`, deployed `c0b63c0`): lost start-service response no longer tears down a started localization; guard sweep check tolerates backward odometry wobble and caps the swept angle at the target; centre-drift limit and sweep padding use 2 x the profile value; sweep TF lookup waits up to 0.15 s for the scan-time transform.
+
 ## Issue #13 guarded startup, in-place validation: 2026-10-06/07
 
 - `--localization-strategy segmented_rotation --localization-motion guarded --motion-profile docs/evidence/issue13_motion_profile_accepted_2026-10-06.json --operator-present` (no `--operator-rotation-clear`, so the guard could not rotate) on branch `fix/issue13-startup-discovery-retry` (`c227f66`, deployed). Every run had zero motion: `/cmd_vel` carried only the guard's zero commands, wheel-tick deltas 0/0.
