@@ -31,6 +31,7 @@ localization_motion=forbid
 motion_profile=""
 operator_rotation_clear=false
 operator_present=false
+force_probe_once=false
 map_argument_seen=false
 
 usage() {
@@ -65,6 +66,10 @@ Options:
                   covers only unobserved sweep cells (the MID-360 blind zone).
   --operator-present
                   Confirms an operator is at the robot with the stop in reach.
+  --force-probe-once
+                  Real-robot test of the probe path: rotate once even if the
+                  stationary result already passed. Only with --automatic and
+                  --localization-motion guarded; Nav2 never activates.
   -h, --help      Show this help.
 
 Environment overrides:
@@ -119,6 +124,9 @@ while (( $# > 0 )); do
       ;;
     --operator-present)
       operator_present=true
+      ;;
+    --force-probe-once)
+      force_probe_once=true
       ;;
     --validation-only|--automatic)
       automatic_localization=true
@@ -192,8 +200,12 @@ if [[ "${localization_motion}" == "guarded" ]]; then
   # ACCEPTED status and hash binding are checked here, before anything
   # starts; the manager and guard check them again on the Jetson.
   motion_hashes_json="$(python3 "${script_dir}/check_motion_profile.py" "${motion_profile}")" || exit 2
-elif [[ -n "${motion_profile}" || "${operator_rotation_clear}" == "true" ]]; then
-  echo "--motion-profile and --operator-rotation-clear require --localization-motion guarded." >&2
+elif [[ -n "${motion_profile}" || "${operator_rotation_clear}" == "true" || "${force_probe_once}" == "true" ]]; then
+  echo "--motion-profile, --operator-rotation-clear and --force-probe-once require --localization-motion guarded." >&2
+  exit 2
+fi
+if [[ "${force_probe_once}" == "true" && "${automatic_activation}" == "true" ]]; then
+  echo "--force-probe-once is a validation-only test; use --automatic, not --automatic-activate." >&2
   exit 2
 fi
 
@@ -575,6 +587,15 @@ verify_motion_guard() {
     echo "The motion guard does not permit motion (profile, hashes or carbot_msgs)." >&2
     return 1
   fi
+  if [[ "${force_probe_once}" == "true" ]]; then
+    local forced
+    forced="$(remote_param_get /automatic_localization_manager force_probe_once)" || return 1
+    if [[ "${forced}" != *"Boolean value is: True"* ]]; then
+      echo "force_probe_once was requested but the manager does not have it enabled." >&2
+      return 1
+    fi
+    echo "强制探测测试已开启：静止定位通过后仍会转动一次（只验证，不激活 Nav2）。"
+  fi
   echo "PASS: motion guard is running and permits guarded rotation."
 }
 
@@ -770,7 +791,8 @@ fi
 remote "${jetson_workspace}/scripts/jetson_nvblox_container.sh" \
   recreate navigation-safe "${map_yaml}" "${initialization_mode}" "${complex_route_mode}" \
   "${localization_strategy}" "${localization_motion}" "${remote_profile}" \
-  "${extrinsics_hash}" "${control_chain_hash}" "${operator_rotation_clear}" >/dev/null
+  "${extrinsics_hash}" "${control_chain_hash}" "${operator_rotation_clear}" \
+  "$([[ "${force_probe_once}" == "true" ]] && echo force-probe-once)" >/dev/null
 
 echo "[4/8] Running the non-motion hardware preflight..."
 run_preflight_with_readiness_retry

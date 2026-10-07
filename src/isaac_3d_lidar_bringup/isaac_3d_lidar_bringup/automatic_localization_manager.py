@@ -424,6 +424,10 @@ class AutomaticLocalizationManager(Node):
             'motion_policy': MotionPolicy.FORBID.value,
             'motion_profile_path': '',
             'operator_rotation_clear': False,
+            # Real-robot test of the probe path: probe once even when the
+            # stationary result already passed.  Validation-only, guarded
+            # segmented_rotation only.
+            'force_probe_once': False,
             'train_frames_per_view': 3,
             'holdout_frames_per_view': 3,
             'max_views': 8,
@@ -538,6 +542,14 @@ class AutomaticLocalizationManager(Node):
         # segmented_rotation probes through the separate motion guard; this
         # node never creates a velocity publisher for it.
         self._segmented = strategy == Strategy.SEGMENTED_ROTATION
+        self._force_probe_once = bool(self._parameter('force_probe_once'))
+        if self._force_probe_once and not (
+                self._segmented and policy == MotionPolicy.GUARDED
+                and self._validation_only):
+            raise ContractError(
+                'force_probe_once is a test of the probe path: it needs '
+                'segmented_rotation, motion_policy guarded and '
+                'validation_only (Nav2 never activates)')
         names = (
             'train_frames_per_view', 'holdout_frames_per_view', 'max_views',
             'max_probe_segments', 'max_refined_clusters', 'probe_angles_rad',
@@ -604,6 +616,7 @@ class AutomaticLocalizationManager(Node):
             self._view_id = 0
             self._probe = ProbeLink(self._session)    # STOP handshake
             self._guard_release_confirmed = False
+            self._force_probe_pending = self._force_probe_once
             self._refresh_probe_lease()
             self._probe_hypothesis_counts = []
             self._probe_unknown_cells = None
@@ -1891,6 +1904,17 @@ class AutomaticLocalizationManager(Node):
                 self._reject(RejectReason.SEARCH_INCOMPLETE, str(decision))
             elif not decision.accepted:
                 self._reject_or_probe(decision.reason, now)
+            elif getattr(self, '_force_probe_pending', False):
+                # Test mode: the result passed, but probe once anyway; the
+                # next accepted result after that probe is used normally.
+                self._force_probe_pending = False
+                self._probe_hypothesis_counts.append(
+                    len(self._search_result.hypotheses))
+                self._probe_reason = 'FORCED_PROBE_TEST'
+                self.get_logger().info(
+                    'force_probe_once: stationary result passed; probing '
+                    'once anyway (validation test, Nav2 stays inactive)')
+                self._transition(State.PLAN_PROBE)
             else:
                 self._accept_confined(decision.winner, now)
 
@@ -2062,6 +2086,7 @@ class AutomaticLocalizationManager(Node):
                 round(self._rotation_progress, 3) if legacy
                 else round(guard_travel, 3)),
             'map_hash': self._map_hash,
+            'forced_probe_test': getattr(self, '_force_probe_once', False),
         }
 
     def _publish_status(self, force=False):
