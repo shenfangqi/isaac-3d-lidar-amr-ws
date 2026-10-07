@@ -58,6 +58,18 @@ def test_motion_permission(policy, profile, permitted):
                 result.center_drift_m) == (0.1, 0.05, 0.03)
 
 
+def test_sweep_tf_lookup_waits_for_the_source_time_transform():
+    # 2026-10-07: scans stamped ahead of the newest odom TF failed with
+    # "extrapolation into the future" while turning.
+    source = (PACKAGE_DIR / 'isaac_3d_lidar_bringup'
+              / 'localization_motion_guard_node.py').read_text()
+    lookup = source.split('def _lookup', 1)[1].split('def ', 1)[0]
+    assert 'Time.from_msg(stamp)' in lookup
+    assert "timeout=Duration(seconds=float(self._value('tf_wait_sec')))" in (
+        lookup)
+    assert 'MultiThreadedExecutor(num_threads=3)' in source
+
+
 def test_profile_hash_is_stable_and_content_bound():
     assert profile_hash(_profile()) == profile_hash(_profile())
     assert profile_hash(_profile()) != profile_hash(_profile('REVIEWED'))

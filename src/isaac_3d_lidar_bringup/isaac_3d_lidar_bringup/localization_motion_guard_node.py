@@ -15,6 +15,7 @@ from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import (DurabilityPolicy, qos_profile_sensor_data, QoSProfile,
@@ -105,6 +106,9 @@ class MotionGuardNode(Node):
         declare('evidence_half_extent_m', 1.0)
         declare('evidence_resolution', 0.05)
         declare('sweep_budget_sec', 0.2)
+        # Scans can be stamped ~0.2 s ahead of the newest odom TF while
+        # turning (2026-10-07); wait this long for the exact-time TF.
+        declare('tf_wait_sec', 0.15)
         declare('max_probe_segments', 6)
         declare('max_total_probe_yaw_rad', 2.0 * math.pi)
         declare('probe_motion_timeout_sec', 45.0)
@@ -252,8 +256,12 @@ class MotionGuardNode(Node):
                 angle, decision.allowed, decision.reason, received))
 
     def _lookup(self, source, stamp):
+        # Runs in the sweep callback group: waiting here never delays the
+        # 50 ms control cycle.  Still the source-time TF, never the latest.
         transform = self._tf_buffer.lookup_transform(
-            self._value('odom_frame'), source, Time.from_msg(stamp)).transform
+            self._value('odom_frame'), source, Time.from_msg(stamp),
+            timeout=Duration(seconds=float(self._value('tf_wait_sec')))
+        ).transform
         return SE2(transform.translation.x, transform.translation.y,
                    _yaw(transform.rotation))
 
@@ -312,7 +320,9 @@ class MotionGuardNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = MotionGuardNode()
-    executor = MultiThreadedExecutor(num_threads=2)
+    # Sweep evaluation (which may wait for TF), the control cycle and the
+    # TF listener each get a thread.
+    executor = MultiThreadedExecutor(num_threads=3)
     executor.add_node(node)
     try:
         executor.spin()
