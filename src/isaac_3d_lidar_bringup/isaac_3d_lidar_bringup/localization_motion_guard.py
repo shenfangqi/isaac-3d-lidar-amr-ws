@@ -37,6 +37,7 @@ from .localization_contracts import (
     SCHEMA_VERSION,
 )
 from .localization_rotation_policy import (
+    CENTER_DRIFT_MARGIN,
     predicted_stop_angle,
     ProbeBudget,
     RotationProgress,
@@ -68,6 +69,10 @@ class GuardConfig:
     max_odom_yaw_jump_rad: float = 0.35
     # /carbot/status arrives at 2 Hz: three periods.
     chassis_status_max_age_s: float = 1.5
+    # Odometry wobbles backwards by ~0.002 rad (2026-10-07); that region is
+    # where the body just was, so a verdict may fall this short of the
+    # remaining angle and still cover it.
+    sweep_tolerance_rad: float = 0.02
 
     def __post_init__(self):
         for name in self.__dataclass_fields__:
@@ -251,10 +256,8 @@ class MotionGuardCore:
     def sweep_query(self):
         """Angle the node should evaluate from the current pose, or None."""
         if self.state == GuardState.ROTATING:
-            remaining = self._target - self._progress.signed_progress
-            if remaining * self._target > 0.0:
-                return remaining
-            return None
+            remaining = self._sweep_remaining()
+            return remaining if remaining is not None else None
         if self._pending is not None:
             return self._pending.delta_yaw_rad
         return None
@@ -367,7 +370,9 @@ class MotionGuardCore:
             return
         drift = math.hypot(self._odom.x - self._segment_start[0],
                            self._odom.y - self._segment_start[1])
-        if drift > self.permission.center_drift_m:
+        # Same margin as the sweep padding: the base origin circles the
+        # rotation centre, so the measured drift scales with the angle.
+        if drift > self.permission.center_drift_m * CENTER_DRIFT_MARGIN:
             self._halt(RejectReason.ODOM_JUMP)
             return
         remaining = self._target - self._progress.signed_progress
@@ -377,21 +382,38 @@ class MotionGuardCore:
         if remaining * self._target <= 0.0 or abs(remaining) <= stop_angle:
             self._halt(None)             # segment complete
             return
-        verdict = self._sweep_reason(remaining, now_mono)
+        verdict = self._sweep_reason(self._sweep_remaining(), now_mono)
         if verdict is None:
             self._halt(RejectReason.SENSOR_STALE)
         elif verdict:
             self._halt(RejectReason(verdict))
 
+    def _sweep_remaining(self):
+        """
+        Remaining angle the sweep must cover, never more than the target.
+
+        Odometry can wobble slightly backwards at the start of a turn, which
+        would make target - progress exceed the target (and pi/2) and void
+        a verdict that covers the whole target (2026-10-07 real robot).
+        """
+        remaining = self._target - self._progress.signed_progress
+        if remaining * self._target <= 0.0:
+            return None
+        return math.copysign(min(abs(remaining), abs(self._target)),
+                             self._target)
+
     def _sweep_reason(self, angle, now_mono):
         """'' if a fresh verdict allows ``angle``; reason; None if none."""
         verdict = self._sweep
+        if angle is None:
+            return ''                    # nothing left to sweep
         if verdict is None or not (
                 0.0 <= now_mono - verdict.receipt_mono
                 <= self.config.sweep_freshness_s):
             return None
         if verdict.delta_yaw * angle <= 0.0 or (
-                abs(verdict.delta_yaw) + 1e-9 < abs(angle)):
+                abs(verdict.delta_yaw) + self.config.sweep_tolerance_rad
+                < abs(angle)):
             return None
         if verdict.allowed:
             return ''

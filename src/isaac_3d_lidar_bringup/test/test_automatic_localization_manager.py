@@ -1196,3 +1196,66 @@ def test_forbid_policy_rejects_probe_planning(segmented):
     manager._tick()
     assert manager._reject_reason == 'PROFILE_INVALID'
     assert all(r.operation.value != 'ROTATE' for r in manager.requests)
+
+
+def test_forced_probe_runs_once_even_after_a_passing_result(segmented):
+    # Real-robot test mode: the stationary result passes, the manager still
+    # probes once through the guard, then accepts the next passing result.
+    manager = segmented
+    manager.params['force_probe_once'] = True
+    manager._configure_strategy()
+    winner = localization_contracts.Hypothesis(
+        1.0, 2.0, 0.5, 0.9, 0.9, 0.0, 0, (0.9,), (0.05, 0.05, 0.02))
+    accepted = localization_hypotheses.QualityDecision(True, '', winner)
+    manager._worker = FakeWorker([_search_result(), accepted,
+                                  _search_result(), accepted])
+    _start_to_collect(manager)
+    _feed(manager, 3)
+    manager._tick()
+    manager._tick()
+    _feed(manager, 3)
+    manager._tick()
+    manager._latest_safety_scan = _room_scan(manager)
+    _guard(manager, 'STOPPED')
+    manager._tick()                       # passed, but probe anyway
+    assert manager._state == manager.State.PLAN_PROBE
+    assert manager._confined_status()['forced_probe_test'] is True
+    assert manager.seeds == []
+
+    _guard(manager, 'STOPPED')
+    manager._tick()
+    assert manager.requests[-1].operation.value == 'ROTATE'
+    _guard(manager, 'ROTATING', travel=0.3)
+    manager._tick()
+    _guard(manager, 'STOPPED')
+    manager._tick()
+    _guard(manager, 'STOPPED', stopped=True)
+    manager._state_started -= manager.params['probe_settle_sec']
+    manager._tick()
+    assert manager._state == manager.State.COLLECT_STATIC
+
+    _feed(manager, 3)
+    manager._tick()
+    manager._tick()
+    _feed(manager, 3)
+    manager._tick()
+    manager._tick()                       # second pass is accepted
+    assert manager._state == manager.State.STOP_AND_VERIFY
+    assert manager.requests[-1].operation.value == 'RELEASE'
+    assert len(manager.seeds) == 1
+
+
+@pytest.mark.parametrize('strategy, policy, validation_only', [
+    ('segmented_rotation', 'guarded', False),
+    ('segmented_rotation', 'forbid', True),
+    ('stationary_only', 'forbid', True),
+])
+def test_force_probe_once_is_validation_only_guarded_test(
+        manager, strategy, policy, validation_only):
+    manager.params.update({'localization_strategy': strategy,
+                           'motion_policy': policy,
+                           'motion_profile_path': '/tmp/profile.json',
+                           'force_probe_once': True})
+    manager._validation_only = validation_only
+    with pytest.raises(localization_contracts.ContractError):
+        manager._configure_strategy()

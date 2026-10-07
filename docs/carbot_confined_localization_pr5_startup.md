@@ -82,4 +82,6 @@
 - `test_issue13_startup.py`：校验工具只放行 ACCEPTED 且哈希匹配的配置（ESTIMATED、REVIEWED、哈希不符、格式错误都拒绝）；仓库里的 ACCEPTED 配置与当前参数仍匹配；启动脚本和容器脚本的组合规则、启动前校验顺序、sha256 核对、guard 核对都在。
 - 离线运行启动脚本（不可达主机）确认五种错误组合都在连接 Jetson 前被拒绝。
 - 实车原位置验证（2026-10-06/07，不加 `--operator-rotation-clear`，guard 不可能转动）：`--automatic` 到达 CANDIDATE_READY 且 guard 已释放、无残留发布者；`--automatic-activate` 到达 READY，Nav2 全部激活，`/cmd_vel_command` 只有 velocity_smoother 一个发布者，没有发目标；全程 `/cmd_vel` 只有零速、轮编码器增量为 0。验证中发现并修复了四个问题（guard 释放丢失、启动器参数读取偶发超时、PLAN_PROBE 不记原因、Nav2 激活后误判 guard 未释放）。
-- 第一次真正的受保护旋转（探测转动）需要放到静止定位有歧义的位置，并单独授权、现场可急停。
+- 实车探测转动（2026-10-07，有人看护）：两个位置 4 轮都没有自然出现歧义，因此用只验证的 `--force-probe-once` 测试模式强制探测一次。第 4 次完整走通 PLAN_PROBE → guard 转动约 85°（目标 90°，清零后多转 3.7°）→ 停稳 → 第二视角 → CANDIDATE_READY，guard 释放、无残留发布者，位姿经操作员确认。前 3 次暴露并修复了起步抖动、中心漂移阈值和 TF 外推三个问题，详见 `docs/evidence/issue13_probe_rotation_2026-10-07.md`。
+
+`--force-probe-once`：只在 `segmented_rotation` + `guarded` + `--automatic`（不激活 Nav2）下允许；静止结果通过后仍强制探测一次，之后的结果正常接受；所有安全检查照常执行。

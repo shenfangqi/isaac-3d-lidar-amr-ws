@@ -11,7 +11,7 @@ time_gate="${workspace}/scripts/wait_for_mapping_time_sync.py"
 
 usage() {
   echo "Usage: $0 {start|recreate|stop|status|logs} [compact|full|mapping]" >&2
-  echo "       $0 {start|recreate} navigation-safe MAP_YAML [manual|auto|auto-activate] [none|complex-route-validation] [legacy_full_rotation|stationary_only|segmented_rotation] [forbid|guarded PROFILE_JSON EXTRINSICS_HASH CONTROL_CHAIN_HASH true|false]" >&2
+  echo "       $0 {start|recreate} navigation-safe MAP_YAML [manual|auto|auto-activate] [none|complex-route-validation] [legacy_full_rotation|stationary_only|segmented_rotation] [forbid|guarded PROFILE_JSON EXTRINSICS_HASH CONTROL_CHAIN_HASH true|false [force-probe-once]]" >&2
   echo "       $0 {start|recreate} navigation-diagnostic MAP_YAML" >&2
   echo "       Append 'auto' for validation or 'auto-activate' for guarded Nav2 activation." >&2
 }
@@ -79,6 +79,11 @@ case "${mode}" in
     extrinsics_hash="${9:-}"
     control_chain_hash="${10:-}"
     operator_rotation_clear="${11:-false}"
+    force_probe="${12:-}"
+    if [[ -n "${force_probe}" && "${force_probe}" != "force-probe-once" ]]; then
+      echo "The 12th argument must be empty or 'force-probe-once'." >&2
+      exit 2
+    fi
     if [[ "${motion_policy}" != "forbid" && "${motion_policy}" != "guarded" ]]; then
       echo "Motion policy must be 'forbid' or 'guarded'." >&2
       exit 2
@@ -116,8 +121,15 @@ case "${mode}" in
       container_profile="/workspaces/isaac_ros-dev${motion_profile#${workspace}}"
       printf -v quoted_container_profile '%q' "${container_profile}"
       motion_launch_argument=" motion_policy:=guarded motion_profile_path:=${quoted_container_profile} extrinsics_hash:=${extrinsics_hash} control_chain_hash:=${control_chain_hash} operator_rotation_clear:=${operator_rotation_clear}"
-    elif [[ "${operator_rotation_clear}" == "true" ]]; then
-      echo "operator_rotation_clear requires motion_policy guarded." >&2
+      if [[ -n "${force_probe}" ]]; then
+        if [[ "${initialization}" != "auto" ]]; then
+          echo "force-probe-once is a validation-only test; use initialization 'auto'." >&2
+          exit 2
+        fi
+        motion_launch_argument+=" force_probe_once:=true"
+      fi
+    elif [[ "${operator_rotation_clear}" == "true" || -n "${force_probe}" ]]; then
+      echo "operator_rotation_clear and force-probe-once require motion_policy guarded." >&2
       exit 2
     fi
     if [[ "${localization_strategy}" != "legacy_full_rotation" && "${initialization}" == "manual" ]]; then

@@ -42,6 +42,7 @@ def generate_launch_description():
     extrinsics_hash = LaunchConfiguration('extrinsics_hash')
     control_chain_hash = LaunchConfiguration('control_chain_hash')
     operator_rotation_clear = LaunchConfiguration('operator_rotation_clear')
+    force_probe_once = LaunchConfiguration('force_probe_once')
     probe_parameters = {
         'motion_policy': motion_policy,
         'motion_profile_path': motion_profile_path,
@@ -256,6 +257,8 @@ def generate_launch_description():
                 'validation_only': auto_localization_validation_only,
                 'localization_strategy': localization_strategy,
                 **probe_parameters,
+                'force_probe_once': PythonExpression([
+                    "'", force_probe_once, "' == 'true'"]),
             },
         ],
         condition=IfCondition(automatic_localization),
@@ -430,6 +433,16 @@ def generate_launch_description():
             description='ACCEPTED rotation motion profile (JSON).'),
         DeclareLaunchArgument('extrinsics_hash', default_value=''),
         DeclareLaunchArgument('control_chain_hash', default_value=''),
+        DeclareLaunchArgument(
+            'force_probe_once',
+            default_value='false',
+            choices=['true', 'false'],
+            description=(
+                'Real-robot test: probe once even if the stationary result '
+                'passed. Only with segmented_rotation, guarded motion and '
+                'validation-only localization.'
+            ),
+        ),
         DeclareLaunchArgument(
             'operator_rotation_clear',
             default_value='false',

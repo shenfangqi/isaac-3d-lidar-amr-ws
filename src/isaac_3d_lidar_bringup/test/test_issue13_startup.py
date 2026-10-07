@@ -93,11 +93,33 @@ def test_start_script_gates_guarded_rotation():
     assert 'A motion guard is running although motion is forbidden.' in source
 
 
+def test_lost_start_response_falls_back_to_manager_state():
+    # 2026-10-07: the start request took effect but its response was lost,
+    # and the launcher tore down a localization already in progress.
+    source = (SCRIPTS / 'start_real_robot_navigation_rviz.sh').read_text()
+    assert 'response was lost, but the manager is already in' in source
+    assert '"${state}" == "WAIT_FOR_START"' in source
+
+
+def test_force_probe_once_is_plumbed_as_a_guarded_validation_test():
+    start = (SCRIPTS / 'start_real_robot_navigation_rviz.sh').read_text()
+    container = (SCRIPTS / 'jetson_nvblox_container.sh').read_text()
+    assert '--force-probe-once is a validation-only test' in start
+    assert 'force_probe_once was requested but the manager' in start
+    assert "force-probe-once is a validation-only test; use initialization 'auto'." in container
+    assert 'motion_launch_argument+=" force_probe_once:=true"' in container
+    launch = (PROJECT_DIR / 'src/isaac_3d_lidar_bringup/launch/'
+              'carbot_navigation_real.launch.py').read_text()
+    block = launch.split("'force_probe_once',", 1)[1]
+    assert block.lstrip().startswith("default_value='false'")
+
+
 def test_container_script_passes_guarded_arguments_only_when_valid():
     source = (SCRIPTS / 'jetson_nvblox_container.sh').read_text()
     assert 'motion_policy guarded is valid only for segmented_rotation.' in (
         source)
-    assert 'operator_rotation_clear requires motion_policy guarded.' in source
+    assert ('operator_rotation_clear and force-probe-once require '
+            'motion_policy guarded.') in source
     assert 'motion_policy:=guarded motion_profile_path:=' in source
     assert 'Motion profile must be inside ${workspace}' in source
     assert '^[0-9a-f]{64}$' in source

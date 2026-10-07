@@ -248,6 +248,8 @@ def test_braking_extension_uses_the_longer_hold():
         0.4 * 0.9 + 0.01)
     unmeasured, _, flag = braking_extension(None, config)
     assert unmeasured == pytest.approx(0.4 * 0.6 + 0.40) and not flag
+    drifting = _profile(config, stop_tail=0.01, latency=0.2, drift=0.015)
+    assert braking_extension(drifting, config)[1] == pytest.approx(0.030)
 
 
 def test_sparse_3d_not_free():
