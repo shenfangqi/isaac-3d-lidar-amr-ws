@@ -1087,10 +1087,12 @@ def test_ambiguity_probes_through_the_guard_then_releases(segmented):
     assert all(f.role.value == 'TRAIN' for f in manager._keyframes)
 
     _feed(manager, 3)
-    manager._tick()                       # second search uses two views
+    manager._tick()                       # second view re-checks
     name, arguments = manager._worker.jobs[-1]
-    assert name == 'run_search_job'
-    assert {frame.view_id for frame in arguments[1]} == {0, 1}
+    assert name == 'run_recheck_job'
+    assert arguments[1].complete
+    assert {frame.view_id for frame in arguments[3]} == {0, 1}
+    assert manager._confined_status()['search_recheck'] is True
 
     manager._tick()
     _feed(manager, 3)
@@ -1188,6 +1190,41 @@ def test_search_worker_stall_only_leases_stop(segmented):
     for _ in range(20):
         manager._tick()
     assert {r.operation.value for r in manager.requests} == {'STOP'}
+
+
+def test_refuted_recheck_searches_the_whole_map_again(segmented):
+    # Spec 5.3: when the re-check refutes every candidate, a new map-wide
+    # search must complete before anything can be accepted.
+    manager = segmented
+    refuted = localization_contracts.SearchResult(
+        'x' * 16, 'ab' * 32, True, (localization_contracts.Hypothesis(
+            1.0, 2.0, 0.5, 0.3, 0.9, 0.0, 0, (0.3,), ()),), 10, 0.1, '')
+    manager._worker = FakeWorker([refuted, _search_result()])
+    _start_to_collect(manager)
+    manager._recheck_basis = (_search_result(),
+                              localization_contracts.SE2(0.0, 0.0, 0.0))
+    _feed(manager, 3)
+    manager._tick()
+    manager._tick()                       # refuted -> map-wide search
+    assert manager._state == manager.State.SEARCH_MULTI_VIEW
+    assert [job[0] for job in manager._worker.jobs] == [
+        'run_recheck_job', 'run_search_job']
+    assert manager._recheck_basis is None
+    manager._tick()
+    assert manager._state == manager.State.VERIFY_HYPOTHESES
+
+
+@pytest.mark.parametrize('complete', [True, False])
+def test_only_a_complete_search_is_rechecked(segmented, complete):
+    # An incomplete search may have dropped alternatives.
+    manager = segmented
+    manager._begin_confined_session(time.monotonic())
+    manager._search_result = _search_result(
+        complete, '' if complete else 'SEARCH_INCOMPLETE')
+    manager._search_reference = localization_contracts.SE2(0.1, 0.0, 0.2)
+    manager._start_next_view()
+    assert (manager._recheck_basis is not None) == complete
+    assert manager._search_result is None
 
 
 @pytest.mark.parametrize('setup, reason', [

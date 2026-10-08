@@ -407,10 +407,7 @@ def _incomplete(session, digest, evaluated, started, reason, hypotheses=()):
                         time.monotonic() - started, reason.value)
 
 
-def search_multiview(grid, train_frames, config, deadline=None,
-                     cancel_token=None):
-    """Map-wide search over every free cell centre using TRAIN frames."""
-    started = time.monotonic()
+def _train_frames(train_frames):
     frames = tuple(train_frames)
     if not frames:
         raise ContractError('search needs TRAIN frames')
@@ -419,6 +416,21 @@ def search_multiview(grid, train_frames, config, deadline=None,
     session = frames[0].session
     if any(frame.session != session for frame in frames):
         raise ContractError('frames from different sessions')
+    return frames, session
+
+
+def _same_basin(first, second, config):
+    return (math.hypot(first.x - second.x, first.y - second.y)
+            <= config.cluster_xy_m
+            and _angle_distance(first.yaw, second.yaw)
+            <= config.cluster_yaw_rad)
+
+
+def search_multiview(grid, train_frames, config, deadline=None,
+                     cancel_token=None):
+    """Map-wide search over every free cell centre using TRAIN frames."""
+    started = time.monotonic()
+    frames, session = _train_frames(train_frames)
     digest = map_hash(grid)
     reference = frames[0].T_odom_base
     views = {}
@@ -471,10 +483,7 @@ def search_multiview(grid, train_frames, config, deadline=None,
     refined.sort(key=lambda item: _ranking(item[2]), reverse=True)
 
     def same_basin(first, second):
-        return (math.hypot(first.x - second.x, first.y - second.y)
-                <= config.cluster_xy_m
-                and _angle_distance(first.yaw, second.yaw)
-                <= config.cluster_yaw_rad)
+        return _same_basin(first, second, config)
 
     # Neighbouring coarse clusters may refine into the same optimum.  That
     # is one solution, not an independent alternative; keep the best copy.
@@ -513,6 +522,58 @@ def search_multiview(grid, train_frames, config, deadline=None,
            and not represented(cluster['seed']) for cluster in unrefined):
         return _incomplete(session, digest, evaluated, started,
                            RejectReason.SEARCH_INCOMPLETE, hypotheses)
+    return SearchResult(session, digest, True, hypotheses, evaluated,
+                        time.monotonic() - started, '')
+
+
+def recheck_hypotheses(grid, previous, previous_reference, train_frames,
+                       config, deadline=None, cancel_token=None):
+    """
+    Re-refine the hypotheses of a complete search with every TRAIN view.
+
+    Spec 5.3: the map-wide search runs once and later views re-check its
+    candidates.  An incomplete search may have dropped alternatives, so it
+    is refused here and needs a new map-wide search.  Each hypothesis is
+    moved from ``previous_reference`` (odom pose of the previous search's
+    reference frame) to this request's reference frame first.  Nothing is
+    pruned: a candidate the new view weakens still competes in validation.
+    """
+    started = time.monotonic()
+    frames, session = _train_frames(train_frames)
+    if not previous.complete or not previous.hypotheses:
+        raise ContractError('re-check needs a complete search with hypotheses')
+    if previous.session != session:
+        raise ContractError('re-check frames are from another session')
+    digest = map_hash(grid)
+    if digest != previous.map_hash:
+        return _incomplete(session, digest, 0, started,
+                           RejectReason.MAP_CHANGED)
+    reference = frames[0].T_odom_base
+    shift = previous_reference.inverse().compose(reference)
+    field = distance_field(grid, config.occupied_threshold)
+    refined = []
+    evaluated = 0
+    for hypothesis in previous.hypotheses:
+        start = SE2(hypothesis.x, hypothesis.y, hypothesis.yaw).compose(shift)
+        outcome, stop = refine_cluster(
+            grid, (hypothesis.score, start.x, start.y, start.yaw), frames,
+            reference, config, deadline, cancel_token, field)
+        if stop is not None:
+            return _incomplete(session, digest, evaluated, started, stop)
+        evaluated += config.refine_evaluations + config.polish_evaluations
+        refined.append((hypothesis.cluster_id,) + outcome)
+    refined.sort(key=lambda item: _ranking(item[2]), reverse=True)
+    distinct = []
+    for item in refined:
+        if not any(_same_basin(item[1], kept[1], config) for kept in distinct):
+            distinct.append(item)
+    hypotheses = tuple(
+        Hypothesis(
+            x=pose.x, y=pose.y, yaw=pose.yaw,
+            score=metrics['score'], coverage=metrics['coverage'],
+            conflict=metrics['conflict'], cluster_id=cluster_id,
+            per_view=metrics['per_view'], support_bounds=())
+        for cluster_id, pose, metrics in distinct)
     return SearchResult(session, digest, True, hypotheses, evaluated,
                         time.monotonic() - started, '')
 
@@ -628,6 +689,14 @@ def run_search_job(grid, train_frames, config, timeout_s):
     """Worker entry point for search_multiview."""
     return search_multiview(grid, train_frames, config,
                             deadline=time.monotonic() + timeout_s)
+
+
+def run_recheck_job(grid, previous, previous_reference, train_frames, config,
+                    timeout_s):
+    """Worker entry point for recheck_hypotheses."""
+    return recheck_hypotheses(grid, previous, previous_reference,
+                              train_frames, config,
+                              deadline=time.monotonic() + timeout_s)
 
 
 def run_validation_job(grid, result, train_frames, holdout_frames, config,
