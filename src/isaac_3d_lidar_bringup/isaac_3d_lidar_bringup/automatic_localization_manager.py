@@ -67,6 +67,7 @@ from isaac_3d_lidar_bringup.localization_contracts import (
 from isaac_3d_lidar_bringup.localization_hypotheses import (
     grid_snapshot,
     map_hash,
+    run_recheck_job,
     run_search_job,
     run_validation_job,
     SearchConfig,
@@ -605,6 +606,9 @@ class AutomaticLocalizationManager(Node):
         self._next_keyframe_id = 0
         self._last_keyframe_stamp_ns = 0
         self._search_result = None
+        self._search_reference = None
+        self._search_is_recheck = False
+        self._recheck_basis = None
         self._validation_submitted = False
         self._reject_reason = ''
 
@@ -1856,10 +1860,7 @@ class AutomaticLocalizationManager(Node):
                     self._reject(RejectReason.SENSOR_STALE,
                                  'no qualified stationary TRAIN frames')
                 return
-            self._worker.submit(
-                (self._session, self._map_hash), run_search_job,
-                self._latest_grid, train, self._search_config(),
-                self._parameter('search_timeout_sec'))
+            self._submit_search(train)
             self._transition(State.SEARCH_MULTI_VIEW)
 
         elif self._state == State.SEARCH_MULTI_VIEW:
@@ -1878,6 +1879,20 @@ class AutomaticLocalizationManager(Node):
             elif not result.complete:
                 self._search_result = result
                 self._reject_or_probe(result.reason, now)
+            elif self._search_is_recheck and not self._recheck_survives(
+                    result):
+                # Spec 5.3: every candidate refuted -> search the whole map
+                # again; nothing is accepted until it completes.
+                self.get_logger().info(
+                    'candidate re-check refuted every hypothesis; searching '
+                    'the whole map again')
+                train = self._frames(FrameRole.TRAIN, now)
+                if isinstance(train, Reject):
+                    self._reject(train.reason, train.detail)
+                    return
+                self._recheck_basis = None
+                self._submit_search(train)
+                self._transition(State.SEARCH_MULTI_VIEW)
             else:
                 self._search_result = result
                 self._validation_submitted = False
@@ -2034,8 +2049,46 @@ class AutomaticLocalizationManager(Node):
         self._probe_moved = False
         self._transition(State.EXECUTE_PROBE)
 
+    def _submit_search(self, train):
+        """
+        Search the whole map once, then re-check its candidates.
+
+        After a probe, a complete earlier search is re-checked with every
+        TRAIN view instead of repeating the map-wide pass, whose cost grows
+        with each view (2026-10-08: 42 s, 84 s, then past the session).
+        """
+        basis = self._recheck_basis
+        self._search_is_recheck = basis is not None
+        if basis is None:
+            self._worker.submit(
+                (self._session, self._map_hash), run_search_job,
+                self._latest_grid, train, self._search_config(),
+                self._parameter('search_timeout_sec'))
+        else:
+            previous, previous_reference = basis
+            self.get_logger().info(
+                f're-checking {len(previous.hypotheses)} hypotheses with '
+                f'view {self._view_id}')
+            self._worker.submit(
+                (self._session, self._map_hash), run_recheck_job,
+                self._latest_grid, previous, previous_reference, train,
+                self._search_config(), self._parameter('search_timeout_sec'))
+        self._search_reference = train[0].T_odom_base
+
+    def _recheck_survives(self, result):
+        """Whether any re-checked hypothesis still meets the score gate."""
+        floor = self._validation_thresholds().min_score
+        return any(h.score >= floor for h in result.hypotheses)
+
     def _start_next_view(self):
         """After a settled probe: drop used HOLDOUT frames, collect anew."""
+        result = self._search_result
+        # Only a complete search keeps every alternative; otherwise the next
+        # view needs a new map-wide search.
+        self._recheck_basis = (
+            (result, self._search_reference)
+            if result is not None and result.complete and result.hypotheses
+            else None)
         self._view_id += 1
         self._keyframes = [frame for frame in self._keyframes
                            if frame.role == FrameRole.TRAIN]
@@ -2088,6 +2141,7 @@ class AutomaticLocalizationManager(Node):
             'motion_policy': self._motion_policy.value,
             'session': self._session,
             'search_complete': None if result is None else result.complete,
+            'search_recheck': bool(getattr(self, '_search_is_recheck', False)),
             'hypothesis_count': (
                 None if result is None else len(result.hypotheses)),
             'ambiguity_reason': reason,

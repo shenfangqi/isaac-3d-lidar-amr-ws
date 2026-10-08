@@ -24,6 +24,7 @@ from isaac_3d_lidar_bringup.localization_hypotheses import (
     cell_center_to_world,
     cluster_hypotheses,
     map_hash,
+    recheck_hypotheses,
     scan_pose_in_map,
     search_multiview,
     SearchConfig,
@@ -317,6 +318,52 @@ def test_map_change_invalidates_result():
     decision = validate_hypotheses(grid, result, train, holdout, FAST,
                                    ValidationThresholds())
     assert decision.reason == RejectReason.MAP_CHANGED.value
+
+
+def _two_views():
+    # View 0 at the reference odom pose, then a 60 deg in-place probe.
+    turn = math.radians(60)
+    odom0, odom1 = SE2(0.3, -0.1, 0.2), SE2(0.3, -0.1, 0.2 + turn)
+    pose0, pose1 = SE2(1.2, 1.0, 0.4), SE2(1.2, 1.0, 0.4 + turn)
+    view0 = _frames(ROOM, pose0, 'TRAIN', odom=odom0)
+    view1 = _frames(ROOM, pose1, 'TRAIN', start_id=20, view_id=1, odom=odom1)
+    return odom0, view0, pose1, view1, odom1
+
+
+def test_recheck_moves_hypotheses_to_the_new_reference():
+    grid = _grid(ROOM, 3.4, 2.4)
+    odom0, view0, pose1, view1, odom1 = _two_views()
+    previous = search_multiview(grid, view0, FAST)
+    assert previous.complete
+    # The new view's frame is the reference: hypotheses must follow it.
+    result = recheck_hypotheses(grid, previous, odom0, view1 + view0, FAST)
+    assert result.complete
+    assert 0 < len(result.hypotheses) <= len(previous.hypotheses)
+    best = max(result.hypotheses, key=lambda h: h.score)
+    assert math.hypot(best.x - pose1.x, best.y - pose1.y) < 0.08
+    assert abs(math.atan2(math.sin(best.yaw - pose1.yaw),
+                          math.cos(best.yaw - pose1.yaw))) < math.radians(3)
+    assert len(best.per_view) == 2
+    holdout = _frames(ROOM, pose1, 'HOLDOUT', start_id=40, view_id=1,
+                      odom=odom1)
+    decision = validate_hypotheses(grid, result, view1 + view0, holdout,
+                                   FAST, ValidationThresholds())
+    assert decision.accepted, decision
+
+
+def test_recheck_refuses_incomplete_search_and_detects_map_change():
+    grid = _grid(ROOM, 3.4, 2.4)
+    odom0, view0, _pose1, view1, _odom1 = _two_views()
+    previous = search_multiview(grid, view0, FAST)
+    incomplete = SearchResult(previous.session, previous.map_hash, False,
+                              previous.hypotheses, 1, 0.1,
+                              RejectReason.SEARCH_INCOMPLETE.value)
+    with pytest.raises(ContractError):
+        recheck_hypotheses(grid, incomplete, odom0, view0 + view1, FAST)
+    grid.data[0] = 100
+    result = recheck_hypotheses(grid, previous, odom0, view0 + view1, FAST)
+    assert not result.complete
+    assert result.reason == RejectReason.MAP_CHANGED.value
 
 
 def test_rotated_map_origin():
