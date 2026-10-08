@@ -21,6 +21,7 @@ Invariants (spec 4.3, 6.3):
   once stopped and is terminal.
 """
 
+from collections import deque
 from dataclasses import dataclass
 import hashlib
 import math
@@ -64,6 +65,9 @@ class GuardConfig:
     # FAST-LIO odometry has short speed spikes at rest; like the manager,
     # only motion lasting this long resets the stopped window.
     stationary_grace_s: float = 0.3
+    # Translation speed comes from odometry positions over this window, not
+    # from the reported twist (see PoseSpeed).
+    speed_window_s: float = 0.5
     yaw_margin_rad: float = math.radians(5.0)
     max_odom_position_jump_m: float = 0.20
     max_odom_yaw_jump_rad: float = 0.35
@@ -119,6 +123,37 @@ class MotionPermission:
     center_drift_m: float = 0.0
 
 
+class PoseSpeed:
+    """
+    Translation speed from odometry positions over a short window.
+
+    After a long turn FAST-LIO's velocity estimate can keep a bias although
+    the position it integrates does not move (2026-10-08: 0.027 m/s reported
+    for 10 s while the base moved 2.5 mm), so stationarity uses positions.
+    """
+
+    def __init__(self, window_s):
+        self.window_s = window_s
+        self._samples = deque()
+
+    def reset(self):
+        self._samples.clear()
+
+    def update(self, stamp_s, x, y):
+        """Add a sample; return the speed, or None until a window is covered."""
+        samples = self._samples
+        if samples and stamp_s <= samples[-1][0]:
+            samples.clear()
+        samples.append((stamp_s, x, y))
+        while len(samples) > 2 and stamp_s - samples[1][0] >= self.window_s:
+            samples.popleft()
+        oldest_stamp, oldest_x, oldest_y = samples[0]
+        span = stamp_s - oldest_stamp
+        if span < self.window_s:
+            return None
+        return math.hypot(x - oldest_x, y - oldest_y) / span
+
+
 class MotionGuardCore:
     """State machine behind the guard node; see the module docstring."""
 
@@ -140,6 +175,7 @@ class MotionGuardCore:
         self._chassis = None            # (connected, blocked, receipt)
         self._still_since = None
         self._moving_since = None
+        self._pose_speed = PoseSpeed(config.speed_window_s)
         self._release_pending = False
         self._progress = None
         self._segment_start = None
@@ -217,6 +253,7 @@ class MotionGuardCore:
                 > self.config.max_odom_yaw_jump_rad)
             if jumped:
                 self._odom = sample
+                self._pose_speed.reset()
                 self._invalidate_session(RejectReason.ODOM_JUMP)
                 return
         self._odom = sample
@@ -224,7 +261,10 @@ class MotionGuardCore:
             step = self._progress.update(sample.yaw)
             if self.budget is not None:
                 self.budget.charge(abs(step), 0.0)
-        moving = (abs(sample.linear) > self.config.stop_linear_mps
+        linear = self._pose_speed.update(
+            sample.stamp_ns * 1e-9, sample.x, sample.y)
+        # Until a window is covered the translation is unknown: not still.
+        moving = (linear is None or linear > self.config.stop_linear_mps
                   or abs(sample.angular) > self.config.stop_angular_rps)
         if moving:
             if self._moving_since is None:
