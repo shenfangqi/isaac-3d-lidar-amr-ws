@@ -1,5 +1,11 @@
 # Current authoritative project state
 
+## Issue #13 guarded activation on the real robot: 2026-10-08
+
+- Jetson on main `6ae6821`. `--automatic-activate --localization-strategy segmented_rotation --localization-motion guarded --motion-profile docs/evidence/issue13_motion_profile_accepted_2026-10-06.json --operator-rotation-clear --operator-present` (`CARBOT_INITIAL_POSE_TIMEOUT=320`) reached `READY` without a probe, at the forced_probe_04 placement. Pose `(2.670, 4.163, 52.3 deg)`, score 0.925, AMCL 2.0 cm/0.9 deg. All eight Nav2 nodes active, no goal. The velocity smoother was the only `/cmd_vel_command` publisher; guard `RELEASED`.
+- 420 s monitor: 992 `/cmd_vel` samples, 0 nonzero; wheel-tick deltas 0/0. Evidence: `docs/evidence/issue13_guarded_activate_2026-10-08.md`, bag `calibration_data/2026-10-08_issue13_activate_probe_01`. Stack stopped afterwards; web teleop restored disarmed.
+- Still open: a natural probe rotation under `--automatic-activate`. It needs an ambiguous placement (none found yet in 5 runs).
+
 ## Issue #13 probe rotation on the real robot: 2026-10-07
 
 - The full segmented-rotation probe ran on the robot: manager PLAN_PROBE → guard rotation (≈85 deg of a 90 deg probe, 3.7 deg after zero) → settle → second view → CANDIDATE_READY with the guard RELEASED; the operator confirmed both poses. Evidence: `docs/evidence/issue13_probe_rotation_2026-10-07.md`, bags `calibration_data/2026-10-07_issue13_{probe_rotation_01..04,forced_probe_01..04}`.
