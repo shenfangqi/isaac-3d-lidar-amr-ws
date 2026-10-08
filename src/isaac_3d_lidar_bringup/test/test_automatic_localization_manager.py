@@ -80,6 +80,9 @@ def manager():
     node._configure_probe_link()
     node._worker = None
     node._reset_confined_session()
+    node._pose_speed = scope['PoseSpeed'](
+        defaults['stationary_speed_window_sec'])
+    node._last_twist_linear_speed = math.inf
     node._latest_grid = None
     node._map_hash = ''
     node._stationary_only = False
@@ -490,6 +493,36 @@ def test_scan_is_retried_after_its_exact_time_transform_arrives(manager):
         ('map', 'base_footprint', 9900000000),
         ('map', 'base_footprint', 9900000000),
     ]
+
+
+def _feed_odom(manager, count, x_step, twist_x, start_sec=30):
+    manager._accept_source = lambda *args: True
+    manager._last_odom_pose = manager._last_odom_yaw = None
+    manager._stationary_since = manager._moving_since = None
+    for index in range(count):
+        ns = index * 100_000_000
+        manager._on_odom(NS(
+            header=NS(stamp=NS(sec=start_sec + ns // 10**9,
+                               nanosec=ns % 10**9)),
+            pose=NS(pose=NS(position=NS(x=index * x_step, y=0.0),
+                            orientation=_quaternion_ns(0.0))),
+            twist=NS(twist=NS(linear=NS(x=twist_x, y=0.0),
+                              angular=NS(z=0.0)))))
+
+
+def test_biased_twist_at_rest_is_stationary(manager):
+    # 2026-10-08 real robot: FAST-LIO's twist stayed at ~0.027 m/s after a
+    # long probe turn while the position did not move.
+    _feed_odom(manager, 12, 0.0, 0.027)
+    assert manager._stationary_since is not None
+    assert manager._moving_since is None
+    assert manager._last_twist_linear_speed == pytest.approx(0.027)
+
+
+def test_translation_with_zero_twist_is_moving(manager):
+    _feed_odom(manager, 12, 0.005, 0.0)        # 0.05 m/s from positions
+    assert manager._stationary_since is None
+    assert manager._last_linear_speed == pytest.approx(0.05)
 
 
 def test_stop_window_is_reset_during_motion_grace(manager):

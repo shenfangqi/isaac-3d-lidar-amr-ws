@@ -75,6 +75,7 @@ from isaac_3d_lidar_bringup.localization_hypotheses import (
     ValidationThresholds,
 )
 from isaac_3d_lidar_bringup.localization_motion_guard import (
+    PoseSpeed,
     ProbeLink,
     profile_hash,
 )
@@ -281,6 +282,9 @@ class AutomaticLocalizationManager(Node):
         self._stationary_since = None
         self._moving_since = None
         self._last_linear_speed = math.inf
+        self._last_twist_linear_speed = math.inf
+        self._pose_speed = PoseSpeed(
+            self._parameter('stationary_speed_window_sec'))
         self._last_angular_speed = math.inf
         self._sensors_ready_since = None
         self._latest_map = None
@@ -366,6 +370,9 @@ class AutomaticLocalizationManager(Node):
             'max_stationary_linear_speed': 0.02,
             'max_stationary_angular_speed': 0.03,
             'stationary_motion_grace_sec': 0.3,
+            # Translation speed comes from odometry positions over this
+            # window; FAST-LIO's twist can stay biased after a long turn.
+            'stationary_speed_window_sec': 0.5,
             'max_odom_position_jump': 0.20,
             'max_odom_yaw_jump': 0.35,
             'min_scan_beams_for_motion': 10,
@@ -703,6 +710,7 @@ class AutomaticLocalizationManager(Node):
                 or yaw_step > self._parameter('max_odom_yaw_jump')
             ):
                 self._sensors_ready_since = None
+                self._pose_speed.reset()
                 if self._state == State.ROTATE_AND_SCORE:
                     self._fail('odometry jumped during localization')
                 elif self._state in CONFINED_STATES:
@@ -723,12 +731,18 @@ class AutomaticLocalizationManager(Node):
         self._last_odom_time = now
 
         twist = message.twist.twist
-        linear = math.hypot(twist.linear.x, twist.linear.y)
+        stamp = message.header.stamp
+        linear = self._pose_speed.update(
+            stamp.sec + stamp.nanosec * 1e-9, pose.position.x,
+            pose.position.y)
         angular = abs(twist.angular.z)
-        self._last_linear_speed = linear
+        self._last_linear_speed = math.inf if linear is None else linear
+        self._last_twist_linear_speed = math.hypot(
+            twist.linear.x, twist.linear.y)
         self._last_angular_speed = angular
         if (
-            linear <= self._parameter('max_stationary_linear_speed')
+            linear is not None
+            and linear <= self._parameter('max_stationary_linear_speed')
             and angular <= self._parameter('max_stationary_angular_speed')
         ):
             self._moving_since = None
@@ -2193,6 +2207,10 @@ class AutomaticLocalizationManager(Node):
             'odom_linear_speed_mps': (
                 round(self._last_linear_speed, 4)
                 if math.isfinite(self._last_linear_speed) else None
+            ),
+            'odom_twist_linear_speed_mps': (
+                round(self._last_twist_linear_speed, 4)
+                if math.isfinite(self._last_twist_linear_speed) else None
             ),
             'odom_angular_speed_rps': (
                 round(self._last_angular_speed, 4)

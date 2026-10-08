@@ -20,6 +20,7 @@ from isaac_3d_lidar_bringup.localization_motion_guard import (
     MotionGuardCore,
     MotionPermission,
     OdomSample,
+    PoseSpeed,
     SweepVerdict,
 )
 from isaac_3d_lidar_bringup.localization_rotation_policy import (
@@ -52,6 +53,8 @@ class Sim:
         self.feed_chassis = True
         self.chassis_blocked = False
         self.noise = lambda now: 0.0      # extra odometry angular speed
+        self.twist_linear = 0.0         # reported linear speed (may be biased)
+        self.vx = 0.0                   # real translation speed
         self.lease = None               # request re-sent at 10 Hz
         self.sequence = 0
         self.commands = []
@@ -76,6 +79,7 @@ class Sim:
         for _ in range(count):
             self.now += dt
             self.yaw += self.rate * dt
+            self.x += self.vx * dt
             self.stamp += int(dt * 1e9)
             if self.lease is not None and self.now >= self._next_lease:
                 self.guard.on_request(self.lease, self.now)
@@ -84,7 +88,8 @@ class Sim:
                 self.guard.on_odom(OdomSample(
                     self.stamp, self.x, self.y,
                     math.atan2(math.sin(self.yaw), math.cos(self.yaw)),
-                    0.0, self.rate + self.noise(self.now), self.now))
+                    self.twist_linear, self.rate + self.noise(self.now),
+                    self.now))
             if self.feed_chassis:
                 self.guard.on_chassis(True, self.chassis_blocked, self.now)
             query = self.guard.sweep_query()
@@ -101,6 +106,9 @@ class Sim:
         return self
 
     def handshake(self):
+        # The node receives odometry long before the first request; fill the
+        # position window the stationarity check needs.
+        self.step(12)
         self.request(MotionOperation.STOP)
         self.step(15)
         assert self.guard.state == GuardState.STOPPED
@@ -466,6 +474,36 @@ def test_sustained_motion_clears_stopped():
     sim = Sim().handshake()
     sim.noise = lambda now: 0.05
     sim.step(10)                      # 0.5 s of motion > 0.3 s grace
+    assert not sim.status.stopped
+
+
+def test_pose_speed_needs_a_full_window():
+    speed = PoseSpeed(0.5)
+    assert speed.update(10.0, 0.0, 0.0) is None
+    assert speed.update(10.3, 0.0, 0.0) is None
+    assert speed.update(10.5, 0.01, 0.0) == pytest.approx(0.02)
+    assert speed.update(11.0, 0.01, 0.0) == pytest.approx(0.0)
+    # A stamp going backwards starts a new window.
+    assert speed.update(10.9, 0.01, 0.0) is None
+
+
+def test_biased_twist_at_rest_still_stops_and_releases():
+    # 2026-10-08 real robot: after a 166 deg probe FAST-LIO reported
+    # 0.02-0.04 m/s for 10 s while the base moved 2.5 mm; the guard stayed
+    # STOPPING and the manager failed with "probe rotation did not settle".
+    sim = Sim()
+    sim.twist_linear = 0.027
+    sim.handshake()
+    assert sim.status.stopped
+    sim.request(MotionOperation.RELEASE)
+    sim.step(5)
+    assert sim.guard.state == GuardState.RELEASED
+
+
+def test_translation_clears_stopped_even_with_zero_twist():
+    sim = Sim().handshake()
+    sim.vx = 0.05
+    sim.step(16)                      # window average now above 0.02 m/s
     assert not sim.status.stopped
 
 
