@@ -1516,3 +1516,14 @@ def test_ready_pose_is_saved_only_when_amcl_is_confident(manager, tmp_path):
     manager._maybe_save_pose(20.0)
     assert localization_saved_pose.load_pose(
         str(path), 'ab' * 32, time.time(), 60.0)[0].x == pytest.approx(-0.77)
+
+
+def test_optional_replay_trace_does_not_change_status_decision(manager):
+    baseline = manager._confined_status()
+    assert 'localization_diagnostics' not in baseline
+    manager.params['publish_localization_diagnostics'] = True
+    traced = manager._confined_status()
+    trace = traced.pop('localization_diagnostics')
+    assert traced == baseline
+    assert trace == {'schema': 1, 'train': [], 'holdout': [],
+                     'result': None, 'decision': None}

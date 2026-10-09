@@ -15,7 +15,7 @@ that the search never saw.
 """
 
 from array import array
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 import hashlib
 import math
 import multiprocessing
@@ -131,6 +131,31 @@ class PosePrior:
                 <= self.xy_tolerance_m
                 and _angle_distance(pose.yaw, self.pose.yaw)
                 <= self.yaw_tolerance_rad)
+
+
+def diagnostic_snapshot(result, train, holdout, decision=None):
+    """
+    Small replay trace: actual worker inputs and every competing pose.
+
+    Scan payloads stay in the bag. Source stamps identify exactly which ones
+    were used; transforms avoid approximating TF/executor timing offline.
+    This is evidence only, never an additional acceptance path.
+    """
+    def frame_ref(frame):
+        return {
+            'id': frame.id, 'session': frame.session,
+            'stamp_ns': frame.stamp_ns, 'view_id': frame.view_id,
+            'role': frame.role.value,
+            'T_odom_base': asdict(frame.T_odom_base),
+            'T_base_scan': asdict(frame.T_base_scan),
+        }
+    return {
+        'schema': 1,
+        'train': [frame_ref(f) for f in train],
+        'holdout': [frame_ref(f) for f in holdout],
+        'result': None if result is None else asdict(result),
+        'decision': None if decision is None else asdict(decision),
+    }
 
 
 def grid_snapshot(message):

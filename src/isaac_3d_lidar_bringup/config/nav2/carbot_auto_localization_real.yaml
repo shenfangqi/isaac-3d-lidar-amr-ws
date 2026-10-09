@@ -19,6 +19,8 @@ automatic_localization_manager:
     start_armed: false
     # Pending real positive/negative datasets and supervised acceptance.
     validation_only: true
+    # Opt-in exact worker frame/candidate trace for future bag replay.
+    publish_localization_diagnostics: false
     max_future_stamp_sec: 0.05
     max_tf_future_sec: 0.6
     # AMCL stamps map->odom transform_tolerance ahead; freshness and the
