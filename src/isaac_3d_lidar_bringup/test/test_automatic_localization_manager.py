@@ -1453,8 +1453,8 @@ def test_validation_receives_the_saved_pose_at_the_reference(
     stationary._tick()
     name, arguments = stationary._worker.jobs[-1]
     assert name == 'run_validation_job'
-    prior, per_view_gates = arguments[7], arguments[8]
-    assert per_view_gates is False          # no translation in this session
+    prior, gates = arguments[7], arguments[8]
+    assert gates == ()                      # no translation in this session
     # Session-start odometry equals the keyframes' odometry in this fixture.
     assert (prior.pose.x, prior.pose.y, prior.pose.yaw) == (
         pytest.approx(1.0), pytest.approx(2.0), pytest.approx(0.5))
@@ -1610,8 +1610,8 @@ def test_decide_mode_revalidates_the_3d_leader_as_a_prior(segmented, tmp_path):
     manager._tick()                     # 3D leader -> 2D validation with prior
     name, arguments = manager._worker.jobs[-1]
     assert name == 'run_validation_job'
-    prior, per_view_gates = arguments[7], arguments[8]
-    assert per_view_gates is False          # no translation in this session
+    prior, gates = arguments[7], arguments[8]
+    assert gates == ()                      # no translation in this session
     assert (prior.pose.x, prior.pose.y) == (4.0, 6.0)
     assert prior.xy_tolerance_m == pytest.approx(0.05)
     _guard(manager, 'STOPPED')

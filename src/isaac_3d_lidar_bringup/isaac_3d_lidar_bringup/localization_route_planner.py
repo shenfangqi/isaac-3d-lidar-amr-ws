@@ -206,10 +206,11 @@ def _check_points(fields, points, required):
     worst = float(margin.min())
     if worst >= 0:
         return worst, ''
-    index = int(np.argmin(margin))
-    occ = float(occupied.clearance(points[index:index + 1, 0],
-                                   points[index:index + 1, 1])[0])
-    reason = ('OBSTACLE_IN_SWEEP' if occ - required[index] < 0
+    # Any violation that is close to an occupied cell is an obstacle: the
+    # body would hit it before reaching unknown space behind it.
+    violating = margin < 0
+    occ = occupied.clearance(points[violating, 0], points[violating, 1])
+    reason = ('OBSTACLE_IN_SWEEP' if np.any(occ - required[violating] < 0)
               else 'UNKNOWN_OR_OUTSIDE_IN_SWEEP')
     return worst, reason
 
@@ -384,37 +385,54 @@ class PlanResult:
     initial_objective: float = 0.0
 
 
-def _pairwise(observation, layers, poses_per_stop):
+def _pairwise(observation, layers, poses_per_stop, focus=None):
     """
     Predicted margin per candidate pair.
 
-    Layers are averaged (the 3D re-check combines bands) and views are
-    averaged (the production matcher weights views equally).
+    Layers are averaged (the 3D re-check combines bands).  Over the stops
+    the best one counts: validation runs after every segment and its margin
+    uses the current view's HOLDOUT, so one telling stop is enough.
     """
-    count = len(poses_per_stop[0])
-    totals = {pair: 0.0 for pair in itertools.combinations(range(count), 2)}
+    if focus is None:
+        pairs = itertools.combinations(range(len(poses_per_stop[0])), 2)
+    else:
+        # The leader (first focus index) against every other contender: the
+        # route must tell the leader apart from each of them, whichever is
+        # true; if the leader is wrong it falls behind and the next segment
+        # is planned around the new leader.
+        pairs = ((focus[0], other) for other in focus[1:])
+    best = {pair: 0.0 for pair in pairs}
     for stop in poses_per_stop:
-        for a, b in totals:
-            totals[(a, b)] += sum(observation.separability(layer, stop[a], stop[b])
-                                  for layer in layers) / len(layers)
-    return {pair: value / len(poses_per_stop) for pair, value in totals.items()}
+        for a, b in best:
+            best[(a, b)] = max(best[(a, b)], sum(
+                observation.separability(layer, stop[a], stop[b])
+                for layer in layers) / len(layers))
+    return best
 
 
-def plan_route(fields, model, observation, candidates, config=PlannerConfig()):
+def plan_route(fields, model, observation, candidates, config=PlannerConfig(),
+               focus=None):
     """
-    Search a commonly safe route that separates every candidate pair.
+    Search a commonly safe route that separates the contending candidates.
 
     ``candidates`` is a sequence of ``(pose, PoseBounds)`` with poses at the
-    current time.  Every candidate is kept; none is dropped to make a route
-    feasible.  The objective is the smallest pair difference (hardest pair)
-    accumulated over the current view and every stop of the route.
+    current time.  Safety is checked for *every* candidate; none is dropped
+    to make a route feasible.  The objective is the smallest predicted
+    margin (hardest pair), taking for each pair its best stop (the current
+    view included).  Pairs are all candidates by default; with ``focus`` (the
+    leader first, then the candidates close enough to keep validation
+    ambiguous) they are the leader against each other contender.
     """
     candidates = tuple(candidates)
     if len(candidates) < 2:
         raise ContractError('route planning needs at least two candidates')
+    if focus is not None:
+        focus = tuple(dict.fromkeys(focus))
+        if len(focus) < 2 or any(not 0 <= i < len(candidates) for i in focus):
+            raise ContractError('focus needs at least two valid candidate indices')
     layers = config.layers or tuple(observation.layers)
     start = [tuple(float(v) for v in pose) for pose, _ in candidates]
-    initial = _pairwise(observation, layers, [start])
+    initial = _pairwise(observation, layers, [start], focus)
     initial_objective = min(initial.values())
     if initial_objective >= config.min_difference:
         return PlanResult(DISTINGUISHABLE_NOW, (), initial_objective, initial, 0,
@@ -431,8 +449,11 @@ def plan_route(fields, model, observation, candidates, config=PlannerConfig()):
         next_frontier = []
         for prefix in frontier:
             for primitive in primitives:
-                if prefix and prefix[-1][0] == ROTATE and primitive[0] == ROTATE:
-                    continue             # consecutive turns are one turn
+                if (prefix and prefix[-1][0] == ROTATE and primitive[0] == ROTATE
+                        and prefix[-1][1] * primitive[1] < 0):
+                    continue             # opposite turns cancel each other
+                # Same-direction turns may follow each other: a runtime turn
+                # is at most 90 deg, so a half turn needs two segments.
                 route = prefix + (primitive,)
                 forward = sum(v for k, v in route if k == FORWARD)
                 turning = sum(abs(v) for k, v in route if k == ROTATE)
@@ -455,7 +476,7 @@ def plan_route(fields, model, observation, candidates, config=PlannerConfig()):
                 next_frontier.append(route)
                 stops = [start] + [[c.stops[k] for c in checks]
                                    for k in range(len(route))]
-                pairs = _pairwise(observation, layers, stops)
+                pairs = _pairwise(observation, layers, stops, focus)
                 objective = min(pairs.values())
                 cost = forward + 0.2 * turning
                 key = (objective >= config.min_difference, objective, -cost)
@@ -485,10 +506,10 @@ def plan_route(fields, model, observation, candidates, config=PlannerConfig()):
                       initial_objective)
 
 
-def run_route_plan_job(static_map, layers, candidates, model, config):
+def run_route_plan_job(static_map, layers, candidates, model, config, focus=None):
     """Worker entry point: build the fields and observation model, then plan."""
     fields = (ClearanceField(static_map),
               ClearanceField(static_map, blocked=static_map.data == 100,
                              outside_blocked=False))
     observation = ObservationModel(static_map, layers)
-    return plan_route(fields, model, observation, candidates, config)
+    return plan_route(fields, model, observation, candidates, config, focus)

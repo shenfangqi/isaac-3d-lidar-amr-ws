@@ -748,7 +748,7 @@ def _support_extent(evaluate, center, floor, direction, step, limit):
 
 def validate_hypotheses(grid, result, train_frames, holdout_frames, config,
                         thresholds, deadline=None, cancel_token=None,
-                        prior=None, per_view_gates=False):
+                        prior=None, gate_frames=()):
     """
     Re-score every refined cluster on independent HOLDOUT frames.
 
@@ -757,9 +757,11 @@ def validate_hypotheses(grid, result, train_frames, holdout_frames, config,
     the prior and passes every gate; a clear winner away from the prior is
     refused.  The prior never lowers a gate.
 
-    With ``per_view_gates`` (after a translation probe) the winner must also
-    pass the absolute gates in every HOLDOUT view on its own, so a good fit
-    at one place cannot average away a contradiction at another.
+    ``gate_frames`` (HOLDOUT frames of earlier views, after a translation)
+    are not part of the margin, which stays on the current view like after
+    a rotation; the winner must pass the absolute gates in each of their
+    views and in the current one, so a good fit at one place cannot hide a
+    contradiction at another.
     """
     if not result.complete:
         return QualityDecision(False, result.reason or
@@ -857,9 +859,11 @@ def validate_hypotheses(grid, result, train_frames, holdout_frames, config,
     if yaw_extent is None or yaw_extent > thresholds.max_support_yaw_rad:
         return QualityDecision(False, RejectReason.UNOBSERVABLE_AXIS.value,
                                runner_up_score=runner_up, holdout=summary)
-    if per_view_gates:
+    if gate_frames:
         views = {}
-        for frame in holdout:
+        for frame in tuple(gate_frames) + holdout:
+            if frame.role != FrameRole.HOLDOUT or frame.id in train_ids:
+                raise ContractError('gate frames must be independent HOLDOUT frames')
             views.setdefault(frame.view_id, []).append(frame)
         for frames in views.values():
             if not passes(score_pose(grid, best_pose, frames, reference, config,
@@ -894,12 +898,12 @@ def run_recheck_job(grid, previous, previous_reference, train_frames, config,
 
 
 def run_validation_job(grid, result, train_frames, holdout_frames, config,
-                       thresholds, timeout_s, prior=None, per_view_gates=False):
+                       thresholds, timeout_s, prior=None, gate_frames=()):
     """Worker entry point for validate_hypotheses."""
     return validate_hypotheses(grid, result, train_frames, holdout_frames,
                                config, thresholds,
                                deadline=time.monotonic() + timeout_s,
-                               prior=prior, per_view_gates=per_view_gates)
+                               prior=prior, gate_frames=gate_frames)
 
 
 def _worker_main(connection, function, arguments):

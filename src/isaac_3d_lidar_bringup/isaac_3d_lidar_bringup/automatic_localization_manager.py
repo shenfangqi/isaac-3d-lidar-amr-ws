@@ -806,7 +806,7 @@ class AutomaticLocalizationManager(Node):
             return False
         self._surface_poses = tuple((h.x, h.y, h.yaw) for h in ranked)
         self._surface_original = decision
-        self._surface_inputs = (train, holdout)
+        self._surface_inputs = (train, holdout, self._validation_inputs[2])
         self._worker.submit((self._session, self._map_hash), run_surface_check_job,
                             self._surface_vertices, points, self._surface_poses,
                             self._surface_config)
@@ -833,7 +833,7 @@ class AutomaticLocalizationManager(Node):
         if self._surface_policy != 'decide' or not result.resolved:
             self._finish_validation(self._surface_original, now)
             return
-        train, holdout = self._surface_inputs
+        train, holdout, gates = self._surface_inputs
         prior = PosePrior(SE2(*leader),
                           float(self._parameter('surface_prior_xy_tolerance_m')),
                           float(self._parameter('surface_prior_yaw_tolerance_rad')))
@@ -841,8 +841,7 @@ class AutomaticLocalizationManager(Node):
             (self._session, self._map_hash), run_validation_job,
             self._latest_grid, self._search_result, train, holdout,
             self._search_config(), self._validation_thresholds(),
-            self._parameter('verification_timeout_sec'), prior,
-            getattr(self, '_translated', False))
+            self._parameter('verification_timeout_sec'), prior, gates)
         self._surface_stage = 'validating'
 
     def _finish_validation(self, decision, now):
@@ -965,7 +964,7 @@ class AutomaticLocalizationManager(Node):
         self._diagnostic_train = ()
         self._diagnostic_holdout = ()
         self._diagnostic_decision = None
-        self._validation_inputs = ((), ())
+        self._validation_inputs = ((), (), ())
         self._surface_clouds = deque(maxlen=80)
         self._surface_stage = None
         self._surface_original = None
@@ -2360,10 +2359,14 @@ class AutomaticLocalizationManager(Node):
                                      'no qualified HOLDOUT frames')
                     return
                 train = self._frames(FrameRole.TRAIN, now)
+                # Margin on the current view; earlier views (kept only after
+                # a translation) only gate the winner per view.
+                gates = tuple(f for f in holdout if f.view_id != self._view_id)
+                holdout = tuple(f for f in holdout if f.view_id == self._view_id)
                 self._diagnostic_train = (
                     () if isinstance(train, Reject) else tuple(train))
                 self._diagnostic_holdout = tuple(holdout)
-                self._validation_inputs = (train, holdout)
+                self._validation_inputs = (train, holdout, gates)
                 self._surface_stage = None
                 self._worker.submit(
                     (self._session, self._map_hash), run_validation_job,
@@ -2372,7 +2375,7 @@ class AutomaticLocalizationManager(Node):
                     self._parameter('verification_timeout_sec'),
                     None if isinstance(train, Reject)
                     else self._pose_prior(train),
-                    getattr(self, '_translated', False))
+                    gates)
                 self._validation_submitted = True
                 return
             outcome = self._worker.poll()
@@ -2413,7 +2416,7 @@ class AutomaticLocalizationManager(Node):
                     self._finish_validation(self._surface_original, now)
             else:
                 self._diagnostic_decision = payload
-                train, holdout = self._validation_inputs
+                train, holdout, gates = self._validation_inputs
                 if (isinstance(train, Reject)
                         or not self._start_surface_check(payload, train, holdout, now)):
                     self._finish_validation(payload, now)
@@ -2511,12 +2514,14 @@ class AutomaticLocalizationManager(Node):
         Plausible candidates at the current odometry pose, best first.
 
         Every candidate within ``route_candidate_window`` of the best
-        HOLDOUT score is kept (up to ``route_max_candidates``); none is
-        dropped to make a route feasible.
+        HOLDOUT score is kept (up to ``route_max_candidates``) for safety;
+        none is dropped to make a route feasible.  Also returns the indices
+        of those within the validation margin (+0.05) of the leader: only
+        they can keep the verdict ambiguous, so the route separates them.
         """
         result = self._search_result
         if result is None or not result.hypotheses or self._last_odom_pose is None:
-            return ()
+            return (), ()
         by_id = {h.cluster_id: h for h in result.hypotheses}
         decision = getattr(self, '_diagnostic_decision', None)
         ranked = ([(by_id[c], score) for c, score in decision.holdout if c in by_id]
@@ -2525,13 +2530,15 @@ class AutomaticLocalizationManager(Node):
                                                      key=lambda h: -h.score)])
         best = ranked[0][1]
         window = float(self._parameter('route_candidate_window'))
-        keep = [h for h, score in ranked if score >= best - window]
-        keep = keep[:int(self._parameter('route_max_candidates'))]
+        kept = [(h, score) for h, score in ranked if score >= best - window]
+        kept = kept[:int(self._parameter('route_max_candidates'))]
+        contend = self._validation_thresholds().min_margin + 0.05
+        focus = tuple(i for i, (_h, score) in enumerate(kept) if score >= best - contend)
         current = SE2(*self._last_odom_pose)
         return tuple(
             seed_pose_at_current_time(SE2(h.x, h.y, h.yaw), self._search_reference,
                                       current)
-            for h in keep)
+            for h, _score in kept), focus
 
     def _route_layers(self, static_map):
         """Observation layers: the navigation map, plus mesh bands if loaded."""
@@ -2552,7 +2559,7 @@ class AutomaticLocalizationManager(Node):
     def _tick_plan_route(self, now, state_age):
         """Plan a commonly safe route in the worker; fall back to rotation."""
         if not getattr(self, '_route_submitted', False):
-            poses = self._route_candidates()
+            poses, focus = self._route_candidates()
             if len(poses) < 2:
                 self._route_status = {'status': 'TOO_FEW_CANDIDATES'}
                 self._transition(State.PLAN_PROBE)
@@ -2570,7 +2577,8 @@ class AutomaticLocalizationManager(Node):
             self._worker.submit((self._session, self._map_hash), run_route_plan_job,
                                 static_map, self._route_layers(static_map),
                                 tuple(((p.x, p.y, p.yaw), bounds) for p in poses),
-                                self._route_model(), config)
+                                self._route_model(), config,
+                                focus if len(focus) >= 2 else None)
             self._route_submitted = True
             return
         outcome = self._worker.poll()
