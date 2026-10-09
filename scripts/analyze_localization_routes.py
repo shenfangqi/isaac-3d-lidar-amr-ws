@@ -96,9 +96,13 @@ def main():
         report = json.loads(path.read_text())
         view = next(v for v in report['views'] if v['view_id'] == args.view)
         chosen = plausible(view, args.window, args.limit)
+        best = chosen[0]['holdout']['score'] if chosen else 0.0
+        contend = report['thresholds']['min_margin'] + 0.05
+        focus = tuple(i for i, c in enumerate(chosen)
+                      if c['holdout']['score'] >= best - contend)
         poses = [(c['pose_at_view']['x'], c['pose_at_view']['y'],
                   c['pose_at_view']['yaw']) for c in chosen]
-        entry = {'report': str(path), 'view': args.view,
+        entry = {'report': str(path), 'view': args.view, 'contenders': len(focus),
                  'measured_2d_margin': view['score_margin'],
                  'candidates': [{'pose_at_view': c['pose_at_view'],
                                  'holdout_2d': c['holdout']['score']} for c in chosen]}
@@ -115,7 +119,8 @@ def main():
             config = PlannerConfig(max_depth=args.depth, min_difference=args.min_difference,
                                    time_budget_s=args.budget, layers=names)
             result = plan_route(fields, model, observation,
-                                [(p, bounds) for p in poses], config)
+                                [(p, bounds) for p in poses], config,
+                                focus if len(focus) >= 2 else None)
             entry[label] = {
                 'status': result.status, 'route': describe(result.route),
                 'route_primitives': [list(p) for p in result.route],
@@ -131,7 +136,7 @@ def main():
         measured = (f"measured 2D margin {entry['measured_2d_margin']:.3f}"
                     + (f", 3D gap {entry['measured_3d_gap']:.3f}"
                        if 'measured_3d_gap' in entry else ''))
-        print(f'{name}: {len(poses)} candidates; {measured}')
+        print(f'{name}: {len(poses)} candidates ({len(focus)} contending); {measured}')
         for label in ('2d_scan_band', 'all_layers'):
             e = entry[label]
             print(f'   {label:13s} {e["status"]:27s} now {e["initial_objective"]:.2f} '

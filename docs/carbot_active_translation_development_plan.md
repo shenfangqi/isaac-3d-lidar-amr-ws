@@ -115,3 +115,47 @@
 5. 完成模拟闭环，再提前通知用户充电开机做平移停车标定，最后进行至少 50 次全自动验收。不能用旧静止包替代平移验收。
 
 运行测试可使用现有 `ros2-dev-humble` 容器，不启动 ROS 节点；source Humble，并将 `src/isaac_3d_lidar_bringup:src/carbot_nav_recovery` 加入 PYTHONPATH，保留原 ROS PYTHONPATH。新增测试：`test_localization_translation.py`、`test_localization_active_probe.py`；回归：`test_localization_hypotheses.py`、`test_localization_motion_guard.py`、`test_localization_rotation_policy.py`。不需要用户开机来做前 3 项离线开发。
+
+## 进度记录（2026-10-10 夜间离线开发，分支 `feature/issue13-active-translation`）
+
+用户睡眠期间按本计划执行离线部分；小车已关机，阶段 5 未做。代码已提交到分支，**未合并、未部署**。
+
+### 阶段 1：完成
+- `localization_route_planner.py` 实现全候选地图扫掠和有界前瞻规划，状态区分为 DISTINGUISHABLE_NOW / ROUTE_FOUND / NO_COMMON_SAFE_ACTION / NOT_FOUND_WITHIN_BUDGET / INDISTINGUISHABLE_IN_MODEL。
+  - 净空用 4 倍细分网格上的精确距离变换计算，只会低估。
+  - 未知区和地图外一律不可通行。
+- 观测预测与生产打分一致（终点命中率），两个候选的分差按“任一个为真值”取较小者。
+- `scripts/analyze_localization_routes.py` 生成场地分析，写入 `docs/carbot_localization_site_analysis.md`。
+
+### 阶段 3 中的三维复核：完成
+- 这是阶段 1 分析之后提前实现的主路径。
+- 新模块 `localization_surface_check.py`；manager 新增 `surface_recheck_policy`，取值 off / record / decide：
+  - launch 默认 record，只记录证据；
+  - decide 需要在启动时用 `--surface-recheck decide` 显式打开。三维给出的第一名会作为先验，再跑一遍完整的二维验证，原有门槛和走廊可观测性检查照样生效。
+
+### 阶段 2：完成（默认关闭）
+- `localization_translation_contracts.py` 是独立的带版本号协议，包括平移请求、地图路线证据、平移状态和平移标定文件。
+- 守卫节点里并联了 LinearProbeGuard，与旋转核心共用唯一的速度发布者，两者互斥。
+- 只有 ACCEPTED 且与本车匹配的平移标定文件才会放行；**这样的标定文件目前不存在**。
+- 已通过节点级隔离测试：在独立 DDS 域中，前进按地图证据放行，证据拒绝时立即停车。
+
+### 阶段 3：完成（默认关闭）
+- 新增 PLAN_ROUTE、EXECUTE_TRANSLATION、SETTLE_TRANSLATION 三个状态。规划在 worker 中进行，每段结束后重新规划；找不到路线时退回原来的旋转探测。
+- 执行中每个周期都在静态地图上，对所有候选重新检查剩余路径，并把证据发给守卫。
+- 平移之后的验证：分差只用当前视角，之前各视角的 HOLDOUT 用于逐视角的绝对门槛。
+- 视角筛选在位置分开后，改为按朝向加位置挑选。
+- 启动脚本新增 `--localization-translation guarded --linear-profile JSON`：启动前用 `scripts/check_linear_profile.py` 校验，再拷贝到 Jetson 并核对 sha256。
+
+### 阶段 4：完成
+- `localization_closed_loop.py` 加上 `scripts/simulate_localization_closed_loop.py`，在仿真中全部复用生产代码。
+- 解析场景验证了多步规划、每段重规划、二维排名被推翻后重新全图搜索，以及在生产门槛下从不出现错误的 READY。
+- 闭环仿真发现并修正了两个问题：平移后把各视角平均进分差会稀释信息；规划器的目标函数（改为取最好的停留点、只针对竞争者）。
+
+### 测试
+- 包内全部测试：465 个通过、1 个跳过，lint 全部通过。
+
+### 下次需要设备时的任务（阶段 5）
+1. **部署，并在实车上用 record 模式运行三维复核。** 只需要静止定位，车不动。在之前定不下来的位置积累三维结论和人工真值，确认之后再在验收中使用 decide 模式。
+2. **平移标定**（受控场地，需要有人在场）：测量线速度、停车尾程、侧滑和看门狗，生成平移标定文件并审核到 ACCEPTED。
+   - 不过分析表明，左下窄区内对所有候选都安全的平移动作几乎不存在，平移的价值有限，优先级应该排在三维复核之后。
+3. **最终验收**：随手放车至少 50 次，要求错误 READY 为 0、自动成功率至少 95%、每次不超过 360 s。
