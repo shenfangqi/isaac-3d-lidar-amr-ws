@@ -65,6 +65,7 @@ from isaac_3d_lidar_bringup.localization_contracts import (
     validate_strategy_configuration,
 )
 from isaac_3d_lidar_bringup.localization_hypotheses import (
+    diagnostic_snapshot,
     grid_snapshot,
     map_hash,
     PosePrior,
@@ -359,6 +360,7 @@ class AutomaticLocalizationManager(Node):
             'nomotion_update_service': '/request_nomotion_update',
             'start_armed': False,
             'validation_only': True,
+            'publish_localization_diagnostics': False,
             'max_future_stamp_sec': 0.05,
             'max_tf_future_sec': 0.6,
             # Must equal AMCL transform_tolerance (carbot_amcl_real.yaml).
@@ -639,6 +641,9 @@ class AutomaticLocalizationManager(Node):
         self._recheck_basis = None
         self._coarse_cache = None
         self._validation_submitted = False
+        self._diagnostic_train = ()
+        self._diagnostic_holdout = ()
+        self._diagnostic_decision = None
         self._reject_reason = ''
 
     def _cancel_worker(self):
@@ -2013,6 +2018,9 @@ class AutomaticLocalizationManager(Node):
                                      'no qualified HOLDOUT frames')
                     return
                 train = self._frames(FrameRole.TRAIN, now)
+                self._diagnostic_train = (
+                    () if isinstance(train, Reject) else tuple(train))
+                self._diagnostic_holdout = tuple(holdout)
                 self._worker.submit(
                     (self._session, self._map_hash), run_validation_job,
                     self._latest_grid, self._search_result, train, holdout,
@@ -2031,6 +2039,8 @@ class AutomaticLocalizationManager(Node):
                                  'validation worker deadline')
                 return
             token, status, decision = outcome
+            if token == (self._session, self._map_hash) and status == 'ok':
+                self._diagnostic_decision = decision
             if token != (self._session, self._map_hash):
                 self._reject(RejectReason.MAP_CHANGED,
                              'stale validation result')
@@ -2177,6 +2187,9 @@ class AutomaticLocalizationManager(Node):
         TRAIN view instead of repeating the map-wide pass, whose cost grows
         with each view (2026-10-08: 42 s, 84 s, then past the session).
         """
+        self._diagnostic_train = tuple(train)
+        self._diagnostic_holdout = ()
+        self._diagnostic_decision = None
         basis = self._recheck_basis
         self._search_is_recheck = basis is not None
         if basis is None:
@@ -2210,6 +2223,9 @@ class AutomaticLocalizationManager(Node):
             if result is not None and result.complete and result.hypotheses
             else None)
         self._view_id += 1
+        self._diagnostic_train = ()
+        self._diagnostic_holdout = ()
+        self._diagnostic_decision = None
         self._keyframes = [frame for frame in self._keyframes
                            if frame.role == FrameRole.TRAIN]
         self._confined_scans.clear()
@@ -2255,7 +2271,7 @@ class AutomaticLocalizationManager(Node):
         guard = getattr(self, '_guard_status', None)
         guard_state = None if guard is None else guard[0].state.value
         guard_travel = 0.0 if guard is None else guard[0].abs_travel_rad
-        return {
+        data = {
             'schema_version': SCHEMA_VERSION,
             'strategy': self._strategy.value,
             'motion_policy': self._motion_policy.value,
@@ -2281,6 +2297,11 @@ class AutomaticLocalizationManager(Node):
                 else 'loaded' if getattr(self, '_saved_prior', None)
                 else getattr(self, '_saved_prior_reason', '') or None),
         }
+        if self._parameter('publish_localization_diagnostics'):
+            data['localization_diagnostics'] = diagnostic_snapshot(
+                result, self._diagnostic_train, self._diagnostic_holdout,
+                self._diagnostic_decision)
+        return data
 
     def _publish_status(self, force=False):
         now = time.monotonic()

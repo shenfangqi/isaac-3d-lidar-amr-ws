@@ -18,9 +18,17 @@ TOPICS = ['/map', '/scan', '/scan_localization', '/tf', '/tf_static',
           '/amcl_pose', '/particle_cloud', '/initialpose',
           '/automatic_localization/status', '/cmd_vel_command', '/cmd_vel']
 
+# Record deskewed points plus the full-attitude transform chain. The 2D
+# scans alone cannot recover discarded heights. No driver custom types are
+# needed to replay PointCloud2; raw packets/IMU may be added explicitly.
+LOCALIZATION_3D_TOPICS = ['/fast_lio/cloud_registered_body',
+                          '/fast_lio/imu_odom']
+
 
 def record(args):
-    topics = list(dict.fromkeys([*TOPICS, *args.extra_topic]))
+    topics = list(dict.fromkeys([
+        *TOPICS, *(LOCALIZATION_3D_TOPICS if args.include_localization_3d else []),
+        *args.extra_topic]))
     directory = args.output.resolve()
     directory.mkdir(parents=True, exist_ok=False)
     config = yaml.safe_load(args.map.read_text())
@@ -43,7 +51,8 @@ def record(args):
         (directory / f'{name}.txt').write_text(result.stdout + result.stderr)
     # Runtime parameters, not just YAML defaults. Preserve failure diagnostics.
     for node in ['amcl', 'automatic_localization_manager',
-                 'mid360_pointcloud_to_laserscan']:
+                 'mid360_pointcloud_to_laserscan',
+                 'mid360_localization_pointcloud_to_laserscan']:
         try:
             result = subprocess.run(['ros2', 'param', 'dump', '/' + node],
                                     capture_output=True, text=True, timeout=15)
@@ -134,6 +143,8 @@ def main():
     capture.add_argument('--artifact', type=Path, action='append', default=[])
     capture.add_argument('--extra-topic', action='append', default=[],
                          help='additional topic to record; repeat as needed')
+    capture.add_argument('--include-localization-3d', action='store_true',
+                         help='also record deskewed body PointCloud2 for height-layer analysis')
     convert = commands.add_parser('export')
     convert.add_argument('--bag', type=Path, required=True)
     convert.add_argument('--start', type=float, required=True)
