@@ -1214,6 +1214,30 @@ def test_refuted_recheck_searches_the_whole_map_again(segmented):
     assert manager._state == manager.State.VERIFY_HYPOTHESES
 
 
+def test_map_wide_search_keeps_and_passes_the_coarse_cache(segmented):
+    manager = segmented
+    cache = localization_hypotheses.CoarseCache(('key',), {0: (0, ())})
+    incomplete = _search_result(False, 'SEARCH_INCOMPLETE')
+    manager._worker = FakeWorker([
+        localization_hypotheses.SearchOutput(incomplete, cache)])
+    _start_to_collect(manager)
+    _feed(manager, 3)
+    manager._tick()
+    name, arguments = manager._worker.jobs[-1]
+    assert name == 'run_search_job' and arguments[-1] is None
+    manager._latest_safety_scan = _room_scan(manager)
+    manager._tick()                       # incomplete -> probe planning
+    assert manager._coarse_cache is cache
+    assert manager._search_result is incomplete
+    manager._search_reference = localization_contracts.SE2(0.0, 0.0, 0.0)
+    manager._start_next_view()
+    assert manager._recheck_basis is None
+    _feed(manager, 3)
+    manager._tick()                       # next map-wide search
+    name, arguments = manager._worker.jobs[-1]
+    assert name == 'run_search_job' and arguments[-1] is cache
+
+
 @pytest.mark.parametrize('complete', [True, False])
 def test_only_a_complete_search_is_rechecked(segmented, complete):
     # An incomplete search may have dropped alternatives.

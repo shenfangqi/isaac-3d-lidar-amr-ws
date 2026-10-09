@@ -71,6 +71,7 @@ from isaac_3d_lidar_bringup.localization_hypotheses import (
     run_search_job,
     run_validation_job,
     SearchConfig,
+    SearchOutput,
     SearchWorker,
     seed_pose_at_current_time,
     ValidationThresholds,
@@ -611,6 +612,7 @@ class AutomaticLocalizationManager(Node):
         self._search_reference = None
         self._search_is_recheck = False
         self._recheck_basis = None
+        self._coarse_cache = None
         self._validation_submitted = False
         self._reject_reason = ''
 
@@ -1874,6 +1876,10 @@ class AutomaticLocalizationManager(Node):
                                  'search worker deadline')
                 return
             token, status, result = outcome
+            if status == 'ok' and isinstance(result, SearchOutput):
+                # Coarse scores of these views serve the next map-wide search.
+                self._coarse_cache = result.coarse_cache
+                result = result.result
             if token != (self._session, self._map_hash):
                 self._reject(RejectReason.MAP_CHANGED, 'stale search result')
             elif status != 'ok':
@@ -2065,7 +2071,7 @@ class AutomaticLocalizationManager(Node):
             self._worker.submit(
                 (self._session, self._map_hash), run_search_job,
                 self._latest_grid, train, self._search_config(),
-                self._parameter('search_timeout_sec'))
+                self._parameter('search_timeout_sec'), self._coarse_cache)
         else:
             previous, previous_reference = basis
             self.get_logger().info(
