@@ -330,6 +330,7 @@ def _parameters(**overrides):
     data = {
         'train_frames_per_view': 3, 'holdout_frames_per_view': 3,
         'max_views': 8, 'max_probe_segments': 6, 'max_refined_clusters': 8,
+        'max_extra_refined_clusters': 16,
         'probe_angles_rad': [math.pi / 6, -math.pi / 6, math.pi / 3,
                              -math.pi / 3, math.pi / 2, -math.pi / 2],
         'max_total_probe_yaw_rad': 2.0 * math.pi,

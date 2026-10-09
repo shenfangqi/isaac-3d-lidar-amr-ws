@@ -231,7 +231,8 @@ def test_runner_up_not_pruned():
     true_pose = SE2(1.7, 1.2, 0.0)
     train = _frames(walls, true_pose, 'TRAIN')
     holdout = _frames(walls, true_pose, 'HOLDOUT', start_id=10)
-    tight = SearchConfig(**{**FAST.__dict__, 'max_refined_clusters': 1})
+    tight = SearchConfig(**{**FAST.__dict__, 'max_refined_clusters': 1,
+                            'max_extra_refined_clusters': 0})
     result = search_multiview(grid, train, tight)
     assert not result.complete
     assert result.reason == RejectReason.SEARCH_INCOMPLETE.value
@@ -239,16 +240,20 @@ def test_runner_up_not_pruned():
                                    ValidationThresholds()).accepted
 
 
-@pytest.mark.parametrize('duplicate, filler, rival, complete', [
+@pytest.mark.parametrize('duplicate, filler, rival, extra, complete', [
     # Real 2026-10-05 replay shape: a weak duplicate refines best.  Its
     # coarse score must not lower the floor below unrelated clusters.
-    (0.55, 0.50, 0.45, True),
+    (0.55, 0.50, 0.45, 0, True),
     # An unrefined rival close to the basin's best coarse score still
-    # makes the search incomplete.
-    (0.75, 0.70, 0.68, False),
+    # makes the search incomplete ...
+    (0.75, 0.70, 0.68, 0, False),
+    # ... unless extra refinements may refine the competing rivals.
+    (0.75, 0.70, 0.68, 16, True),
+    # Not enough extra refinements for both rivals: still incomplete.
+    (0.75, 0.70, 0.68, 1, False),
 ])
 def test_competition_floor_uses_best_coarse_score_of_winner_basin(
-        monkeypatch, duplicate, filler, rival, complete):
+        monkeypatch, duplicate, filler, rival, extra, complete):
     import isaac_3d_lidar_bringup.localization_hypotheses as hypotheses
 
     winner = SE2(1.0, 1.0, 0.0)
@@ -273,10 +278,14 @@ def test_competition_floor_uses_best_coarse_score_of_winner_basin(
     monkeypatch.setattr(hypotheses, 'refine_cluster', refine)
     grid = _grid(ROOM, 3.4, 2.4)
     tight = SearchConfig(**{**FAST.__dict__, 'coarse_step_m': 1.0,
-                            'coarse_yaw_step_rad': math.pi})
+                            'coarse_yaw_step_rad': math.pi,
+                            'max_extra_refined_clusters': extra})
     result = search_multiview(grid, _frames(ROOM, winner, 'TRAIN'), tight)
     assert result.complete is complete
     assert result.hypotheses[0].cluster_id == 1
+    if extra >= 2:
+        # Both rivals were refined and stay as alternatives.
+        assert {8, 9} <= {h.cluster_id for h in result.hypotheses}
 
 
 def test_search_deadline_and_cancel_are_incomplete():

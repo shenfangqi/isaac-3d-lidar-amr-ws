@@ -455,6 +455,7 @@ class AutomaticLocalizationManager(Node):
             'independent_cluster_xy_m': 0.30,
             'independent_cluster_yaw_rad': math.pi / 12.0,
             'max_refined_clusters': 8,
+            'max_extra_refined_clusters': 16,
             # segmented_rotation (PR3).  The guard re-checks everything.
             'motion_request_topic': '/automatic_localization/motion_request',
             'motion_status_topic': '/automatic_localization/motion_status',
@@ -563,7 +564,8 @@ class AutomaticLocalizationManager(Node):
                 'validation_only (Nav2 never activates)')
         names = (
             'train_frames_per_view', 'holdout_frames_per_view', 'max_views',
-            'max_probe_segments', 'max_refined_clusters', 'probe_angles_rad',
+            'max_probe_segments', 'max_refined_clusters',
+            'max_extra_refined_clusters', 'probe_angles_rad',
             'max_total_probe_yaw_rad', 'probe_motion_timeout_sec',
             'motion_request_timeout_sec', 'sensor_freshness_sec',
             'search_timeout_sec', 'session_timeout_sec',
@@ -588,6 +590,8 @@ class AutomaticLocalizationManager(Node):
             cluster_xy_m=self._confined['independent_cluster_xy_m'],
             cluster_yaw_rad=self._confined['independent_cluster_yaw_rad'],
             max_refined_clusters=self._confined['max_refined_clusters'],
+            max_extra_refined_clusters=self._confined[
+                'max_extra_refined_clusters'],
         )
 
     def _validation_thresholds(self):
@@ -1996,7 +2000,11 @@ class AutomaticLocalizationManager(Node):
             return
         counts = self._probe_hypothesis_counts
         result = self._search_result
-        counts.append(None if result is None else len(result.hypotheses))
+        # An incomplete search refines a capped number of clusters, so its
+        # count says nothing about progress (2026-10-09: 8, 8, 8 stopped the
+        # probes after two segments).  Only complete searches count.
+        counts.append(None if result is None or not result.complete
+                      else len(result.hypotheses))
         # Two probes in a row without fewer hypotheses: stop exploring.
         if len(counts) >= 3 and None not in counts[-3:] and (
                 counts[-1] >= counts[-2] >= counts[-3]):
