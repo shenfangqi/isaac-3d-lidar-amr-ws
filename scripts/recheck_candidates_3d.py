@@ -23,34 +23,14 @@ import sys
 
 import numpy as np
 
-DEFAULT_BANDS = ((0.0, 0.22), (0.22, 0.35), (0.35, 0.6), (0.6, 1.0),
-                 (1.0, 1.5), (1.5, 2.0), (2.0, 3.0))
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'src/isaac_3d_lidar_bringup'))
+from isaac_3d_lidar_bringup.localization_surface_check import (  # noqa: E402,F401
+    band_inliers, compare, DEFAULT_BANDS, load_ply_vertices, planar,
+    quaternion_matrix, transform,
+)
+
 PROVISIONAL_MIN_COMPOSITE_GAP = 0.15
-
-
-def quaternion_matrix(x, y, z, w):
-    """Rotation matrix of a unit quaternion."""
-    return np.array([
-        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
-        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
-        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
-
-
-def transform(translation, quaternion):
-    """4x4 homogeneous transform."""
-    matrix = np.eye(4)
-    matrix[:3, :3] = quaternion_matrix(*quaternion)
-    matrix[:3, 3] = translation
-    return matrix
-
-
-def planar(x, y, yaw):
-    """4x4 transform of a planar pose."""
-    matrix = np.eye(4)
-    matrix[:2, :2] = [[math.cos(yaw), -math.sin(yaw)],
-                      [math.sin(yaw), math.cos(yaw)]]
-    matrix[:2, 3] = (x, y)
-    return matrix
 
 
 def chain_to_base(frame, static):
@@ -64,80 +44,6 @@ def chain_to_base(frame, static):
         matrix = edge @ matrix
         frame = parent
     return matrix
-
-
-def load_ply_vertices(path):
-    """Vertices (N x 3) of an ASCII PLY mesh."""
-    with open(path, encoding='ascii', errors='strict') as stream:
-        if stream.readline().strip() != 'ply':
-            raise ValueError('not a PLY file')
-        count, properties, in_vertex = None, [], False
-        for line in stream:
-            words = line.split()
-            if words[:2] == ['format', 'ascii'] or not words:
-                continue
-            if words[0] == 'format':
-                raise ValueError('only ASCII PLY is supported')
-            if words[0] == 'element':
-                in_vertex = words[1] == 'vertex'
-                if in_vertex:
-                    count = int(words[2])
-            elif words[0] == 'property' and in_vertex:
-                properties.append(words[-1])
-            elif words[0] == 'end_header':
-                break
-        if count is None or properties[:3] != ['x', 'y', 'z']:
-            raise ValueError('PLY vertices must start with x y z')
-        vertices = np.loadtxt(stream, max_rows=count, usecols=(0, 1, 2),
-                              ndmin=2)
-    if len(vertices) != count:
-        raise ValueError('truncated PLY vertex list')
-    return vertices
-
-
-def band_inliers(base_points, pose, tree, bands, tolerance):
-    """[(points, inliers)] per band for ``base_points`` placed at ``pose``."""
-    world = (planar(*pose) @ np.c_[base_points, np.ones(len(base_points))].T
-             ).T[:, :3]
-    distance, _ = tree.query(world, distance_upper_bound=tolerance * 2.0)
-    near = distance <= tolerance
-    heights = base_points[:, 2]
-    return [(int(mask.sum()), int((near & mask).sum()))
-            for mask in ((heights >= lo) & (heights < hi) for lo, hi in bands)]
-
-
-def compare(per_candidate, min_points):
-    """
-    Composite and margins from per-band counts.
-
-    ``per_candidate`` is a list of per-band ``(points, inliers)`` lists over
-    the same points.  Bands with fewer than ``min_points`` points are
-    excluded for every candidate.
-    """
-    counts = np.array([[points for points, _ in bands]
-                       for bands in per_candidate])
-    hits = np.array([[inliers for _, inliers in bands]
-                     for bands in per_candidate], dtype=float)
-    used = counts[0] >= min_points
-    shares = np.divide(hits, counts, out=np.zeros_like(hits),
-                       where=counts > 0)
-    weights = counts[0] * used
-    composite = (shares * weights).sum(1) / max(weights.sum(), 1)
-    order = list(np.argsort(-composite, kind='stable'))
-    best = order[0]
-    runner = order[1] if len(order) > 1 else None
-    margins = (shares[best] - shares[runner]) if runner is not None else None
-    return {
-        'bands_used': used.tolist(),
-        'shares': shares.round(4).tolist(),
-        'composite': composite.round(4).tolist(),
-        'order': [int(i) for i in order],
-        'composite_gap': (None if runner is None else
-                          round(float(composite[best] - composite[runner]), 4)),
-        'band_margins': (None if margins is None else
-                         [round(float(m), 4) if u else None
-                          for m, u in zip(margins, used)]),
-    }
 
 
 def same_pose(a, b, xy=0.3, yaw=math.radians(15)):

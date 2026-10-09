@@ -11,6 +11,7 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 import time
 
+import numpy as np
 import pytest
 
 from isaac_3d_lidar_bringup import localization_contracts
@@ -19,6 +20,7 @@ from isaac_3d_lidar_bringup import localization_motion_guard
 from isaac_3d_lidar_bringup import localization_observations
 from isaac_3d_lidar_bringup import localization_rotation_policy
 from isaac_3d_lidar_bringup import localization_saved_pose
+from isaac_3d_lidar_bringup import localization_surface_check
 from isaac_3d_lidar_bringup.automatic_localization_quality import (
     angular_difference, quaternion_yaw, trim_time_window,
 )
@@ -58,8 +60,9 @@ def manager():
     scope.update(vars(localization_motion_guard))
     scope.update(vars(localization_rotation_policy))
     scope.update(vars(localization_saved_pose))
+    scope.update(vars(localization_surface_check))
     scope.update(Enum=Enum, Node=object, time=time, math=math, Time=FakeTime,
-                 deque=deque, uuid=__import__('uuid'),
+                 deque=deque, uuid=__import__('uuid'), np=__import__('numpy'),
                  ManageLifecycleNodes=FakeManageLifecycleNodes,
                  TransformException=LookupError, quaternion_yaw=quaternion_yaw,
                  angular_difference=angular_difference,
@@ -79,6 +82,7 @@ def manager():
     node.params = defaults
     node._validation_only = True
     node._configure_strategy()
+    node._configure_surface_check()
     node._configure_probe_link()
     node._worker = None
     node._reset_confined_session()
@@ -1527,3 +1531,157 @@ def test_optional_replay_trace_does_not_change_status_decision(manager):
     assert traced == baseline
     assert trace == {'schema': 1, 'train': [], 'holdout': [],
                      'result': None, 'decision': None}
+
+
+# --- Static 3D surface re-check --------------------------------------------
+
+def _mesh(tmp_path):
+    path = tmp_path / 'map.ply'
+    path.write_text('ply\nformat ascii 1.0\nelement vertex 3\nproperty float x\n'
+                    'property float y\nproperty float z\nend_header\n'
+                    '0 0 0\n1 0 0\n0 1 0\n')
+    return path
+
+
+def _two_candidates():
+    first = localization_contracts.Hypothesis(
+        1.0, 2.0, 0.5, 0.9, 0.9, 0.0, 0, (0.9,), ())
+    second = localization_contracts.Hypothesis(
+        4.0, 6.0, -2.6, 0.88, 0.9, 0.0, 1, (0.88,), ())
+    return localization_contracts.SearchResult(
+        'x' * 16, 'ab' * 32, True, (first, second), 10, 0.1, '')
+
+
+def _surface_session(manager, tmp_path, policy, results, points=30000):
+    manager.params.update({'surface_recheck_policy': policy,
+                           'surface_mesh_path': str(_mesh(tmp_path))})
+    manager._configure_surface_check()
+    ambiguous = localization_hypotheses.QualityDecision(
+        False, 'AMBIGUOUS_LOCATION', runner_up_score=0.88,
+        holdout=((0, 0.9), (1, 0.88)))
+    manager._worker = FakeWorker([_two_candidates(), ambiguous, *results])
+    manager._surface_points = lambda train, now: np.zeros((points, 3))
+    _start_to_collect(manager)
+    _feed(manager, 3)
+    manager._tick()                     # search submitted
+    manager._tick()                     # -> VERIFY_HYPOTHESES
+    _feed(manager, 3)
+    manager._tick()                     # validation submitted
+    manager._latest_safety_scan = _room_scan(manager)
+    _guard(manager, 'STOPPED')
+    manager._tick()                     # ambiguous -> 3D re-check (or not)
+
+
+def _surface(resolved, leader=1, gap=0.23):
+    return localization_surface_check.SurfaceResult(
+        resolved, '' if resolved else 'LEADER_GAP_TOO_SMALL', leader,
+        (0.58, 0.81), gap, (1000,) * 7, (True,) * 6 + (False,), 30000)
+
+
+def test_record_mode_logs_the_3d_result_and_keeps_the_2d_verdict(segmented, tmp_path):
+    manager = segmented
+    _surface_session(manager, tmp_path, 'record', [_surface(True)])
+    assert manager._worker.jobs[-1][0] == 'run_surface_check_job'
+    _guard(manager, 'STOPPED')
+    manager._tick()                     # 3D result recorded only
+    assert manager._state == manager.State.PLAN_PROBE
+    status = manager._confined_status()['surface_recheck']
+    assert status['resolved'] and not status['used']
+    assert status['leader_pose_at_reference'] == {'x': 4.0, 'y': 6.0, 'yaw': -2.6}
+    assert [job[0] for job in manager._worker.jobs].count('run_validation_job') == 1
+
+
+def test_decide_mode_revalidates_the_3d_leader_as_a_prior(segmented, tmp_path):
+    manager = segmented
+    winner = localization_contracts.Hypothesis(
+        4.0, 6.0, -2.6, 0.88, 0.9, 0.0, 1, (0.88,), (0.05, 0.05, 0.02))
+    accepted = localization_hypotheses.QualityDecision(
+        True, '', winner, prior_used=True)
+    _surface_session(manager, tmp_path, 'decide', [_surface(True), accepted])
+    _guard(manager, 'STOPPED')
+    manager._tick()                     # 3D leader -> 2D validation with prior
+    name, arguments = manager._worker.jobs[-1]
+    assert name == 'run_validation_job'
+    prior = arguments[-1]
+    assert (prior.pose.x, prior.pose.y) == (4.0, 6.0)
+    assert prior.xy_tolerance_m == pytest.approx(0.05)
+    _guard(manager, 'STOPPED')
+    manager._tick()                     # accepted through the full 2D gates
+    assert manager._state == manager.State.STOP_AND_VERIFY
+    assert manager._confined_status()['surface_recheck']['used'] is True
+    assert not manager._saved_prior_used
+    assert all(r.operation.value != 'ROTATE' for r in manager.requests)
+
+
+def test_a_3d_leader_that_fails_2d_validation_changes_nothing(segmented, tmp_path):
+    manager = segmented
+    refused = localization_hypotheses.QualityDecision(False, 'UNOBSERVABLE_AXIS')
+    _surface_session(manager, tmp_path, 'decide', [_surface(True), refused])
+    _guard(manager, 'STOPPED')
+    manager._tick()
+    _guard(manager, 'STOPPED')
+    manager._tick()
+    assert manager._state == manager.State.PLAN_PROBE     # original ambiguity
+    assert manager._confined_status()['surface_recheck']['used'] is False
+
+
+def test_an_unresolved_3d_result_in_decide_mode_keeps_the_2d_verdict(segmented, tmp_path):
+    manager = segmented
+    _surface_session(manager, tmp_path, 'decide', [_surface(False, gap=0.05)])
+    _guard(manager, 'STOPPED')
+    manager._tick()
+    assert manager._state == manager.State.PLAN_PROBE
+    assert [job[0] for job in manager._worker.jobs].count('run_validation_job') == 1
+
+
+def test_too_few_cloud_points_skip_the_3d_recheck(segmented, tmp_path):
+    manager = segmented
+    _surface_session(manager, tmp_path, 'decide', [], points=100)
+    assert manager._state == manager.State.PLAN_PROBE
+    assert all(job[0] != 'run_surface_check_job' for job in manager._worker.jobs)
+    assert manager._confined_status()['surface_recheck']['reason'] == 'TOO_FEW_POINTS'
+
+
+@pytest.mark.parametrize('strategy, policy, mesh_ok, outcome', [
+    ('legacy_full_rotation', 'record', True, 'off'),
+    ('legacy_full_rotation', 'decide', True, 'error'),
+    ('stationary_only', 'record', False, 'off'),
+    ('stationary_only', 'decide', False, 'error'),
+    ('stationary_only', 'decide', True, 'decide'),
+    ('stationary_only', 'sometimes', True, 'error'),
+])
+def test_surface_policy_configuration(manager, tmp_path, strategy, policy, mesh_ok,
+                                      outcome):
+    manager.params.update({
+        'localization_strategy': strategy, 'surface_recheck_policy': policy,
+        'surface_mesh_path': str(_mesh(tmp_path) if mesh_ok else tmp_path / 'none.ply')})
+    manager._configure_strategy()
+    manager.get_logger = lambda: NS(info=lambda m: None, warn=lambda m: None)
+    if outcome == 'error':
+        with pytest.raises(localization_contracts.ContractError):
+            manager._configure_surface_check()
+    else:
+        manager._configure_surface_check()
+        assert manager._surface_policy == outcome
+
+
+def test_clouds_are_kept_only_while_stopped_during_localization(stationary):
+    manager = stationary
+    manager._begin_confined_session(time.monotonic())
+    cloud = NS(header=NS(frame_id='imu_link', stamp=NS(sec=30, nanosec=0)),
+               fields=[NS(name=n, offset=4 * i, datatype=7) for i, n in enumerate('xyz')],
+               is_bigendian=False, width=1, height=1, point_step=12,
+               data=b'\x00\x00\x80?' * 3)
+    manager._on_cloud(cloud)
+    assert len(manager._surface_clouds) == 1
+    manager._stopped = lambda now: False
+    manager._on_cloud(cloud)
+    assert len(manager._surface_clouds) == 0          # motion discards them
+    manager._stopped = lambda now: True
+    manager._state = manager.State.READY
+    manager._on_cloud(cloud)
+    assert len(manager._surface_clouds) == 0
+    manager._state = manager.State.COLLECT_STATIC
+    manager._on_cloud(cloud)
+    manager._start_next_view()
+    assert len(manager._surface_clouds) == 0          # a new view starts afresh

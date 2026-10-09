@@ -142,9 +142,25 @@ def test_robot_not_moved_is_plumbed_as_a_per_launch_attestation():
     assert ('--robot-not-moved requires --localization-strategy '
             'stationary_only or segmented_rotation.') in start
     assert 'robot_not_moved was requested but the manager' in start
-    assert '"${robot_not_moved}" >/dev/null' in start
+    assert '"${robot_not_moved}" "${surface_recheck}" >/dev/null' in start
     assert 'robot_not_moved="${13:-false}"' in container
     assert 'auto_launch_argument+=" robot_not_moved:=true"' in container
     block = launch.split("'robot_not_moved',", 1)[1]
     assert block.lstrip().startswith("default_value='false'")
     assert '/workspaces/isaac_ros-dev/state/carbot_last_pose.json' in launch
+
+
+def test_surface_recheck_is_plumbed_with_record_as_the_default():
+    start = (SCRIPTS / 'start_real_robot_navigation_rviz.sh').read_text()
+    container = (SCRIPTS / 'jetson_nvblox_container.sh').read_text()
+    launch = (PROJECT_DIR / 'src/isaac_3d_lidar_bringup/launch/'
+              'carbot_navigation_real.launch.py').read_text()
+    assert 'surface_recheck=record' in start
+    assert '--surface-recheck)' in start
+    assert 'surface_recheck decide was requested but the manager reports' in start
+    assert '"${robot_not_moved}" "${surface_recheck}" >/dev/null' in start
+    assert 'surface_recheck="${14:-record}"' in container
+    assert 'auto_launch_argument+=" surface_recheck_policy:=${surface_recheck}"' in container
+    block = launch.split("'surface_recheck_policy',", 1)[1]
+    assert block.lstrip().startswith("default_value='record'")
+    assert "'.rsplit('.', 1)[0] + '.ply'" in launch

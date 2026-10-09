@@ -12,12 +12,13 @@ from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
 from nav2_msgs.msg import ParticleCloud
 from nav2_msgs.srv import ManageLifecycleNodes
 from nav_msgs.msg import OccupancyGrid, Odometry
+import numpy as np
 import rclpy
 from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import LaserScan, PointCloud2
 from std_msgs.msg import String
 from std_srvs.srv import Empty, Trigger
 from tf2_ros import Buffer, TransformException, TransformListener
@@ -101,6 +102,14 @@ from isaac_3d_lidar_bringup.localization_saved_pose import (
     save_pose,
     SavedPose,
 )
+from isaac_3d_lidar_bringup.localization_surface_check import (
+    load_ply_vertices,
+    planar,
+    pointcloud2_xyz,
+    run_surface_check_job,
+    SurfaceCheckConfig,
+    transform,
+)
 
 
 LOCALIZATION_MANAGER = '/lifecycle_manager_localization/manage_nodes'
@@ -162,6 +171,7 @@ class AutomaticLocalizationManager(Node):
         self._stationary_only = False
         # Also immutable: no dynamic change may enable motion or relax gates.
         self._configure_strategy()
+        self._configure_surface_check()
 
         status_qos = QoSProfile(
             depth=1,
@@ -234,6 +244,11 @@ class AutomaticLocalizationManager(Node):
             self._on_particle_cloud,
             scan_qos,
         )
+        self._cloud_subscription = None
+        if self._surface_policy != 'off':
+            self._cloud_subscription = self.create_subscription(
+                PointCloud2, self._parameter('surface_cloud_topic'),
+                self._on_cloud, scan_qos)
 
         self._localization_client = self.create_client(
             ManageLifecycleNodes, LOCALIZATION_MANAGER
@@ -483,6 +498,19 @@ class AutomaticLocalizationManager(Node):
             'saved_pose_max_age_sec': 14.0 * 86400.0,
             'saved_pose_xy_tolerance_m': 0.25,
             'saved_pose_yaw_tolerance_rad': math.radians(10.0),
+            # Static 3D re-check of near-equal 2D candidates against the map
+            # mesh: off, record (evidence only) or decide (nominate a leader
+            # that must still pass the full 2D validation as a prior).
+            'surface_recheck_policy': 'off',
+            'surface_mesh_path': '',
+            'surface_cloud_topic': '/fast_lio/cloud_registered_body',
+            'surface_max_candidates': 5,
+            'surface_cloud_window_sec': 5.0,
+            'surface_max_points_per_cloud': 6000,
+            'surface_min_composite_gap': 0.15,
+            'surface_min_leader_composite': 0.70,
+            'surface_prior_xy_tolerance_m': 0.05,
+            'surface_prior_yaw_tolerance_rad': math.radians(2.0),
             'probe_plan_timeout_sec': 2.0,
             'probe_settle_sec': 1.0,
             'probe_settle_timeout_sec': 5.0,
@@ -557,6 +585,168 @@ class AutomaticLocalizationManager(Node):
         if released:
             self._guard_release_confirmed = True
         return released
+
+    def _configure_surface_check(self):
+        """Validate the 3D re-check policy and load the mesh once."""
+        policy = str(self._parameter('surface_recheck_policy'))
+        if policy not in ('off', 'record', 'decide'):
+            raise ContractError('surface_recheck_policy must be off, record or decide')
+        self._surface_vertices = None
+        self._surface_config = SurfaceCheckConfig(
+            min_composite_gap=float(self._parameter('surface_min_composite_gap')),
+            min_leader_composite=float(self._parameter('surface_min_leader_composite')))
+        if self._strategy == Strategy.LEGACY_FULL_ROTATION:
+            if policy == 'decide':
+                raise ContractError(
+                    'the 3D re-check needs stationary_only or segmented_rotation')
+            policy = 'off'             # record is evidence only; nothing to record
+        if policy != 'off':
+            path = self._parameter('surface_mesh_path')
+            try:
+                self._surface_vertices = load_ply_vertices(path)
+            except (OSError, ValueError) as error:
+                if policy == 'decide':
+                    raise ContractError(f'3D re-check mesh unusable: {error}') from error
+                self.get_logger().warn(
+                    f'3D re-check disabled, mesh unusable ({path}): {error}')
+                policy = 'off'
+        self._surface_policy = policy
+
+    def _on_cloud(self, message):
+        """Keep deskewed clouds taken while stopped during localization."""
+        if self._state not in (State.COLLECT_STATIC, State.SEARCH_MULTI_VIEW,
+                               State.VERIFY_HYPOTHESES):
+            return
+        now = time.monotonic()
+        if not self._stopped(now):
+            self._surface_clouds.clear()
+            return
+        stamp = message.header.stamp
+        stamp_ns = stamp.sec * 10**9 + stamp.nanosec
+        try:
+            xyz = pointcloud2_xyz(
+                message, int(self._parameter('surface_max_points_per_cloud')))
+        except ContractError:
+            return
+        self._surface_clouds.append((stamp_ns, message.header.frame_id, xyz, now))
+
+    def _surface_points(self, train, now):
+        """
+        Stationary cloud points in the reference keyframe's base frame.
+
+        Each cloud uses the full 3D base<-sensor transform and the planar
+        odometry at its own source stamp; clouds without both are skipped.
+        """
+        reference = train[0].T_odom_base.inverse()
+        window = float(self._parameter('surface_cloud_window_sec'))
+        parts = []
+        for stamp_ns, frame, xyz, received in self._surface_clouds:
+            if now - received > window or not len(xyz):
+                continue
+            try:
+                edge = self._tf_buffer.lookup_transform(
+                    'base_footprint', frame, Time(nanoseconds=stamp_ns)).transform
+                odom_base = self._tf_se2('odom', 'base_footprint', stamp_ns)
+            except (LookupError, TransformException):
+                continue
+            t, q = edge.translation, edge.rotation
+            relative = reference.compose(odom_base)
+            matrix = (planar(relative.x, relative.y, relative.yaw)
+                      @ transform((t.x, t.y, getattr(t, 'z', 0.0)),
+                                  (q.x, q.y, q.z, q.w)))
+            homogeneous = np.c_[xyz, np.ones(len(xyz))]
+            parts.append((matrix @ homogeneous.T).T[:, :3])
+        return np.vstack(parts) if parts else np.zeros((0, 3))
+
+    def _start_surface_check(self, decision, train, holdout, now):
+        """Submit the 3D re-check for an ambiguous decision; False if skipped."""
+        if (self._surface_policy == 'off' or self._search_result is None
+                or decision.reason != RejectReason.AMBIGUOUS_LOCATION.value
+                or getattr(decision, 'prior_conflict', False)):
+            return False
+        by_id = {h.cluster_id: h for h in self._search_result.hypotheses}
+        ranked = [by_id[cluster] for cluster, _score in decision.holdout
+                  if cluster in by_id][:int(self._parameter('surface_max_candidates'))]
+        points = self._surface_points(train, now)
+        if len(ranked) < 2 or len(points) < self._surface_config.min_points:
+            self._surface_status = {
+                'policy': self._surface_policy, 'resolved': False,
+                'reason': 'TOO_FEW_CANDIDATES' if len(ranked) < 2 else 'TOO_FEW_POINTS',
+                'points': int(len(points))}
+            return False
+        self._surface_poses = tuple((h.x, h.y, h.yaw) for h in ranked)
+        self._surface_original = decision
+        self._surface_inputs = (train, holdout)
+        self._worker.submit((self._session, self._map_hash), run_surface_check_job,
+                            self._surface_vertices, points, self._surface_poses,
+                            self._surface_config)
+        self._surface_stage = 'checking'
+        return True
+
+    def _on_surface_result(self, result, now):
+        """Record the 3D result; in decide mode re-validate its leader in 2D."""
+        leader = (self._surface_poses[result.leader]
+                  if 0 <= result.leader < len(self._surface_poses) else None)
+        self._surface_status = {
+            'policy': self._surface_policy, 'resolved': result.resolved,
+            'reason': result.reason, 'points': result.points,
+            'composite': list(result.composite), 'composite_gap': result.composite_gap,
+            'leader_pose_at_reference': (
+                None if leader is None else
+                {'x': round(leader[0], 3), 'y': round(leader[1], 3),
+                 'yaw': round(leader[2], 4)}),
+            'used': False}
+        self.get_logger().info(
+            f'3D re-check ({self._surface_policy}): resolved={result.resolved} '
+            f'reason={result.reason or "-"} gap={result.composite_gap:.3f} '
+            f'composite={list(result.composite)}')
+        if self._surface_policy != 'decide' or not result.resolved:
+            self._finish_validation(self._surface_original, now)
+            return
+        train, holdout = self._surface_inputs
+        prior = PosePrior(SE2(*leader),
+                          float(self._parameter('surface_prior_xy_tolerance_m')),
+                          float(self._parameter('surface_prior_yaw_tolerance_rad')))
+        self._worker.submit(
+            (self._session, self._map_hash), run_validation_job,
+            self._latest_grid, self._search_result, train, holdout,
+            self._search_config(), self._validation_thresholds(),
+            self._parameter('verification_timeout_sec'), prior)
+        self._surface_stage = 'validating'
+
+    def _finish_validation(self, decision, now):
+        """Act on a final validation decision (accept, probe or reject)."""
+        if getattr(decision, 'prior_conflict', False):
+            # Rotating cannot fix this: the attestation or the
+            # localization is wrong.  Hand over to the operator.
+            self._reject(RejectReason.AMBIGUOUS_LOCATION,
+                         'clear winner contradicts the saved pose '
+                         '(robot_not_moved)')
+        elif not decision.accepted:
+            self._reject_or_probe(decision.reason, now)
+        elif getattr(self, '_force_probe_pending', False):
+            # Test mode: the result passed, but probe once anyway; the
+            # next accepted result after that probe is used normally.
+            self._force_probe_pending = False
+            self._probe_hypothesis_counts.append(
+                len(self._search_result.hypotheses))
+            self._probe_reason = 'FORCED_PROBE_TEST'
+            self.get_logger().info(
+                'force_probe_once: stationary result passed; probing '
+                'once anyway (validation test, Nav2 stays inactive)')
+            self._transition(State.PLAN_PROBE)
+        else:
+            if getattr(decision, 'prior_used', False):
+                if self._surface_status and self._surface_stage == 'used':
+                    self._surface_status['used'] = True
+                    self.get_logger().info(
+                        '3D re-check leader passed the full 2D validation')
+                else:
+                    self._saved_prior_used = True
+                    self.get_logger().info(
+                        'saved pose resolved near-equal candidates '
+                        '(robot_not_moved)')
+            self._accept_confined(decision.winner, now)
 
     def _configure_strategy(self):
         """Validate the Issue #13 strategy once; conflicts abort startup."""
@@ -644,6 +834,13 @@ class AutomaticLocalizationManager(Node):
         self._diagnostic_train = ()
         self._diagnostic_holdout = ()
         self._diagnostic_decision = None
+        self._validation_inputs = ((), ())
+        self._surface_clouds = deque(maxlen=80)
+        self._surface_stage = None
+        self._surface_original = None
+        self._surface_inputs = None
+        self._surface_poses = ()
+        self._surface_status = None
         self._reject_reason = ''
 
     def _cancel_worker(self):
@@ -2021,6 +2218,8 @@ class AutomaticLocalizationManager(Node):
                 self._diagnostic_train = (
                     () if isinstance(train, Reject) else tuple(train))
                 self._diagnostic_holdout = tuple(holdout)
+                self._validation_inputs = (train, holdout)
+                self._surface_stage = None
                 self._worker.submit(
                     (self._session, self._map_hash), run_validation_job,
                     self._latest_grid, self._search_result, train, holdout,
@@ -2032,46 +2231,46 @@ class AutomaticLocalizationManager(Node):
                 return
             outcome = self._worker.poll()
             if outcome is None:
+                allowance = 3.0 if self._surface_stage else 1.0
                 if state_age > self._parameter(
-                        'collect_static_timeout_sec') + self._parameter(
+                        'collect_static_timeout_sec') + allowance * self._parameter(
                         'verification_timeout_sec') + 5.0:
                     self._reject(RejectReason.SEARCH_INCOMPLETE,
                                  'validation worker deadline')
                 return
-            token, status, decision = outcome
-            if token == (self._session, self._map_hash) and status == 'ok':
-                self._diagnostic_decision = decision
+            token, status, payload = outcome
+            stage, self._surface_stage = self._surface_stage, None
             if token != (self._session, self._map_hash):
                 self._reject(RejectReason.MAP_CHANGED,
                              'stale validation result')
+            elif status != 'ok' and stage is not None:
+                # A failed 3D job or re-validation leaves the 2D verdict.
+                self.get_logger().warn(f'3D re-check failed: {payload}')
+                self._surface_status = {'policy': self._surface_policy,
+                                        'resolved': False, 'reason': 'JOB_FAILED'}
+                self._finish_validation(self._surface_original, now)
             elif status != 'ok':
-                self._reject(RejectReason.SEARCH_INCOMPLETE, str(decision))
-            elif getattr(decision, 'prior_conflict', False):
-                # Rotating cannot fix this: the attestation or the
-                # localization is wrong.  Hand over to the operator.
-                self._reject(RejectReason.AMBIGUOUS_LOCATION,
-                             'clear winner contradicts the saved pose '
-                             '(robot_not_moved)')
-            elif not decision.accepted:
-                self._reject_or_probe(decision.reason, now)
-            elif getattr(self, '_force_probe_pending', False):
-                # Test mode: the result passed, but probe once anyway; the
-                # next accepted result after that probe is used normally.
-                self._force_probe_pending = False
-                self._probe_hypothesis_counts.append(
-                    len(self._search_result.hypotheses))
-                self._probe_reason = 'FORCED_PROBE_TEST'
-                self.get_logger().info(
-                    'force_probe_once: stationary result passed; probing '
-                    'once anyway (validation test, Nav2 stays inactive)')
-                self._transition(State.PLAN_PROBE)
-            else:
-                if getattr(decision, 'prior_used', False):
-                    self._saved_prior_used = True
+                self._reject(RejectReason.SEARCH_INCOMPLETE, str(payload))
+            elif stage == 'checking':
+                self._on_surface_result(payload, now)
+            elif stage == 'validating':
+                self._diagnostic_decision = payload
+                if payload.accepted and payload.prior_used:
+                    self._surface_stage = 'used'
+                    self._finish_validation(payload, now)
+                    self._surface_stage = None
+                else:
                     self.get_logger().info(
-                        'saved pose resolved near-equal candidates '
-                        '(robot_not_moved)')
-                self._accept_confined(decision.winner, now)
+                        '3D re-check leader failed the 2D validation '
+                        f'({payload.reason or "accepted without the prior"}); '
+                        'keeping the 2D verdict')
+                    self._finish_validation(self._surface_original, now)
+            else:
+                self._diagnostic_decision = payload
+                train, holdout = self._validation_inputs
+                if (isinstance(train, Reject)
+                        or not self._start_surface_check(payload, train, holdout, now)):
+                    self._finish_validation(payload, now)
 
         elif self._state == State.PLAN_PROBE:
             self._plan_probe(now, state_age)
@@ -2223,6 +2422,8 @@ class AutomaticLocalizationManager(Node):
             if result is not None and result.complete and result.hypotheses
             else None)
         self._view_id += 1
+        self._surface_clouds.clear()
+        self._surface_stage = None
         self._diagnostic_train = ()
         self._diagnostic_holdout = ()
         self._diagnostic_decision = None
@@ -2292,6 +2493,7 @@ class AutomaticLocalizationManager(Node):
             'map_hash': self._map_hash,
             'forced_probe_test': getattr(self, '_force_probe_once', False),
             'robot_not_moved': getattr(self, '_robot_not_moved', False),
+            'surface_recheck': getattr(self, '_surface_status', None),
             'saved_pose_prior': (
                 'used' if getattr(self, '_saved_prior_used', False)
                 else 'loaded' if getattr(self, '_saved_prior', None)
