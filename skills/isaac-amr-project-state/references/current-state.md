@@ -1,5 +1,11 @@
 # Current authoritative project state
 
+## Issue #13 natural probe rotation on the real robot: 2026-10-08/09
+
+- Jetson runs main `f600613` (#34 position-based stationarity, #35 candidate re-check). At placement C, `--automatic-activate --localization-strategy segmented_rotation --localization-motion guarded --motion-profile docs/evidence/issue13_motion_profile_accepted_2026-10-06.json --operator-rotation-clear --operator-present` ran four natural probes (-90/-90/-90/-60 deg, 309 deg in total, each settled in 0.7-0.8 s). It then reached `READY` at `(-0.768, 0.095, -93.4 deg)`; the operator confirmed the pose. Bag: `calibration_data/2026-10-09_issue13_activate_probe_06` (includes `/scan_localization`).
+- Findings fixed on the way: FAST-LIO's twist stayed biased (about 0.027 m/s) at rest after a long turn, so the settle check failed (#34); a map-wide re-search after every probe grew 42 → 84 → >96 s and hit the session limit (#35). Evidence: `docs/evidence/issue13_natural_probe_2026-10-09.md`.
+- Open: probe_06 used 233 s of the 240 s session. The first search was incomplete, so view 1 still needed a full map-wide search (82 s). The probe count is bounded by the guard budget (6 segments), not by the hypothesis-count rule.
+
 ## Issue #13 guarded activation on the real robot: 2026-10-08
 
 - Jetson on main `6ae6821`. `--automatic-activate --localization-strategy segmented_rotation --localization-motion guarded --motion-profile docs/evidence/issue13_motion_profile_accepted_2026-10-06.json --operator-rotation-clear --operator-present` (`CARBOT_INITIAL_POSE_TIMEOUT=320`) reached `READY` without a probe, at the forced_probe_04 placement. Pose `(2.670, 4.163, 52.3 deg)`, score 0.925, AMCL 2.0 cm/0.9 deg. All eight Nav2 nodes active, no goal. The velocity smoother was the only `/cmd_vel_command` publisher; guard `RELEASED`.
