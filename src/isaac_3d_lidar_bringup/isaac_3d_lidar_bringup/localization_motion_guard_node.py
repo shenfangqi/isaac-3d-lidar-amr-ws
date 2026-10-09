@@ -1,10 +1,15 @@
 """
-ROS shell around MotionGuardCore (Issue #13 PR3).
+ROS shell around MotionGuardCore (Issue #13 PR3) and LinearProbeGuard.
 
 The 50 ms control timer, requests, odometry and the emergency flag share one
 callback group; sweep evaluation runs in its own group so a slow scan never
 delays the control cycle.  The velocity publisher exists only while motion
 is permitted and a STOP handshake has opened a session; RELEASE destroys it.
+
+Translation (phase 2) is a separate core with its own versioned messages and
+its own linear profile; without an ACCEPTED linear profile matching this
+robot it can never command motion.  Rotation and translation share the one
+publisher and may never be active together.
 """
 
 import math
@@ -38,6 +43,7 @@ from .localization_contracts import (
     GuardState,
     MotionPolicy,
     profile_permits_motion,
+    RejectReason,
     RotationAttestation,
     SE2,
 )
@@ -56,6 +62,14 @@ from .localization_rotation_policy import (
     ProbeBudgetLimits,
     RotationGateConfig,
 )
+from .localization_translation_contracts import (
+    decode_linear_profile,
+    decode_route_evidence,
+    decode_translation_request,
+    encode_translation_status,
+    translation_status,
+)
+from .localization_translation_guard import combine_commands, LinearProbeGuard
 
 
 CANONICAL_FOOTPRINT = [0.155, 0.133, 0.155, -0.133,
@@ -115,6 +129,14 @@ class MotionGuardNode(Node):
         declare('session_timeout_sec', 360.0)
         declare('motion_request_timeout_sec', 0.30)
         declare('sensor_freshness_sec', 0.5)
+        # Phase 2 translation: disabled unless an ACCEPTED linear profile for
+        # this geometry/extrinsics/control chain is given.
+        declare('linear_profile_path', '')
+        declare('translation_request_topic',
+                '/automatic_localization/translation_request')
+        declare('route_evidence_topic', '/automatic_localization/route_evidence')
+        declare('translation_status_topic',
+                '/automatic_localization/translation_status')
 
         value = self._value
         flat = list(value('footprint_xy'))
@@ -141,6 +163,10 @@ class MotionGuardNode(Node):
             max_motion_time_s=float(value('probe_motion_timeout_sec')),
             max_session_s=float(value('session_timeout_sec')))
         self._core = MotionGuardCore(config, permission, limits)
+        linear_profile = self._load_linear_profile(value('linear_profile_path'))
+        if CarbotStatus is None:
+            linear_profile = None
+        self._linear = LinearProbeGuard(linear_profile, expected_hashes=self._hashes)
         self._lock = threading.Lock()
         self._attest = bool(value('operator_rotation_clear'))
         self._attestation = None
@@ -173,11 +199,20 @@ class MotionGuardNode(Node):
         self.create_subscription(LaserScan, value('scan_topic'),
                                  self._on_scan, qos_profile_sensor_data,
                                  callback_group=sweep)
+        self.create_subscription(String, value('translation_request_topic'),
+                                 self._on_translation_request, 10,
+                                 callback_group=control)
+        self.create_subscription(String, value('route_evidence_topic'),
+                                 self._on_route_evidence, 10,
+                                 callback_group=control)
         self._status = self.create_publisher(String, value('status_topic'), 1)
+        self._translation_status = self.create_publisher(
+            String, value('translation_status_topic'), 1)
         self.create_timer(0.05, self._tick, callback_group=control)
         self.get_logger().info(
             f'motion guard: permitted={permission.permitted} '
-            f'policy={value("motion_policy")} attestation={self._attest}')
+            f'policy={value("motion_policy")} attestation={self._attest} '
+            f'translation_permitted={self._linear.permitted}')
 
     def _value(self, name):
         return self.get_parameter(name).value
@@ -191,6 +226,41 @@ class MotionGuardNode(Node):
         except (OSError, ContractError) as error:
             self.get_logger().error(f'motion profile rejected: {error}')
             return None
+
+    def _load_linear_profile(self, path):
+        if not path:
+            return None
+        try:
+            with open(path, encoding='utf-8') as stream:
+                return decode_linear_profile(stream.read())
+        except (OSError, ContractError) as error:
+            self.get_logger().error(f'linear profile rejected: {error}')
+            return None
+
+    def _on_translation_request(self, message):
+        try:
+            request = decode_translation_request(message.data)
+        except ContractError as error:
+            self.get_logger().warning(f'invalid translation request: {error}')
+            return
+        with self._lock:
+            try:
+                self._linear.request(
+                    request.operation, request.session, request.sequence,
+                    time.monotonic(), distance_m=request.distance_m,
+                    speed_mps=request.speed_mps, profile_hash=request.profile_hash)
+            except ContractError as error:
+                self.get_logger().warning(f'translation request refused: {error}')
+
+    def _on_route_evidence(self, message):
+        try:
+            evidence = decode_route_evidence(message.data)
+        except ContractError as error:
+            self.get_logger().warning(f'invalid route evidence: {error}')
+            return
+        with self._lock:
+            if evidence.session == self._linear.session:
+                self._linear.on_preview(evidence.to_preview(), time.monotonic())
 
     def _on_request(self, message):
         try:
@@ -214,15 +284,20 @@ class MotionGuardNode(Node):
         with self._lock:
             self._odom_pose = SE2(sample.x, sample.y, sample.yaw)
             self._core.on_odom(sample)
+            self._linear.on_odom(sample)
 
     def _on_chassis(self, message):
         with self._lock:
+            now = time.monotonic()
             self._core.on_chassis(message.agent_connected,
-                                  message.motion_blocked, time.monotonic())
+                                  message.motion_blocked, now)
+            self._linear.on_chassis(message.agent_connected,
+                                    message.motion_blocked, now)
 
     def _on_emergency(self, message):
         with self._lock:
             self._core.on_emergency(message.data)
+            self._linear.on_emergency(message.data, time.monotonic())
 
     def _on_scan(self, scan):
         with self._lock:
@@ -277,9 +352,18 @@ class MotionGuardNode(Node):
         now = time.monotonic()
         with self._lock:
             command = self._core.tick(now)
+            linear_command = self._linear.tick(now)
+            linear_command, command, conflict = combine_commands(
+                self._core.state.value, command, self._linear.state, linear_command)
+            if conflict:
+                self._linear._fault('CONTROL_CONFLICT')
+                self._core._halt(RejectReason.CONTROL_CONFLICT)
             state = self._core.state
             session = self._core.session
             status = self._core.status(now)
+            linear_session = self._linear.session
+            linear_state = self._linear.state
+            linear_status = translation_status(self._linear)
             if session and session != self._session_seen:
                 self._session_seen = session
                 self._attestation = (
@@ -289,20 +373,27 @@ class MotionGuardNode(Node):
                         float(self._value('attestation_max_age_sec')))
                     if self._attest and self._odom_pose is not None
                     else None)
-        permitted = self._core.permission.permitted
-        if state == GuardState.RELEASED:
+        rotation_open = self._core.permission.permitted and session
+        linear_open = self._linear.permitted and linear_session
+        rotation_done = state == GuardState.RELEASED or not session
+        linear_done = linear_state == 'RELEASED' or not linear_session
+        if (state == GuardState.RELEASED or linear_state == 'RELEASED') \
+                and rotation_done and linear_done:
             self._release()
-        elif permitted and session and self._publisher is None \
+        elif (rotation_open or linear_open) and self._publisher is None \
                 and not self._released:
             self._publisher = self.create_publisher(
                 Twist, self._value('cmd_vel_topic'), 10)
         if self._publisher is not None:
             message = Twist()
+            message.linear.x = float(linear_command)
             message.angular.z = float(command)
             self._publisher.publish(message)
         self._tick_count += 1
         if self._tick_count % 2 == 0:
             self._status.publish(String(data=encode_motion_status(status)))
+            self._translation_status.publish(
+                String(data=encode_translation_status(linear_status)))
 
     def _release(self):
         if self._publisher is not None:

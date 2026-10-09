@@ -316,3 +316,20 @@ class LinearProbeGuard:
                 or preview.stop_extension_m + 1e-9 < self.stop_extension_m):
             return 'SWEEP_TOO_SHORT'
         return ''
+
+
+def combine_commands(rotation_state, angular_rad_s, linear_state, linear_mps):
+    """
+    Merge the rotation and translation cores into one command.
+
+    Returns ``(linear, angular, conflict)``.  The two may never move at the
+    same time: if both are active, both outputs are zero and ``conflict`` is
+    True so the caller can fault both cores.  ``rotation_state`` is the
+    rotation core's state value ('ROTATING' while active).
+    """
+    rotating = rotation_state == 'ROTATING' or angular_rad_s != 0.0
+    moving = linear_state == 'MOVING' or linear_mps != 0.0
+    if rotating and moving:
+        return 0.0, 0.0, True
+    return (float(linear_mps) if moving else 0.0,
+            float(angular_rad_s) if rotating else 0.0, False)
