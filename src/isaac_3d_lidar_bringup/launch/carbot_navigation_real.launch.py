@@ -46,6 +46,8 @@ def generate_launch_description():
     robot_not_moved = LaunchConfiguration('robot_not_moved')
     saved_pose_path = LaunchConfiguration('saved_pose_path')
     surface_recheck_policy = LaunchConfiguration('surface_recheck_policy')
+    translation_policy = LaunchConfiguration('translation_policy')
+    linear_profile_path = LaunchConfiguration('linear_profile_path')
     surface_mesh_path = LaunchConfiguration('surface_mesh_path')
     probe_parameters = {
         'motion_policy': motion_policy,
@@ -54,6 +56,9 @@ def generate_launch_description():
         'control_chain_hash': control_chain_hash,
         'operator_rotation_clear': PythonExpression([
             "'", operator_rotation_clear, "' == 'true'"]),
+        # Phase 3 translation; the guard also needs the linear profile.
+        'translation_policy': translation_policy,
+        'linear_profile_path': linear_profile_path,
     }
     complex_route_braking_profile = LaunchConfiguration(
         'complex_route_braking_profile')
@@ -465,6 +470,18 @@ def generate_launch_description():
                 'among near-equal candidates.'
             ),
         ),
+        DeclareLaunchArgument(
+            'translation_policy',
+            default_value='forbid',
+            choices=['forbid', 'guarded'],
+            description=(
+                'Guarded translation probes; needs motion_policy guarded and an '
+                'ACCEPTED linear profile matching this robot.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'linear_profile_path', default_value='',
+            description='ACCEPTED linear (translation) profile (JSON).'),
         DeclareLaunchArgument(
             'surface_recheck_policy',
             default_value='record',

@@ -483,3 +483,12 @@ def plan_route(fields, model, observation, candidates, config=PlannerConfig()):
                       best[1] if best else initial_objective,
                       best[4] if best else initial, evaluated, unsafe,
                       initial_objective)
+
+
+def run_route_plan_job(static_map, layers, candidates, model, config):
+    """Worker entry point: build the fields and observation model, then plan."""
+    fields = (ClearanceField(static_map),
+              ClearanceField(static_map, blocked=static_map.data == 100,
+                             outside_blocked=False))
+    observation = ObservationModel(static_map, layers)
+    return plan_route(fields, model, observation, candidates, config)

@@ -20,7 +20,10 @@ from isaac_3d_lidar_bringup import localization_motion_guard
 from isaac_3d_lidar_bringup import localization_observations
 from isaac_3d_lidar_bringup import localization_rotation_policy
 from isaac_3d_lidar_bringup import localization_saved_pose
+from isaac_3d_lidar_bringup import localization_route_planner
 from isaac_3d_lidar_bringup import localization_surface_check
+from isaac_3d_lidar_bringup import localization_translation_contracts
+from isaac_3d_lidar_bringup import localization_translation_guard
 from isaac_3d_lidar_bringup.automatic_localization_quality import (
     angular_difference, quaternion_yaw, trim_time_window,
 )
@@ -61,8 +64,12 @@ def manager():
     scope.update(vars(localization_rotation_policy))
     scope.update(vars(localization_saved_pose))
     scope.update(vars(localization_surface_check))
+    scope.update(vars(localization_route_planner))
+    scope.update(vars(localization_translation_contracts))
+    scope.update(vars(localization_translation_guard))
     scope.update(Enum=Enum, Node=object, time=time, math=math, Time=FakeTime,
                  deque=deque, uuid=__import__('uuid'), np=__import__('numpy'),
+                 hashlib=__import__('hashlib'), json=__import__('json'),
                  ManageLifecycleNodes=FakeManageLifecycleNodes,
                  TransformException=LookupError, quaternion_yaw=quaternion_yaw,
                  angular_difference=angular_difference,
@@ -1446,7 +1453,8 @@ def test_validation_receives_the_saved_pose_at_the_reference(
     stationary._tick()
     name, arguments = stationary._worker.jobs[-1]
     assert name == 'run_validation_job'
-    prior = arguments[-1]
+    prior, per_view_gates = arguments[7], arguments[8]
+    assert per_view_gates is False          # no translation in this session
     # Session-start odometry equals the keyframes' odometry in this fixture.
     assert (prior.pose.x, prior.pose.y, prior.pose.yaw) == (
         pytest.approx(1.0), pytest.approx(2.0), pytest.approx(0.5))
@@ -1472,7 +1480,7 @@ def test_unusable_saved_pose_gives_no_prior(
     stationary._tick()
     _feed(stationary, 3)
     stationary._tick()
-    assert stationary._worker.jobs[-1][1][-1] is None
+    assert stationary._worker.jobs[-1][1][7] is None
     assert stationary._confined_status()['saved_pose_prior'] == expected
 
 
@@ -1602,7 +1610,8 @@ def test_decide_mode_revalidates_the_3d_leader_as_a_prior(segmented, tmp_path):
     manager._tick()                     # 3D leader -> 2D validation with prior
     name, arguments = manager._worker.jobs[-1]
     assert name == 'run_validation_job'
-    prior = arguments[-1]
+    prior, per_view_gates = arguments[7], arguments[8]
+    assert per_view_gates is False          # no translation in this session
     assert (prior.pose.x, prior.pose.y) == (4.0, 6.0)
     assert prior.xy_tolerance_m == pytest.approx(0.05)
     _guard(manager, 'STOPPED')
@@ -1685,3 +1694,213 @@ def test_clouds_are_kept_only_while_stopped_during_localization(stationary):
     manager._on_cloud(cloud)
     manager._start_next_view()
     assert len(manager._surface_clouds) == 0          # a new view starts afresh
+
+
+# --- Phase 3 translation probes --------------------------------------------
+
+def _free_grid(width_m=6.0, height_m=6.0, resolution=0.05, walls=()):
+    w, h = round(width_m / resolution), round(height_m / resolution)
+    data = [0] * (w * h)
+    for x in range(w):
+        data[x] = data[(h - 1) * w + x] = 100
+    for y in range(h):
+        data[y * w] = data[y * w + w - 1] = 100
+    for x0, y0, x1, y1 in walls:
+        for y in range(round(y0 / resolution), round(y1 / resolution)):
+            for x in range(round(x0 / resolution), round(x1 / resolution)):
+                data[y * w + x] = 100
+    return NS(frame_id='map', data=data, info=NS(
+        width=w, height=h, resolution=resolution,
+        origin=NS(position=NS(x=0.0, y=0.0),
+                  orientation=NS(x=0.0, y=0.0, z=0.0, w=1.0))))
+
+
+def _linear_profile(manager, status='ACCEPTED'):
+    return localization_translation_guard.LinearProfile(
+        *manager._probe_hashes, ('synthetic-test',), 0.08, 0.1, 0.02, 0.6, 0.03,
+        status)
+
+
+@pytest.fixture
+def translated(segmented, tmp_path):
+    manager = segmented
+    path = tmp_path / 'linear.json'
+    path.write_text(localization_translation_contracts.encode_linear_profile(
+        _linear_profile(manager)))
+    manager.params.update({'translation_policy': 'guarded',
+                           'linear_profile_path': str(path)})
+    manager.translation_requests, manager.evidence = [], []
+    original = manager.create_publisher
+
+    def create_publisher(kind, topic, qos):
+        if 'translation_request' in topic:
+            return NS(publish=lambda msg: manager.translation_requests.append(
+                localization_translation_contracts.decode_translation_request(msg.data)))
+        if 'route_evidence' in topic:
+            return NS(publish=lambda msg: manager.evidence.append(
+                localization_translation_contracts.decode_route_evidence(msg.data)))
+        return original(kind, topic, qos)
+
+    manager.create_publisher = create_publisher
+    manager._configure_probe_link()
+    assert manager._translation_enabled, manager._translation_reason
+    grid = _free_grid()
+    manager._latest_grid = grid
+    manager._map_hash = localization_hypotheses.map_hash(grid)
+    manager._last_odom_stamp_ns = 25 * 10**9
+    return manager
+
+
+def _linear(manager, state, reason=''):
+    link = manager._translation
+    status = localization_translation_contracts.TranslationStatus(
+        link.session, link.sequence, state, reason, 0.0, 0.0, 0, 0.0, True)
+    manager._translation_status = (status, time.monotonic())
+
+
+def _twin_result(manager):
+    first = localization_contracts.Hypothesis(
+        1.5, 3.0, 0.0, 0.9, 0.9, 0.0, 0, (0.9,), ())
+    second = localization_contracts.Hypothesis(
+        4.5, 3.0, math.pi, 0.88, 0.9, 0.0, 1, (0.88,), ())
+    return localization_contracts.SearchResult(
+        'x' * 16, manager._map_hash, True, (first, second), 10, 0.1, '')
+
+
+def _plan(status, route):
+    return localization_route_planner.PlanResult(status, route, 0.3, {(0, 1): 0.3}, 4)
+
+
+def _to_route_planning(manager, plan):
+    ambiguous = localization_hypotheses.QualityDecision(
+        False, 'AMBIGUOUS_LOCATION', runner_up_score=0.88,
+        holdout=((0, 0.9), (1, 0.88)))
+    manager._worker = FakeWorker([_twin_result(manager), ambiguous, plan])
+    _start_to_collect(manager)
+    _feed(manager, 3)
+    manager._tick()
+    manager._tick()
+    _feed(manager, 3)
+    manager._tick()
+    manager._latest_safety_scan = _room_scan(manager)
+    _guard(manager, 'STOPPED')
+    manager._tick()                     # ambiguous -> PLAN_ROUTE
+    assert manager._state == manager.State.PLAN_ROUTE
+    manager._tick()                     # plan submitted
+    assert manager._worker.jobs[-1][0] == 'run_route_plan_job'
+    manager._tick()                     # plan result
+
+
+@pytest.mark.parametrize('policy, profile_status, enabled', [
+    ('forbid', 'ACCEPTED', False),
+    ('guarded', 'REVIEWED', False),
+    ('guarded', None, False),
+    ('guarded', 'ACCEPTED', True),
+])
+def test_translation_needs_an_accepted_matching_linear_profile(
+        segmented, tmp_path, policy, profile_status, enabled):
+    manager = segmented
+    path = tmp_path / 'linear.json'
+    if profile_status:
+        path.write_text(localization_translation_contracts.encode_linear_profile(
+            _linear_profile(manager, profile_status)))
+    manager.params.update({'translation_policy': policy,
+                           'linear_profile_path': str(path)})
+    manager.get_logger = lambda: NS(info=lambda m: None, error=lambda m: None,
+                                    warning=lambda m: None)
+    manager._configure_probe_link()
+    assert manager._translation_enabled is enabled
+
+
+def test_translation_policy_needs_guarded_motion(segmented):
+    manager = segmented
+    manager.params.update({'motion_policy': 'forbid', 'operator_rotation_clear': False,
+                           'translation_policy': 'guarded'})
+    manager._configure_strategy()
+    with pytest.raises(localization_contracts.ContractError):
+        manager._configure_probe_link()
+
+
+def test_forward_route_runs_under_map_evidence_and_starts_a_new_view(translated):
+    manager = translated
+    _to_route_planning(manager, _plan('ROUTE_FOUND', (('FORWARD', 0.4),)))
+    assert manager._state == manager.State.EXECUTE_TRANSLATION
+    move = manager.translation_requests[-1]
+    assert move.operation == 'MOVE' and move.distance_m == pytest.approx(0.4)
+    assert move.profile_hash == manager._linear_profile.digest
+    _linear(manager, 'MOVING')
+    manager._tick()
+    evidence = manager.evidence[-1]
+    assert evidence.clear and evidence.remaining_m == pytest.approx(0.4)
+    assert evidence.stop_extension_m == pytest.approx(manager._linear_stop_extension)
+    assert evidence.map_hash == manager._map_hash
+    _linear(manager, 'STOPPING')
+    manager._tick()
+    assert manager._state == manager.State.SETTLE_TRANSLATION
+    assert manager.translation_requests[-1].operation == 'STOP'
+    _linear(manager, 'STOPPED')
+    manager._state_started -= manager.params['translation_settle_sec']
+    manager._tick()
+    assert manager._state == manager.State.COLLECT_STATIC
+    assert manager._translated and manager._view_id == 1
+    # Earlier HOLDOUT frames stay, but the new view needs its own frames.
+    assert any(f.role.value == 'HOLDOUT' for f in manager._keyframes)
+    assert manager._role_complete(localization_contracts.FrameRole.HOLDOUT,
+                                  time.monotonic()) is None
+    assert all(r.operation.value != 'ROTATE' for r in manager.requests)
+
+
+def test_no_route_falls_back_to_rotation_probing(translated):
+    manager = translated
+    _to_route_planning(manager, _plan('NO_COMMON_SAFE_ACTION', ()))
+    assert manager._state == manager.State.PLAN_PROBE
+    assert manager._confined_status()['translation']['plan']['status'] == (
+        'NO_COMMON_SAFE_ACTION')
+    assert all(r.operation == 'STOP' for r in manager.translation_requests)
+
+
+def test_a_planned_rotation_is_the_only_angle_offered_to_the_guard(translated):
+    manager = translated
+    _to_route_planning(manager, _plan('ROUTE_FOUND', (('ROTATE', -math.pi / 4),
+                                                      ('FORWARD', 0.4))))
+    assert manager._state == manager.State.PLAN_PROBE
+    _guard(manager, 'STOPPED')
+    manager._tick()
+    rotate = manager.requests[-1]
+    assert rotate.operation.value == 'ROTATE'
+    assert rotate.delta_yaw_rad == pytest.approx(-math.pi / 4)
+
+
+def test_a_translation_fault_stops_the_session(translated):
+    manager = translated
+    _to_route_planning(manager, _plan('ROUTE_FOUND', (('FORWARD', 0.4),)))
+    _linear(manager, 'FAULT', 'OBSTACLE_IN_SWEEP')
+    manager._tick()
+    assert manager._state == manager.State.SAFE_STOP
+    assert manager._reject_reason == 'OBSTACLE_IN_SWEEP'
+    assert manager.translation_requests[-1].operation == 'STOP'
+
+
+def test_evidence_refuses_when_the_remaining_path_is_unsafe_for_any_candidate(translated):
+    manager = translated
+    # A wall 0.3 m ahead of the second candidate only (it faces -x at x=4.5).
+    grid = _free_grid(walls=[(3.9, 2.5, 4.0, 3.5)])
+    manager._latest_grid = grid
+    manager._map_hash = localization_hypotheses.map_hash(grid)
+    _to_route_planning(manager, _plan('ROUTE_FOUND', (('FORWARD', 0.4),)))
+    _linear(manager, 'MOVING')
+    manager._tick()
+    evidence = manager.evidence[-1]
+    assert not evidence.clear and evidence.reason == 'OBSTACLE_IN_SWEEP'
+
+
+def test_navigation_waits_for_the_translation_core_to_release(translated):
+    manager = translated
+    manager._begin_confined_session(time.monotonic())
+    _guard(manager, 'RELEASED')
+    manager.publishers_on_cmd = 0
+    _linear(manager, 'STOPPED')
+    assert not manager._guard_released(time.monotonic())
+    manager._translation.release()
+    _linear(manager, 'RELEASED')
+    assert manager._guard_released(time.monotonic())

@@ -264,3 +264,44 @@ def _header(data, kind):
         _fail(f'unsupported schema {data["schema_version"]!r}')
     if data['kind'] != kind:
         _fail(f'expected {kind}, got {data["kind"]!r}')
+
+
+class TranslationLink:
+    """
+    Manager side of the translation lease for one localization session.
+
+    Every change of intent uses a new, strictly increasing sequence;
+    ``request`` is re-sent unchanged at the control rate as a renewal.
+    The first request is the STOP handshake.
+    """
+
+    def __init__(self, session):
+        self.session = _session(session)
+        self.sequence = 1
+        self._request = TranslationRequest(session, 1, 'STOP')
+
+    @property
+    def operation(self):
+        return self._request.operation
+
+    def request(self):
+        return self._request
+
+    def _next(self, operation, distance=0.0, speed=0.0, profile_hash=''):
+        self.sequence += 1
+        self._request = TranslationRequest(self.session, self.sequence, operation,
+                                           distance, speed, profile_hash)
+
+    def stop(self):
+        self._next('STOP')
+
+    def move(self, distance_m, speed_mps, profile_hash):
+        self._next('MOVE', distance_m, speed_mps, profile_hash)
+
+    def release(self):
+        self._next('RELEASE')
+
+    def owns(self, status):
+        """Whether ``status`` reports on this link's latest request."""
+        return (status is not None and status.session == self.session
+                and status.sequence == self.sequence)

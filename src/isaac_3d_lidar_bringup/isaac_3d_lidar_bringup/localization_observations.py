@@ -129,9 +129,27 @@ def collect_keyframes(buffer, role, max_views, max_age_s, now_mono, session,
                               f'/ {math.degrees(yaw):.1f} deg')
     ordered = sorted(views, key=lambda v: views[v][0].T_odom_base.yaw)
     if len(ordered) > max_views:
-        # Evenly spaced by odom yaw: keep viewpoint diversity, not recency.
-        step = len(ordered) / max_views
-        ordered = [ordered[int(i * step)] for i in range(max_views)]
+        poses = {v: views[v][0].T_odom_base for v in views}
+        spread = max(math.hypot(poses[a].x - poses[b].x, poses[a].y - poses[b].y)
+                     for a in views for b in views)
+        if spread <= 0.10:
+            # Evenly spaced by odom yaw: keep viewpoint diversity, not recency.
+            step = len(ordered) / max_views
+            ordered = [ordered[int(i * step)] for i in range(max_views)]
+        else:
+            # After translation, positions differ too: farthest-point choice
+            # over heading and position (0.5 m ~ 1 rad), keeping the first
+            # (reference) view so the reference keyframe never changes.
+            def distance(a, b):
+                return (abs(math.atan2(math.sin(poses[a].yaw - poses[b].yaw),
+                                       math.cos(poses[a].yaw - poses[b].yaw)))
+                        + math.hypot(poses[a].x - poses[b].x,
+                                     poses[a].y - poses[b].y) / 0.5)
+            chosen = [min(views)]
+            while len(chosen) < max_views:
+                chosen.append(max((v for v in views if v not in chosen),
+                                  key=lambda v: (min(distance(v, c) for c in chosen), -v)))
+            ordered = chosen
     selected = []
     for view_id in sorted(ordered):
         selected.extend(views[view_id])

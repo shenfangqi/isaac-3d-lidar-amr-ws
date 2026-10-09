@@ -3,6 +3,7 @@
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
+import hashlib
 import json
 import math
 import time
@@ -97,6 +98,18 @@ from isaac_3d_lidar_bringup.localization_rotation_policy import (
     footprint_geometry_hash,
     RotationGateConfig,
 )
+from isaac_3d_lidar_bringup.localization_route_planner import (
+    check_route,
+    ClearanceField,
+    FORWARD,
+    MotionModel,
+    PlannerConfig,
+    PoseBounds,
+    ROTATE,
+    ROUTE_FOUND,
+    run_route_plan_job,
+    static_map_from_grid,
+)
 from isaac_3d_lidar_bringup.localization_saved_pose import (
     load_pose,
     save_pose,
@@ -110,6 +123,15 @@ from isaac_3d_lidar_bringup.localization_surface_check import (
     SurfaceCheckConfig,
     transform,
 )
+from isaac_3d_lidar_bringup.localization_translation_contracts import (
+    decode_linear_profile,
+    decode_translation_status,
+    encode_route_evidence,
+    encode_translation_request,
+    RouteEvidence,
+    TranslationLink,
+)
+from isaac_3d_lidar_bringup.localization_translation_guard import LinearProbeGuard
 
 
 LOCALIZATION_MANAGER = '/lifecycle_manager_localization/manage_nodes'
@@ -141,11 +163,29 @@ class State(Enum):
     PLAN_PROBE = 'PLAN_PROBE'
     EXECUTE_PROBE = 'EXECUTE_PROBE'
     SETTLE_PROBE = 'SETTLE_PROBE'
+    # Phase 3 translation (translation_policy guarded, ACCEPTED linear
+    # profile only); the guard drives, this node sends map evidence.
+    PLAN_ROUTE = 'PLAN_ROUTE'
+    EXECUTE_TRANSLATION = 'EXECUTE_TRANSLATION'
+    SETTLE_TRANSLATION = 'SETTLE_TRANSLATION'
 
 
 CONFINED_STATES = frozenset((
     State.COLLECT_STATIC, State.SEARCH_MULTI_VIEW, State.VERIFY_HYPOTHESES,
-    State.PLAN_PROBE, State.EXECUTE_PROBE, State.SETTLE_PROBE))
+    State.PLAN_PROBE, State.EXECUTE_PROBE, State.SETTLE_PROBE,
+    State.PLAN_ROUTE, State.EXECUTE_TRANSLATION, State.SETTLE_TRANSLATION))
+
+# Linear guard faults that are not contract reasons themselves.
+LINEAR_FAULT_REASONS = {
+    'UNKNOWN_OR_OUTSIDE_IN_SWEEP': RejectReason.UNKNOWN_SWEEP,
+    'SWEEP_STALE': RejectReason.SENSOR_STALE,
+    'SWEEP_POSE_MISMATCH': RejectReason.SENSOR_STALE,
+    'SWEEP_TOO_SHORT': RejectReason.SENSOR_STALE,
+    'LEASE_EXPIRED': RejectReason.CANCELED,
+    'NO_PROGRESS': RejectReason.MOTION_BUDGET_EXHAUSTED,
+    'PATH_DEVIATION': RejectReason.ODOM_JUMP,
+    'LINEAR_PROFILE_INVALID': RejectReason.PROFILE_INVALID,
+}
 
 # A new viewpoint can resolve these; data and map failures it cannot.
 PROBE_RESOLVABLE = frozenset((
@@ -511,6 +551,25 @@ class AutomaticLocalizationManager(Node):
             'surface_min_leader_composite': 0.70,
             'surface_prior_xy_tolerance_m': 0.05,
             'surface_prior_yaw_tolerance_rad': math.radians(2.0),
+            # Phase 3 translation probes: forbid unless guarded AND an
+            # ACCEPTED linear profile matches this robot.
+            'translation_policy': 'forbid',
+            'linear_profile_path': '',
+            'translation_request_topic':
+                '/automatic_localization/translation_request',
+            'route_evidence_topic': '/automatic_localization/route_evidence',
+            'translation_status_topic':
+                '/automatic_localization/translation_status',
+            'translation_speed_mps': 0.05,
+            'route_plan_timeout_sec': 60.0,
+            'route_max_depth': 2,
+            'route_min_difference': 0.15,
+            'route_candidate_window': 0.25,
+            'route_max_candidates': 6,
+            'translation_motion_timeout_sec': 30.0,
+            'translation_settle_sec': 1.0,
+            'translation_settle_timeout_sec': 8.0,
+            'translation_status_freshness_sec': 0.5,
             'probe_plan_timeout_sec': 2.0,
             'probe_settle_sec': 1.0,
             'probe_settle_timeout_sec': 5.0,
@@ -553,6 +612,71 @@ class AutomaticLocalizationManager(Node):
         except (OSError, ContractError) as error:
             # Every probe then reports PROFILE_INVALID; nothing moves.
             self.get_logger().error(f'motion profile rejected: {error}')
+        self._configure_translation()
+
+    def _configure_translation(self):
+        """Enable translation only for an ACCEPTED, matching linear profile."""
+        self._translation = None
+        self._translation_enabled = False
+        self._translation_status = None
+        self._linear_profile = None
+        self._linear_stop_extension = math.inf
+        self._route_fields = None
+        policy = str(self._parameter('translation_policy'))
+        if policy not in ('forbid', 'guarded'):
+            raise ContractError('translation_policy must be forbid or guarded')
+        self._translation_reason = 'translation_policy=forbid'
+        if policy == 'forbid':
+            return
+        if self._motion_policy != MotionPolicy.GUARDED:
+            raise ContractError('translation_policy guarded needs motion_policy guarded')
+        profile = None
+        try:
+            with open(self._parameter('linear_profile_path'), encoding='utf-8') as stream:
+                profile = decode_linear_profile(stream.read())
+        except (OSError, ContractError) as error:
+            self._translation_reason = f'linear profile rejected: {error}'
+        speed = float(self._parameter('translation_speed_mps'))
+        if profile is not None:
+            probe = LinearProbeGuard(profile, expected_hashes=self._probe_hashes)
+            if not probe.permitted:
+                self._translation_reason = (
+                    'linear profile is not ACCEPTED for this geometry, '
+                    'extrinsics and control chain')
+            elif not 0 < speed <= profile.max_speed_mps:
+                self._translation_reason = 'translation_speed_mps exceeds the profile'
+            else:
+                self._linear_profile = profile
+                self._linear_stop_extension = probe.stop_extension_m
+                self._translation_enabled = True
+                self._translation_reason = ''
+        self._translation_request_publisher = self.create_publisher(
+            String, self._parameter('translation_request_topic'), 10)
+        self._route_evidence_publisher = self.create_publisher(
+            String, self._parameter('route_evidence_topic'), 10)
+        self.create_subscription(
+            String, self._parameter('translation_status_topic'),
+            self._on_translation_status, 10)
+        if not self._translation_enabled:
+            self.get_logger().error(f'translation disabled: {self._translation_reason}')
+
+    def _on_translation_status(self, message):
+        try:
+            status = decode_translation_status(message.data)
+        except ContractError as error:
+            self.get_logger().warning(f'invalid translation status: {error}')
+            return
+        self._translation_status = (status, time.monotonic())
+
+    def _fresh_translation_status(self, now):
+        """Fresh translation status for our latest request, or None."""
+        if self._translation is None or self._translation_status is None:
+            return None
+        status, received = self._translation_status
+        if (now - received > self._parameter('translation_status_freshness_sec')
+                or not self._translation.owns(status)):
+            return None
+        return status
 
     def _on_motion_status(self, message):
         try:
@@ -576,11 +700,17 @@ class AutomaticLocalizationManager(Node):
         if self._probe is not None:
             self._motion_request_publisher.publish(String(
                 data=encode_motion_request(self._probe.request())))
+        if getattr(self, '_translation', None) is not None:
+            self._translation_request_publisher.publish(String(
+                data=encode_translation_request(self._translation.request())))
 
     def _guard_released(self, now):
         status = self._fresh_guard_status(now)
+        linear = self._fresh_translation_status(now)
         released = (status is not None and self._probe.owns(status)
                     and status.state == GuardState.RELEASED
+                    and (getattr(self, '_translation', None) is None
+                         or (linear is not None and linear.state == 'RELEASED'))
                     and self.count_publishers(self._command_topic) == 0)
         if released:
             self._guard_release_confirmed = True
@@ -711,7 +841,8 @@ class AutomaticLocalizationManager(Node):
             (self._session, self._map_hash), run_validation_job,
             self._latest_grid, self._search_result, train, holdout,
             self._search_config(), self._validation_thresholds(),
-            self._parameter('verification_timeout_sec'), prior)
+            self._parameter('verification_timeout_sec'), prior,
+            getattr(self, '_translated', False))
         self._surface_stage = 'validating'
 
     def _finish_validation(self, decision, now):
@@ -857,6 +988,12 @@ class AutomaticLocalizationManager(Node):
         if self._segmented:
             self._view_id = 0
             self._probe = ProbeLink(self._session)    # STOP handshake
+            self._translation = (TranslationLink(self._session)
+                                 if self._translation_enabled else None)
+            self._translation_status = None
+            self._translated = False
+            self._route_rotation = None
+            self._route_status = None
             self._guard_release_confirmed = False
             self._force_probe_pending = self._force_probe_once
             self._refresh_probe_lease()
@@ -1001,6 +1138,8 @@ class AutomaticLocalizationManager(Node):
         pose = message.pose.pose
         yaw = quaternion_yaw(pose.orientation)
         current_pose = (pose.position.x, pose.position.y, yaw)
+        self._last_odom_stamp_ns = (message.header.stamp.sec * 10**9
+                                    + message.header.stamp.nanosec)
         if self._last_odom_pose is not None:
             distance = math.hypot(
                 current_pose[0] - self._last_odom_pose[0],
@@ -1394,6 +1533,10 @@ class AutomaticLocalizationManager(Node):
                 and self._probe.operation != MotionOperation.RELEASE):
             self._probe.stop()
             self._refresh_probe_lease()      # do not wait for the next tick
+        if (getattr(self, '_translation', None) is not None
+                and self._translation.operation != 'RELEASE'):
+            self._translation.stop()
+            self._refresh_probe_lease()
         self.get_logger().error(reason)
         if self._navigation_may_be_active:
             self._request_navigation_pause()
@@ -2031,6 +2174,10 @@ class AutomaticLocalizationManager(Node):
                 if self._probe.operation != MotionOperation.RELEASE:
                     self._probe.release()
                     self._refresh_probe_lease()
+                if (self._translation is not None
+                        and self._translation.operation != 'RELEASE'):
+                    self._translation.release()
+                    self._refresh_probe_lease()
                 if state_age > self._parameter('service_timeout_sec'):
                     self._fail('motion guard did not release control')
             elif not self._navigation_client.service_is_ready():
@@ -2125,10 +2272,8 @@ class AutomaticLocalizationManager(Node):
             if frames.reason == RejectReason.ODOM_JUMP:
                 self._reject(frames.reason, frames.detail)
             return None
-        # Each new view must contribute its own TRAIN frames.
-        current = [frame for frame in frames
-                   if role != FrameRole.TRAIN
-                   or frame.view_id == self._view_id]
+        # Each new view must contribute its own frames of this role.
+        current = [frame for frame in frames if frame.view_id == self._view_id]
         return frames if len(current) >= wanted else None
 
     def _gather(self, role, now):
@@ -2226,7 +2371,8 @@ class AutomaticLocalizationManager(Node):
                     self._search_config(), self._validation_thresholds(),
                     self._parameter('verification_timeout_sec'),
                     None if isinstance(train, Reject)
-                    else self._pose_prior(train))
+                    else self._pose_prior(train),
+                    getattr(self, '_translated', False))
                 self._validation_submitted = True
                 return
             outcome = self._worker.poll()
@@ -2306,6 +2452,22 @@ class AutomaticLocalizationManager(Node):
                 self._fail('probe rotation did not settle',
                            manual_recovery=False)
 
+        elif self._state == State.PLAN_ROUTE:
+            self._tick_plan_route(now, state_age)
+
+        elif self._state == State.EXECUTE_TRANSLATION:
+            self._tick_execute_translation(now, state_age)
+
+        elif self._state == State.SETTLE_TRANSLATION:
+            status = self._fresh_translation_status(now)
+            settled = (status is not None and status.state == 'STOPPED'
+                       and self._stopped(now))
+            if settled and state_age >= self._parameter('translation_settle_sec'):
+                self._translated = True
+                self._start_next_view()
+            elif state_age > self._parameter('translation_settle_timeout_sec'):
+                self._fail('translation did not settle', manual_recovery=False)
+
     def _reject_or_probe(self, reason, now):
         """Ambiguity in segmented_rotation plans a probe; else reject."""
         if not self._segmented or reason not in PROBE_RESOLVABLE:
@@ -2325,9 +2487,190 @@ class AutomaticLocalizationManager(Node):
                          'probes did not reduce the hypotheses')
             return
         self._probe_reason = reason
+        if (getattr(self, '_translation_enabled', False)
+                and reason == RejectReason.AMBIGUOUS_LOCATION.value
+                and result is not None and result.complete):
+            self.get_logger().info(f'{reason}: planning a common safe route')
+            self._route_submitted = False
+            self._transition(State.PLAN_ROUTE)
+            return
         self.get_logger().info(
             f'{reason}: planning a probe rotation (segmented_rotation)')
         self._transition(State.PLAN_PROBE)
+
+    def _route_model(self):
+        """Motion envelope from the ACCEPTED linear profile."""
+        profile = self._linear_profile
+        return MotionModel(
+            footprint=self._footprint, padding_m=self._rotation_gate.padding_m,
+            forward_stop_extension_m=self._linear_stop_extension,
+            forward_lateral_error_m=profile.lateral_error_m, calibrated=True)
+
+    def _route_candidates(self):
+        """
+        Plausible candidates at the current odometry pose, best first.
+
+        Every candidate within ``route_candidate_window`` of the best
+        HOLDOUT score is kept (up to ``route_max_candidates``); none is
+        dropped to make a route feasible.
+        """
+        result = self._search_result
+        if result is None or not result.hypotheses or self._last_odom_pose is None:
+            return ()
+        by_id = {h.cluster_id: h for h in result.hypotheses}
+        decision = getattr(self, '_diagnostic_decision', None)
+        ranked = ([(by_id[c], score) for c, score in decision.holdout if c in by_id]
+                  if decision is not None and decision.holdout
+                  else [(h, h.score) for h in sorted(result.hypotheses,
+                                                     key=lambda h: -h.score)])
+        best = ranked[0][1]
+        window = float(self._parameter('route_candidate_window'))
+        keep = [h for h, score in ranked if score >= best - window]
+        keep = keep[:int(self._parameter('route_max_candidates'))]
+        current = SE2(*self._last_odom_pose)
+        return tuple(
+            seed_pose_at_current_time(SE2(h.x, h.y, h.yaw), self._search_reference,
+                                      current)
+            for h in keep)
+
+    def _route_layers(self, static_map):
+        """Observation layers: the navigation map, plus mesh bands if loaded."""
+        occupied = static_map.data == 100
+        layers = {'nav_map': (occupied, occupied)}
+        vertices = getattr(self, '_surface_vertices', None)
+        if vertices is not None:
+            for lo, hi in ((0.35, 0.6), (0.6, 1.0), (1.0, 1.5), (1.5, 2.0)):
+                band = vertices[(vertices[:, 2] >= lo) & (vertices[:, 2] < hi)]
+                i, j = static_map.cells(band[:, 0], band[:, 1])
+                inside = ((i >= 0) & (i < static_map.width)
+                          & (j >= 0) & (j < static_map.height))
+                grid = np.zeros(occupied.shape, bool)
+                grid[j[inside], i[inside]] = True
+                layers[f'mesh_{lo:.2f}-{hi:.2f}'] = (grid, grid)
+        return layers
+
+    def _tick_plan_route(self, now, state_age):
+        """Plan a commonly safe route in the worker; fall back to rotation."""
+        if not getattr(self, '_route_submitted', False):
+            poses = self._route_candidates()
+            if len(poses) < 2:
+                self._route_status = {'status': 'TOO_FEW_CANDIDATES'}
+                self._transition(State.PLAN_PROBE)
+                return
+            static_map = static_map_from_grid(self._latest_grid, self._map_hash)
+            config = PlannerConfig(
+                rotations=(math.pi / 4, -math.pi / 4, math.pi / 2, -math.pi / 2),
+                forwards=tuple(d for d in (0.2, 0.4, 0.6) if d > self._linear_stop_extension),
+                max_depth=int(self._parameter('route_max_depth')),
+                min_difference=float(self._parameter('route_min_difference')),
+                time_budget_s=max(1.0, float(self._parameter('route_plan_timeout_sec')) - 5.0))
+            bounds = PoseBounds()
+            self._route_poses = poses
+            self._route_bounds = bounds
+            self._worker.submit((self._session, self._map_hash), run_route_plan_job,
+                                static_map, self._route_layers(static_map),
+                                tuple(((p.x, p.y, p.yaw), bounds) for p in poses),
+                                self._route_model(), config)
+            self._route_submitted = True
+            return
+        outcome = self._worker.poll()
+        if outcome is None:
+            if state_age > float(self._parameter('route_plan_timeout_sec')) + 5.0:
+                self._cancel_worker()
+                self._route_status = {'status': 'PLAN_TIMEOUT'}
+                self._transition(State.PLAN_PROBE)
+            return
+        token, status, plan = outcome
+        if token != (self._session, self._map_hash) or status != 'ok':
+            self._route_status = {'status': 'PLAN_FAILED', 'detail': str(plan)}
+            self._transition(State.PLAN_PROBE)
+            return
+        self._route_status = {
+            'status': plan.status, 'objective': round(plan.objective, 3),
+            'route': [[kind, round(value, 4)] for kind, value in plan.route],
+            'candidates': len(self._route_poses)}
+        self.get_logger().info(f'route plan: {self._route_status}')
+        if plan.status != ROUTE_FOUND or not plan.route:
+            self._transition(State.PLAN_PROBE)      # existing rotation probing
+            return
+        kind, value = plan.route[0]
+        if kind == ROTATE:
+            self._route_rotation = value
+            self._transition(State.PLAN_PROBE)
+            return
+        self._translation_start = SE2(*self._last_odom_pose)
+        self._translation_target = value
+        self._translation_moved = False
+        self._translation.move(value, float(self._parameter('translation_speed_mps')),
+                               self._linear_profile.digest)
+        self._refresh_probe_lease()
+        self._transition(State.EXECUTE_TRANSLATION)
+
+    def _route_field_pair(self):
+        """Clearance fields of the current map, built once per map hash."""
+        cached = getattr(self, '_route_fields', None)
+        if cached is None or cached[0] != self._map_hash:
+            static_map = static_map_from_grid(self._latest_grid, self._map_hash)
+            cached = (self._map_hash, (
+                ClearanceField(static_map),
+                ClearanceField(static_map, blocked=static_map.data == 100,
+                               outside_blocked=False)))
+            self._route_fields = cached
+        return cached[1]
+
+    def _publish_route_evidence(self):
+        """Re-check the remaining path under every candidate; send evidence."""
+        stamp = getattr(self, '_last_odom_stamp_ns', 0)
+        if self._last_odom_pose is None or stamp <= 0:
+            return
+        odom = SE2(*self._last_odom_pose)
+        delta = self._translation_start.inverse().compose(odom)
+        remaining = max(0.0, self._translation_target - delta.x)
+        clear, reason = True, ''
+        if remaining > 1e-3:
+            fields, model = self._route_field_pair(), self._route_model()
+            for start in self._route_poses:
+                pose = start.compose(delta)
+                check = check_route(fields, model, (pose.x, pose.y, pose.yaw),
+                                    self._route_bounds, ((FORWARD, remaining),))
+                if not check.safe:
+                    clear, reason = False, check.reason
+                    break
+        digest = hashlib.sha256(json.dumps(
+            [[round(p.x, 4), round(p.y, 4), round(p.yaw, 4)] for p in self._route_poses]
+        ).encode()).hexdigest()
+        self._route_evidence_publisher.publish(String(data=encode_route_evidence(
+            RouteEvidence(self._session, self._translation.sequence, stamp,
+                          odom.x, odom.y, odom.yaw, remaining,
+                          self._linear_stop_extension, clear, reason,
+                          self._map_hash, digest))))
+
+    def _tick_execute_translation(self, now, state_age):
+        """Feed map evidence and follow the guard's translation status."""
+        self._publish_route_evidence()
+        status = self._fresh_translation_status(now)
+        if status is None:
+            if state_age > self._parameter('translation_status_freshness_sec') * 3:
+                self._reject(RejectReason.CONTROL_CONFLICT,
+                             'translation guard status missing')
+            return
+        if status.state == 'FAULT':
+            reason = LINEAR_FAULT_REASONS.get(status.reason)
+            if reason is None:
+                try:
+                    reason = RejectReason(status.reason)
+                except ValueError:
+                    reason = RejectReason.CONTROL_CONFLICT
+            self._reject(reason, f'translation refused: {status.reason}')
+        elif status.state == 'MOVING':
+            self._translation_moved = True
+        elif self._translation_moved and status.state in ('STOPPING', 'STOPPED'):
+            self._translation.stop()
+            self._refresh_probe_lease()
+            self._transition(State.SETTLE_TRANSLATION)
+        elif state_age > self._parameter('translation_motion_timeout_sec'):
+            self._reject(RejectReason.MOTION_BUDGET_EXHAUSTED,
+                         'translation never completed')
 
     def _plan_probe(self, now, state_age):
         """Read-only choice of the next probe; the guard re-checks it."""
@@ -2353,6 +2696,9 @@ class AutomaticLocalizationManager(Node):
             evidence = evidence_from_scan(
                 scan, sensor, (base.x, base.y), frame_id='odom',
                 deadline=time.monotonic() + 0.5)
+            route_rotation = getattr(self, '_route_rotation', None)
+            angles = ((route_rotation,) if route_rotation is not None
+                      else self._confined['probe_angles_rad'])
             decisions = [
                 evaluate_localization_rotation(
                     evidence, self._footprint, base, angle,
@@ -2360,7 +2706,7 @@ class AutomaticLocalizationManager(Node):
                     config=self._rotation_gate,
                     attestation=self._attestation, session=self._session,
                     now_mono=now).decision
-                for angle in self._confined['probe_angles_rad']]
+                for angle in angles]
         except (LookupError, ContractError):
             return                     # retried until the plan timeout
         self._probe_unknown_cells = min(d.unknown_cells for d in decisions)
@@ -2368,6 +2714,7 @@ class AutomaticLocalizationManager(Node):
         headings = sorted({frame.T_odom_base.yaw for frame in views}
                           if not isinstance(views, Reject) else set())
         choice, reason = choose_probe(decisions, headings, base.yaw)
+        self._route_rotation = None
         if choice is None:
             self._reject(reason, 'no admissible probe rotation')
             return
@@ -2427,8 +2774,12 @@ class AutomaticLocalizationManager(Node):
         self._diagnostic_train = ()
         self._diagnostic_holdout = ()
         self._diagnostic_decision = None
+        # After a translation every view keeps its independent HOLDOUT, so
+        # the winner must pass the gates at each place (per-view gates).
+        keep = ((FrameRole.TRAIN, FrameRole.HOLDOUT)
+                if getattr(self, '_translated', False) else (FrameRole.TRAIN,))
         self._keyframes = [frame for frame in self._keyframes
-                           if frame.role == FrameRole.TRAIN]
+                           if frame.role in keep]
         self._confined_scans.clear()
         self._search_result = None
         self._validation_submitted = False
@@ -2459,6 +2810,8 @@ class AutomaticLocalizationManager(Node):
         if self._probe is not None:
             # No probe follows an accepted candidate: hand control back.
             self._probe.release()
+            if getattr(self, '_translation', None) is not None:
+                self._translation.release()
             self._refresh_probe_lease()
         self._transition(State.STOP_AND_VERIFY)
 
@@ -2494,6 +2847,11 @@ class AutomaticLocalizationManager(Node):
             'forced_probe_test': getattr(self, '_force_probe_once', False),
             'robot_not_moved': getattr(self, '_robot_not_moved', False),
             'surface_recheck': getattr(self, '_surface_status', None),
+            'translation': {
+                'enabled': getattr(self, '_translation_enabled', False),
+                'reason': getattr(self, '_translation_reason', ''),
+                'translated': getattr(self, '_translated', False),
+                'plan': getattr(self, '_route_status', None)},
             'saved_pose_prior': (
                 'used' if getattr(self, '_saved_prior_used', False)
                 else 'loaded' if getattr(self, '_saved_prior', None)

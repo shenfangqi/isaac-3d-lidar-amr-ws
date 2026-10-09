@@ -142,7 +142,8 @@ def test_robot_not_moved_is_plumbed_as_a_per_launch_attestation():
     assert ('--robot-not-moved requires --localization-strategy '
             'stationary_only or segmented_rotation.') in start
     assert 'robot_not_moved was requested but the manager' in start
-    assert '"${robot_not_moved}" "${surface_recheck}" >/dev/null' in start
+    assert '"${robot_not_moved}" "${surface_recheck}" \\' in start
+    assert '"${localization_translation}" "${remote_linear_profile}" >/dev/null' in start
     assert 'robot_not_moved="${13:-false}"' in container
     assert 'auto_launch_argument+=" robot_not_moved:=true"' in container
     block = launch.split("'robot_not_moved',", 1)[1]
@@ -158,9 +159,52 @@ def test_surface_recheck_is_plumbed_with_record_as_the_default():
     assert 'surface_recheck=record' in start
     assert '--surface-recheck)' in start
     assert 'surface_recheck decide was requested but the manager reports' in start
-    assert '"${robot_not_moved}" "${surface_recheck}" >/dev/null' in start
+    assert '"${robot_not_moved}" "${surface_recheck}" \\' in start
+    assert '"${localization_translation}" "${remote_linear_profile}" >/dev/null' in start
     assert 'surface_recheck="${14:-record}"' in container
-    assert 'auto_launch_argument+=" surface_recheck_policy:=${surface_recheck}"' in container
+    assert ('auto_launch_argument+=" surface_recheck_policy:=${surface_recheck}'
+            '${translation_launch_argument}"') in container
     block = launch.split("'surface_recheck_policy',", 1)[1]
     assert block.lstrip().startswith("default_value='record'")
     assert "'.rsplit('.', 1)[0] + '.ply'" in launch
+
+
+def test_translation_is_plumbed_and_needs_an_accepted_linear_profile():
+    start = (SCRIPTS / 'start_real_robot_navigation_rviz.sh').read_text()
+    container = (SCRIPTS / 'jetson_nvblox_container.sh').read_text()
+    launch = (PROJECT_DIR / 'src/isaac_3d_lidar_bringup/launch/'
+              'carbot_navigation_real.launch.py').read_text()
+    assert 'localization_translation=forbid' in start
+    assert 'check_linear_profile.py' in start
+    # Checked before anything starts on the robot.
+    assert start.index('check_linear_profile.py') < start.index(
+        'echo "[1/8] Disabling the conflicting web teleop publisher..."')
+    assert 'Linear profile copy on the Jetson does not match' in start
+    assert 'translation guarded was requested but the manager reports' in start
+    assert 'translation="${15:-forbid}"' in container
+    assert 'translation guarded needs motion_policy guarded.' in container
+    block = launch.split("'translation_policy',", 1)[1]
+    assert block.lstrip().startswith("default_value='forbid'")
+
+
+def test_linear_profile_check_refuses_anything_but_accepted_and_matching(tmp_path):
+    spec = importlib.util.spec_from_file_location(
+        'check_linear_profile', SCRIPTS / 'check_linear_profile.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    from isaac_3d_lidar_bringup.localization_translation_contracts import (
+        encode_linear_profile,
+    )
+    from isaac_3d_lidar_bringup.localization_translation_guard import LinearProfile
+    hashes = _checker().canonical_hashes(PARAMETERS, 0.05)
+    good = LinearProfile(*hashes, ('bag-linear',), 0.08, 0.1, 0.02, 0.6, 0.03, 'ACCEPTED')
+    result = module.check(encode_linear_profile(good), PARAMETERS)
+    assert result['profile_digest'] == good.digest
+    for bad in (LinearProfile(*hashes, ('bag-linear',), 0.08, 0.1, 0.02, 0.6, 0.03,
+                              'REVIEWED'),
+                LinearProfile(hashes[0], hashes[1], '0' * 64, ('bag-linear',), 0.08,
+                              0.1, 0.02, 0.6, 0.03, 'ACCEPTED')):
+        with pytest.raises(ValueError):
+            module.check(encode_linear_profile(bad), PARAMETERS)
+    with pytest.raises(ValueError):
+        module.check('not json', PARAMETERS)
