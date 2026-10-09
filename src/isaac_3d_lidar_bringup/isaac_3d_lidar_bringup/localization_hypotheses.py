@@ -426,9 +426,51 @@ def _same_basin(first, second, config):
             <= config.cluster_yaw_rad)
 
 
+@dataclass(frozen=True)
+class CoarseCache:
+    """
+    Per-view coarse scores of one session's map-wide searches.
+
+    The multi-view coarse score is the mean of the single-view scores of one
+    representative frame per view, so the scores of an earlier view can be
+    reused verbatim while the map, the search settings, the reference frame
+    and that view's representative are unchanged.  ``views`` maps a view id
+    to ``(representative keyframe id, array of scores)`` in pose order.
+    """
+
+    key: tuple
+    views: dict
+
+
+@dataclass(frozen=True)
+class SearchOutput:
+    """A map-wide search result and the coarse cache for the next one."""
+
+    result: SearchResult
+    coarse_cache: CoarseCache
+
+
+def _coarse_key(digest, config, reference_id):
+    return (digest, reference_id, config.coarse_step_m,
+            config.coarse_yaw_step_rad, config.coarse_beams,
+            config.occupied_threshold, config.tolerance_cells)
+
+
 def search_multiview(grid, train_frames, config, deadline=None,
                      cancel_token=None):
     """Map-wide search over every free cell centre using TRAIN frames."""
+    return search_multiview_cached(grid, train_frames, config, deadline,
+                                   cancel_token).result
+
+
+def search_multiview_cached(grid, train_frames, config, deadline=None,
+                            cancel_token=None, coarse_cache=None):
+    """
+    ``search_multiview`` that reuses and returns per-view coarse scores.
+
+    The result is identical to a search without the cache; only views
+    without valid cached scores are evaluated in the coarse pass.
+    """
     started = time.monotonic()
     frames, session = _train_frames(train_frames)
     digest = map_hash(grid)
@@ -438,18 +480,39 @@ def search_multiview(grid, train_frames, config, deadline=None,
         views.setdefault(frame.view_id, []).append(frame)
     # One representative per view keeps the coarse pass at single-view cost
     # per viewpoint; all TRAIN frames are used during refinement.
-    coarse_frames = tuple(members[len(members) // 2]
-                          for _view, members in sorted(views.items()))
+    view_ids = sorted(views)
+    representative = {view: views[view][len(views[view]) // 2]
+                      for view in view_ids}
 
     info = grid.info
     cell_step = max(1, round(config.coarse_step_m / info.resolution))
     yaw_count = max(1, math.ceil(2.0 * math.pi / config.coarse_yaw_step_rad))
+    key = _coarse_key(digest, config, frames[0].id)
+    cached = coarse_cache.views if (
+        coarse_cache is not None and coarse_cache.key == key) else {}
+    scores = {view: cached[view][1] for view in view_ids
+              if view in cached
+              and cached[view][0] == representative[view].id}
+    fresh = {view: array('d') for view in view_ids if view not in scores}
+    pose_count = sum(
+        1 for cell_y in range(0, info.height, cell_step)
+        for cell_x in range(0, info.width, cell_step)
+        if grid.data[cell_y * info.width + cell_x] == 0) * yaw_count
+    if any(len(values) != pose_count for values in scores.values()):
+        fresh.update({view: array('d') for view in scores})
+        scores = {}
+
+    def incomplete(stop):
+        return SearchOutput(_incomplete(session, digest, evaluated, started,
+                                        stop), coarse_cache)
+
     coarse = []
     evaluated = 0
+    index = 0
     for cell_y in range(0, info.height, cell_step):
         stop = _expired(deadline, cancel_token)
         if stop is not None:
-            return _incomplete(session, digest, evaluated, started, stop)
+            return incomplete(stop)
         for cell_x in range(0, info.width, cell_step):
             # A free cell is a candidate centre, not a rotation-safety proof.
             if grid.data[cell_y * info.width + cell_x] != 0:
@@ -457,17 +520,30 @@ def search_multiview(grid, train_frames, config, deadline=None,
             x, y = cell_center_to_world(grid, cell_x, cell_y)
             for yaw_index in range(yaw_count):
                 yaw = -math.pi + yaw_index * 2.0 * math.pi / yaw_count
-                metrics = score_pose(grid, SE2(x, y, yaw), coarse_frames,
-                                     reference, config, config.coarse_beams)
+                pose = SE2(x, y, yaw)
+                for view, values in fresh.items():
+                    values.append(score_pose(
+                        grid, pose, (representative[view],), reference,
+                        config, config.coarse_beams)['score'])
+                # Same order and arithmetic as score_pose over all views.
+                score = sum(
+                    (scores[view] if view in scores else fresh[view])[index]
+                    for view in view_ids) / len(view_ids)
+                index += 1
                 evaluated += 1
-                if metrics['score'] > 0.0:
-                    coarse.append((metrics['score'], x, y, yaw))
+                if score > 0.0:
+                    coarse.append((score, x, y, yaw))
+    cache = CoarseCache(key, {
+        view: (representative[view].id,
+               scores[view] if view in scores else fresh[view])
+        for view in view_ids})
     coarse.sort(reverse=True)
     clusters = cluster_hypotheses(coarse[:config.coarse_keep],
                                   config.cluster_xy_m, config.cluster_yaw_rad)
     if not clusters:
-        return SearchResult(session, digest, True, (), evaluated,
-                            time.monotonic() - started, '')
+        return SearchOutput(SearchResult(session, digest, True, (), evaluated,
+                                         time.monotonic() - started, ''),
+                            cache)
 
     field = distance_field(grid, config.occupied_threshold)
     refined = []
@@ -476,7 +552,8 @@ def search_multiview(grid, train_frames, config, deadline=None,
             grid, cluster['seed'], frames, reference, config, deadline,
             cancel_token, field)
         if stop is not None:
-            return _incomplete(session, digest, evaluated, started, stop)
+            return SearchOutput(_incomplete(session, digest, evaluated,
+                                            started, stop), cache)
         pose, metrics = outcome
         evaluated += config.refine_evaluations + config.polish_evaluations
         refined.append((cluster, pose, metrics))
@@ -520,10 +597,12 @@ def search_multiview(grid, train_frames, config, deadline=None,
     if any(cluster['seed'][0] >= winner_coarse
            - config.coarse_competition_margin
            and not represented(cluster['seed']) for cluster in unrefined):
-        return _incomplete(session, digest, evaluated, started,
-                           RejectReason.SEARCH_INCOMPLETE, hypotheses)
-    return SearchResult(session, digest, True, hypotheses, evaluated,
-                        time.monotonic() - started, '')
+        return SearchOutput(_incomplete(
+            session, digest, evaluated, started,
+            RejectReason.SEARCH_INCOMPLETE, hypotheses), cache)
+    return SearchOutput(SearchResult(session, digest, True, hypotheses,
+                                     evaluated, time.monotonic() - started,
+                                     ''), cache)
 
 
 def recheck_hypotheses(grid, previous, previous_reference, train_frames,
@@ -685,10 +764,11 @@ def validate_hypotheses(grid, result, train_frames, holdout_frames, config,
                            runner_up_score=runner_up, holdout=summary)
 
 
-def run_search_job(grid, train_frames, config, timeout_s):
-    """Worker entry point for search_multiview."""
-    return search_multiview(grid, train_frames, config,
-                            deadline=time.monotonic() + timeout_s)
+def run_search_job(grid, train_frames, config, timeout_s, coarse_cache=None):
+    """Worker entry point: a SearchOutput with the updated coarse cache."""
+    return search_multiview_cached(grid, train_frames, config,
+                                   deadline=time.monotonic() + timeout_s,
+                                   coarse_cache=coarse_cache)
 
 
 def run_recheck_job(grid, previous, previous_reference, train_frames, config,

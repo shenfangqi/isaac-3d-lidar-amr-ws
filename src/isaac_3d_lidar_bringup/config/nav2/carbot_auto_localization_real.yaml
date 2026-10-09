@@ -146,7 +146,8 @@ automatic_localization_manager:
     # Per search job; the whole session including verification is bounded
     # separately.  The worker process owns the CPU, never the ROS executor.
     search_timeout_sec: 120.0
-    session_timeout_sec: 240.0
+    # 240 s initially; 2026-10-09 a natural four-probe run needed 233 s.
+    session_timeout_sec: 360.0
     collect_static_timeout_sec: 10.0
     # Search clustering settings pending offline calibration; these are not
     # localization tolerances.

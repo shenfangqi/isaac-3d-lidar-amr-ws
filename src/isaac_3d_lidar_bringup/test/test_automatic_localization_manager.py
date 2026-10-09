@@ -1214,6 +1214,30 @@ def test_refuted_recheck_searches_the_whole_map_again(segmented):
     assert manager._state == manager.State.VERIFY_HYPOTHESES
 
 
+def test_map_wide_search_keeps_and_passes_the_coarse_cache(segmented):
+    manager = segmented
+    cache = localization_hypotheses.CoarseCache(('key',), {0: (0, ())})
+    incomplete = _search_result(False, 'SEARCH_INCOMPLETE')
+    manager._worker = FakeWorker([
+        localization_hypotheses.SearchOutput(incomplete, cache)])
+    _start_to_collect(manager)
+    _feed(manager, 3)
+    manager._tick()
+    name, arguments = manager._worker.jobs[-1]
+    assert name == 'run_search_job' and arguments[-1] is None
+    manager._latest_safety_scan = _room_scan(manager)
+    manager._tick()                       # incomplete -> probe planning
+    assert manager._coarse_cache is cache
+    assert manager._search_result is incomplete
+    manager._search_reference = localization_contracts.SE2(0.0, 0.0, 0.0)
+    manager._start_next_view()
+    assert manager._recheck_basis is None
+    _feed(manager, 3)
+    manager._tick()                       # next map-wide search
+    name, arguments = manager._worker.jobs[-1]
+    assert name == 'run_search_job' and arguments[-1] is cache
+
+
 @pytest.mark.parametrize('complete', [True, False])
 def test_only_a_complete_search_is_rechecked(segmented, complete):
     # An incomplete search may have dropped alternatives.
@@ -1329,3 +1353,27 @@ def test_force_probe_once_is_validation_only_guarded_test(
     manager._validation_only = validation_only
     with pytest.raises(localization_contracts.ContractError):
         manager._configure_strategy()
+
+
+def test_guard_and_manager_share_session_limits(manager):
+    # The guard does not read the manager's YAML.  If its session budget or
+    # attestation lifetime were shorter, late probes of a longer session
+    # would be refused by the guard (2026-10-09: 240 -> 360 s).
+    package = Path(__file__).resolve().parents[1]
+    guard = ast.parse((package / 'isaac_3d_lidar_bringup'
+                       / 'localization_motion_guard_node.py').read_text())
+    declared = {
+        call.args[0].value: call.args[1].value
+        for call in ast.walk(guard)
+        if isinstance(call, ast.Call) and getattr(call.func, 'id', '') == (
+            'declare') and len(call.args) == 2
+        and isinstance(call.args[0], ast.Constant)
+        and isinstance(call.args[1], ast.Constant)}
+    config = (package / 'config/nav2/carbot_auto_localization_real.yaml'
+              ).read_text()
+    for name in ('session_timeout_sec', 'attestation_max_age_sec'):
+        assert declared[name] == manager.params[name], name
+    assert f"session_timeout_sec: {manager.params['session_timeout_sec']}" in (
+        config)
+    assert localization_rotation_policy.ProbeBudgetLimits().max_session_s == (
+        manager.params['session_timeout_sec'])

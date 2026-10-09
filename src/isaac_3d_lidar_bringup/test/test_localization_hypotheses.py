@@ -20,6 +20,7 @@ from isaac_3d_lidar_bringup.localization_contracts import (
     SE2,
     SearchResult,
 )
+from isaac_3d_lidar_bringup import localization_hypotheses
 from isaac_3d_lidar_bringup.localization_hypotheses import (
     cell_center_to_world,
     cluster_hypotheses,
@@ -27,6 +28,7 @@ from isaac_3d_lidar_bringup.localization_hypotheses import (
     recheck_hypotheses,
     scan_pose_in_map,
     search_multiview,
+    search_multiview_cached,
     SearchConfig,
     SearchWorker,
     seed_pose_at_current_time,
@@ -364,6 +366,53 @@ def test_recheck_refuses_incomplete_search_and_detects_map_change():
     result = recheck_hypotheses(grid, previous, odom0, view0 + view1, FAST)
     assert not result.complete
     assert result.reason == RejectReason.MAP_CHANGED.value
+
+
+def _coarse_calls(monkeypatch):
+    calls = []
+    original = localization_hypotheses.score_pose
+
+    def counting(grid, pose, frames, reference, config, beams):
+        if beams == config.coarse_beams:
+            calls.append(tuple(frame.view_id for frame in frames))
+        return original(grid, pose, frames, reference, config, beams)
+    monkeypatch.setattr(localization_hypotheses, 'score_pose', counting)
+    return calls
+
+
+def test_coarse_cache_reuses_earlier_views_exactly(monkeypatch):
+    grid = _grid(ROOM, 3.4, 2.4)
+    _odom0, view0, _pose1, view1, _odom1 = _two_views()
+    plain = search_multiview(grid, view0 + view1, FAST)
+    calls = _coarse_calls(monkeypatch)
+    first = search_multiview_cached(grid, view0, FAST)
+    calls.clear()
+    second = search_multiview_cached(grid, view0 + view1, FAST,
+                                     coarse_cache=first.coarse_cache)
+    # Only the new view is scored in the coarse pass ...
+    assert calls and set(calls) == {(1,)}
+    # ... and the result equals a search without the cache.
+    assert second.result.hypotheses == plain.hypotheses
+    assert second.result.complete == plain.complete
+    assert second.result.evaluated == plain.evaluated
+    assert set(second.coarse_cache.views) == {0, 1}
+
+
+def test_coarse_cache_is_ignored_when_its_key_changes(monkeypatch):
+    grid = _grid(ROOM, 3.4, 2.4)
+    _odom0, view0, _pose1, view1, _odom1 = _two_views()
+    first = search_multiview_cached(grid, view0, FAST)
+    calls = _coarse_calls(monkeypatch)
+    # Another reference frame (view 1 first) invalidates every cached view.
+    search_multiview_cached(grid, view1 + view0, FAST,
+                            coarse_cache=first.coarse_cache)
+    assert {0, 1} <= {view for call in calls for view in call}
+    calls.clear()
+    # So does a changed map.
+    grid.data[0] = 100
+    search_multiview_cached(grid, view0, FAST,
+                            coarse_cache=first.coarse_cache)
+    assert set(calls) == {(0,)}
 
 
 def test_rotated_map_origin():

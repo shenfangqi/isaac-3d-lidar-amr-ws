@@ -71,6 +71,7 @@ from isaac_3d_lidar_bringup.localization_hypotheses import (
     run_search_job,
     run_validation_job,
     SearchConfig,
+    SearchOutput,
     SearchWorker,
     seed_pose_at_current_time,
     ValidationThresholds,
@@ -447,7 +448,9 @@ class AutomaticLocalizationManager(Node):
             'probe_motion_timeout_sec': 45.0,
             'motion_request_timeout_sec': 0.30,
             'search_timeout_sec': 120.0,
-            'session_timeout_sec': 240.0,
+            # 2026-10-09: four probes plus one repeated map-wide search used
+            # 233 s of the initial 240 s; the guard uses the same values.
+            'session_timeout_sec': 360.0,
             'collect_static_timeout_sec': 10.0,
             'independent_cluster_xy_m': 0.30,
             'independent_cluster_yaw_rad': math.pi / 12.0,
@@ -462,7 +465,7 @@ class AutomaticLocalizationManager(Node):
             'rotation_padding_m': 0.05,
             'probe_speed_rad_s': 0.40,
             'attestation_max_translation_m': 0.05,
-            'attestation_max_age_sec': 240.0,
+            'attestation_max_age_sec': 360.0,
             'probe_plan_timeout_sec': 2.0,
             'probe_settle_sec': 1.0,
             'probe_settle_timeout_sec': 5.0,
@@ -609,6 +612,7 @@ class AutomaticLocalizationManager(Node):
         self._search_reference = None
         self._search_is_recheck = False
         self._recheck_basis = None
+        self._coarse_cache = None
         self._validation_submitted = False
         self._reject_reason = ''
 
@@ -1872,6 +1876,10 @@ class AutomaticLocalizationManager(Node):
                                  'search worker deadline')
                 return
             token, status, result = outcome
+            if status == 'ok' and isinstance(result, SearchOutput):
+                # Coarse scores of these views serve the next map-wide search.
+                self._coarse_cache = result.coarse_cache
+                result = result.result
             if token != (self._session, self._map_hash):
                 self._reject(RejectReason.MAP_CHANGED, 'stale search result')
             elif status != 'ok':
@@ -2063,7 +2071,7 @@ class AutomaticLocalizationManager(Node):
             self._worker.submit(
                 (self._session, self._map_hash), run_search_job,
                 self._latest_grid, train, self._search_config(),
-                self._parameter('search_timeout_sec'))
+                self._parameter('search_timeout_sec'), self._coarse_cache)
         else:
             previous, previous_reference = basis
             self.get_logger().info(

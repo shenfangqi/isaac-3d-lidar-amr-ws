@@ -151,7 +151,7 @@ seed_pose_at_current_time(winner, reference_odom, current_odom) -> SE2
 
 地图距离场/射线索引可缓存，key 为 map_hash。先全图一次，后续使用候选复核；若所有候选被推翻或搜索裁剪不能保证保留替代解，重新全图搜索，未完成前不能接受。
 
-初始每次搜索上限 120 s，整个会话 240 s，旋转另有独立预算。Jetson 测 p95/p99、源时间年龄与扫描最大空窗；候选计算超时保持停止，不扩大传感器新鲜度阈值来“通过”。
+初始每次搜索上限 120 s，整个会话 240 s（2026-10-09 实车四段探测用了 233 s，会话上限与放置担保有效期改为 360 s），旋转另有独立预算。Jetson 测 p95/p99、源时间年龄与扫描最大空窗；候选计算超时保持停止，不扩大传感器新鲜度阈值来“通过”。
 
 ## 6. 旋转安全与执行算法
 
@@ -223,7 +223,7 @@ manager 在新策略不得创建同话题速度发布者。guard STOP 并 RELEAS
 | max_total_probe_yaw_rad / probe_motion_timeout_sec | 2π / 45，monotonic 预算 |
 | motion_request_timeout_sec | 0.30；实测停车距离必须覆盖该等待时间 |
 | sensor_freshness_sec | 复用 0.5 s 上限；profile 需覆盖最坏数据年龄，不能称瞬时障碍保护 |
-| search_timeout_sec / session_timeout_sec | 120 / 240 |
+| search_timeout_sec / session_timeout_sec | 120 / 360（初始 240） |
 | independent_cluster_xy_m / yaw_rad | 0.30 / π/12，离线验证后调整 |
 | max_refined_clusters | 8；仍有竞争候选则不接受 |
 | motion_profile_path | 空默认；空/错 hash/未 review 禁止 guarded |

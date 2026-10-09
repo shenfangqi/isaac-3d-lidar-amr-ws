@@ -91,7 +91,7 @@ class MotionGuardNode(Node):
         declare('control_chain_hash', '')
         declare('operator_rotation_clear', False)
         declare('attestation_max_translation_m', 0.05)
-        declare('attestation_max_age_sec', 240.0)
+        declare('attestation_max_age_sec', 360.0)
         declare('footprint_xy', CANONICAL_FOOTPRINT)
         declare('padding_m', 0.05)
         declare('request_topic', '/automatic_localization/motion_request')
@@ -112,7 +112,7 @@ class MotionGuardNode(Node):
         declare('max_probe_segments', 6)
         declare('max_total_probe_yaw_rad', 2.0 * math.pi)
         declare('probe_motion_timeout_sec', 45.0)
-        declare('session_timeout_sec', 240.0)
+        declare('session_timeout_sec', 360.0)
         declare('motion_request_timeout_sec', 0.30)
         declare('sensor_freshness_sec', 0.5)
 
