@@ -447,7 +447,9 @@ class AutomaticLocalizationManager(Node):
             'probe_motion_timeout_sec': 45.0,
             'motion_request_timeout_sec': 0.30,
             'search_timeout_sec': 120.0,
-            'session_timeout_sec': 240.0,
+            # 2026-10-09: four probes plus one repeated map-wide search used
+            # 233 s of the initial 240 s; the guard uses the same values.
+            'session_timeout_sec': 360.0,
             'collect_static_timeout_sec': 10.0,
             'independent_cluster_xy_m': 0.30,
             'independent_cluster_yaw_rad': math.pi / 12.0,
@@ -462,7 +464,7 @@ class AutomaticLocalizationManager(Node):
             'rotation_padding_m': 0.05,
             'probe_speed_rad_s': 0.40,
             'attestation_max_translation_m': 0.05,
-            'attestation_max_age_sec': 240.0,
+            'attestation_max_age_sec': 360.0,
             'probe_plan_timeout_sec': 2.0,
             'probe_settle_sec': 1.0,
             'probe_settle_timeout_sec': 5.0,

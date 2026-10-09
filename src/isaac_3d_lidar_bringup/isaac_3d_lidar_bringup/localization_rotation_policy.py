@@ -525,7 +525,7 @@ class ProbeBudgetLimits:
     max_segments: int = 6
     max_total_abs_yaw_rad: float = 2.0 * math.pi
     max_motion_time_s: float = 45.0
-    max_session_s: float = 240.0
+    max_session_s: float = 360.0
 
     def __post_init__(self):
         if isinstance(self.max_segments, bool) or self.max_segments < 1:
