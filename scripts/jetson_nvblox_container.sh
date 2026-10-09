@@ -11,7 +11,7 @@ time_gate="${workspace}/scripts/wait_for_mapping_time_sync.py"
 
 usage() {
   echo "Usage: $0 {start|recreate|stop|status|logs} [compact|full|mapping]" >&2
-  echo "       $0 {start|recreate} navigation-safe MAP_YAML [manual|auto|auto-activate] [none|complex-route-validation] [legacy_full_rotation|stationary_only|segmented_rotation] [forbid|guarded PROFILE_JSON EXTRINSICS_HASH CONTROL_CHAIN_HASH true|false [force-probe-once]]" >&2
+  echo "       $0 {start|recreate} navigation-safe MAP_YAML [manual|auto|auto-activate] [none|complex-route-validation] [legacy_full_rotation|stationary_only|segmented_rotation] [forbid|guarded PROFILE_JSON EXTRINSICS_HASH CONTROL_CHAIN_HASH true|false [force-probe-once]] [ROBOT_NOT_MOVED true|false]" >&2
   echo "       $0 {start|recreate} navigation-diagnostic MAP_YAML" >&2
   echo "       Append 'auto' for validation or 'auto-activate' for guarded Nav2 activation." >&2
 }
@@ -84,6 +84,15 @@ case "${mode}" in
       echo "The 12th argument must be empty or 'force-probe-once'." >&2
       exit 2
     fi
+    robot_not_moved="${13:-false}"
+    if [[ "${robot_not_moved}" != "true" && "${robot_not_moved}" != "false" ]]; then
+      echo "robot_not_moved must be 'true' or 'false'." >&2
+      exit 2
+    fi
+    if [[ "${robot_not_moved}" == "true" && ( "${localization_strategy}" == "legacy_full_rotation" || "${initialization}" == "manual" ) ]]; then
+      echo "robot_not_moved needs automatic stationary_only or segmented_rotation localization." >&2
+      exit 2
+    fi
     if [[ "${motion_policy}" != "forbid" && "${motion_policy}" != "guarded" ]]; then
       echo "Motion policy must be 'forbid' or 'guarded'." >&2
       exit 2
@@ -144,6 +153,9 @@ case "${mode}" in
     fi
     if [[ "${initialization}" != "manual" ]]; then
       auto_launch_argument+=" localization_strategy:=${localization_strategy}${motion_launch_argument}"
+      if [[ "${robot_not_moved}" == "true" ]]; then
+        auto_launch_argument+=" robot_not_moved:=true"
+      fi
     fi
     diagnostic_launch_argument=""
     if [[ "${diagnostic_mode}" == "complex-route-validation" ]]; then

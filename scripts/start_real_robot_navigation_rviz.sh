@@ -32,11 +32,12 @@ motion_profile=""
 operator_rotation_clear=false
 operator_present=false
 force_probe_once=false
+robot_not_moved=false
 map_argument_seen=false
 
 usage() {
   cat <<EOF
-Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [--complex-route-validation] [--localization-strategy STRATEGY] [--localization-motion forbid|guarded --motion-profile JSON [--operator-rotation-clear] --operator-present] [MAP_YAML]
+Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [--complex-route-validation] [--localization-strategy STRATEGY] [--localization-motion forbid|guarded --motion-profile JSON [--operator-rotation-clear] --operator-present] [--robot-not-moved] [MAP_YAML]
 
 Start saved-map navigation for the physical Carbot and open RViz.
 
@@ -70,6 +71,13 @@ Options:
                   Real-robot test of the probe path: rotate once even if the
                   stationary result already passed. Only with --automatic and
                   --localization-motion guarded; Nav2 never activates.
+  --robot-not-moved
+                  Per-launch attestation that the robot has not been moved since
+                  its last READY pose was saved. Lets that pose choose among
+                  near-equal candidates (a symmetric twin elsewhere on the map);
+                  a clear result contradicting it is refused. Do not use after
+                  carrying or pushing the robot. Needs stationary_only or
+                  segmented_rotation.
   -h, --help      Show this help.
 
 Environment overrides:
@@ -127,6 +135,9 @@ while (( $# > 0 )); do
       ;;
     --force-probe-once)
       force_probe_once=true
+      ;;
+    --robot-not-moved)
+      robot_not_moved=true
       ;;
     --validation-only|--automatic)
       automatic_localization=true
@@ -202,6 +213,10 @@ if [[ "${localization_motion}" == "guarded" ]]; then
   motion_hashes_json="$(python3 "${script_dir}/check_motion_profile.py" "${motion_profile}")" || exit 2
 elif [[ -n "${motion_profile}" || "${operator_rotation_clear}" == "true" || "${force_probe_once}" == "true" ]]; then
   echo "--motion-profile, --operator-rotation-clear and --force-probe-once require --localization-motion guarded." >&2
+  exit 2
+fi
+if [[ "${robot_not_moved}" == "true" && "${localization_strategy}" == "legacy_full_rotation" ]]; then
+  echo "--robot-not-moved requires --localization-strategy stationary_only or segmented_rotation." >&2
   exit 2
 fi
 if [[ "${force_probe_once}" == "true" && "${automatic_activation}" == "true" ]]; then
@@ -625,6 +640,14 @@ run_automatic_localization() {
     return 1
   fi
   verify_motion_guard || return 1
+  if [[ "${robot_not_moved}" == "true" ]]; then
+    local attested
+    attested="$(remote_param_get /automatic_localization_manager robot_not_moved)" || return 1
+    if [[ "${attested}" != *"Boolean value is: True"* ]]; then
+      echo "robot_not_moved was requested but the manager does not have it enabled." >&2
+      return 1
+    fi
+  fi
   local service=/automatic_localization/start
   if [[ "${stationary_validation}" == "true" ]]; then
     service=/automatic_localization/prepare_stationary
@@ -744,6 +767,10 @@ if [[ "${localization_motion}" == "guarded" ]]; then
   echo "受保护旋转已开启：定位有歧义时小车可能原地转动，现场必须有人看护、可随时急停。"
   echo "Placement attestation (operator_rotation_clear): ${operator_rotation_clear}"
 fi
+if [[ "${robot_not_moved}" == "true" ]]; then
+  echo "已声明小车自上次保存位姿后未被移动：保存的位姿可用于区分对称位置。"
+  echo "Attestation robot_not_moved: the saved pose may choose among near-equal candidates."
+fi
 echo "Complex-route advisor: $(if [[ "${complex_route_validation}" == "true" ]]; then echo validation-only; else echo disabled; fi)"
 remote test -f "${map_yaml}"
 
@@ -792,7 +819,8 @@ remote "${jetson_workspace}/scripts/jetson_nvblox_container.sh" \
   recreate navigation-safe "${map_yaml}" "${initialization_mode}" "${complex_route_mode}" \
   "${localization_strategy}" "${localization_motion}" "${remote_profile}" \
   "${extrinsics_hash}" "${control_chain_hash}" "${operator_rotation_clear}" \
-  "$([[ "${force_probe_once}" == "true" ]] && echo force-probe-once)" >/dev/null
+  "$([[ "${force_probe_once}" == "true" ]] && echo force-probe-once)" \
+  "${robot_not_moved}" >/dev/null
 
 echo "[4/8] Running the non-motion hardware preflight..."
 run_preflight_with_readiness_retry

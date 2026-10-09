@@ -100,13 +100,37 @@ class ValidationThresholds:
 
 @dataclass(frozen=True)
 class QualityDecision:
-    """Holdout verdict; ``winner`` is set only when accepted."""
+    """
+    Holdout verdict; ``winner`` is set only when accepted.
+
+    ``prior_used``: the saved pose chose the winner among near-equal
+    candidates.  ``prior_conflict``: a clear winner contradicts the saved
+    pose, so the robot_not_moved attestation or the localization is wrong.
+    """
 
     accepted: bool
     reason: str
     winner: object = None
     runner_up_score: object = None
     holdout: tuple = field(default_factory=tuple)
+    prior_used: bool = False
+    prior_conflict: bool = False
+
+
+@dataclass(frozen=True)
+class PosePrior:
+    """The saved pose expressed at the reference keyframe, with tolerances."""
+
+    pose: SE2
+    xy_tolerance_m: float
+    yaw_tolerance_rad: float
+
+    def near(self, pose):
+        """Whether ``pose`` (at the reference keyframe) is at the prior."""
+        return (math.hypot(pose.x - self.pose.x, pose.y - self.pose.y)
+                <= self.xy_tolerance_m
+                and _angle_distance(pose.yaw, self.pose.yaw)
+                <= self.yaw_tolerance_rad)
 
 
 def grid_snapshot(message):
@@ -698,8 +722,16 @@ def _support_extent(evaluate, center, floor, direction, step, limit):
 
 
 def validate_hypotheses(grid, result, train_frames, holdout_frames, config,
-                        thresholds, deadline=None, cancel_token=None):
-    """Re-score every refined cluster on independent HOLDOUT frames."""
+                        thresholds, deadline=None, cancel_token=None,
+                        prior=None):
+    """
+    Re-score every refined cluster on independent HOLDOUT frames.
+
+    With a ``prior`` (operator-attested saved pose), near-equal candidates
+    that would be ambiguous are resolved only if exactly one of them lies at
+    the prior and passes every gate; a clear winner away from the prior is
+    refused.  The prior never lowers a gate.
+    """
     if not result.complete:
         return QualityDecision(False, result.reason or
                                RejectReason.SEARCH_INCOMPLETE.value)
@@ -733,16 +765,35 @@ def validate_hypotheses(grid, result, train_frames, holdout_frames, config,
         (item[0].cluster_id, round(item[2]['score'], 4)) for item in rescored)
     best_hypothesis, best_pose, best = rescored[0]
     runner_up = rescored[1][2]['score'] if len(rescored) > 1 else None
-    if (best['score'] < thresholds.min_score
-            or best['coverage'] < thresholds.min_coverage
-            or best['known'] < thresholds.min_known
-            or best['conflict'] > thresholds.max_conflict):
+
+    def passes(metrics):
+        return (metrics['score'] >= thresholds.min_score
+                and metrics['coverage'] >= thresholds.min_coverage
+                and metrics['known'] >= thresholds.min_known
+                and metrics['conflict'] <= thresholds.max_conflict)
+
+    if not passes(best):
         return QualityDecision(False, RejectReason.NO_VALID_CANDIDATE.value,
                                runner_up_score=runner_up, holdout=summary)
+    prior_used = False
     if (runner_up is not None
             and best['score'] - runner_up < thresholds.min_margin):
+        contenders = [item for item in rescored if item[2]['score']
+                      >= best['score'] - thresholds.min_margin]
+        near = [item for item in contenders
+                if prior is not None and prior.near(item[1])]
+        if len(near) != 1 or not passes(near[0][2]):
+            return QualityDecision(
+                False, RejectReason.AMBIGUOUS_LOCATION.value,
+                runner_up_score=runner_up, holdout=summary)
+        best_hypothesis, best_pose, best = near[0]
+        runner_up = max(item[2]['score'] for item in rescored
+                        if item is not near[0])
+        prior_used = True
+    elif prior is not None and not prior.near(best_pose):
         return QualityDecision(False, RejectReason.AMBIGUOUS_LOCATION.value,
-                               runner_up_score=runner_up, holdout=summary)
+                               runner_up_score=runner_up, holdout=summary,
+                               prior_conflict=True)
 
     # Corridor check: the near-optimal region of the smooth fit must be
     # bounded in every planar direction and in yaw; otherwise that axis is
@@ -785,7 +836,8 @@ def validate_hypotheses(grid, result, train_frames, holdout_frames, config,
         conflict=best['conflict'], cluster_id=best_hypothesis.cluster_id,
         per_view=best['per_view'], support_bounds=support)
     return QualityDecision(True, '', winner=winner,
-                           runner_up_score=runner_up, holdout=summary)
+                           runner_up_score=runner_up, holdout=summary,
+                           prior_used=prior_used)
 
 
 def run_search_job(grid, train_frames, config, timeout_s, coarse_cache=None):
@@ -804,11 +856,12 @@ def run_recheck_job(grid, previous, previous_reference, train_frames, config,
 
 
 def run_validation_job(grid, result, train_frames, holdout_frames, config,
-                       thresholds, timeout_s):
+                       thresholds, timeout_s, prior=None):
     """Worker entry point for validate_hypotheses."""
     return validate_hypotheses(grid, result, train_frames, holdout_frames,
                                config, thresholds,
-                               deadline=time.monotonic() + timeout_s)
+                               deadline=time.monotonic() + timeout_s,
+                               prior=prior)
 
 
 def _worker_main(connection, function, arguments):

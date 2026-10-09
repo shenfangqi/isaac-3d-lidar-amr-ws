@@ -67,6 +67,7 @@ from isaac_3d_lidar_bringup.localization_contracts import (
 from isaac_3d_lidar_bringup.localization_hypotheses import (
     grid_snapshot,
     map_hash,
+    PosePrior,
     run_recheck_job,
     run_search_job,
     run_validation_job,
@@ -93,6 +94,11 @@ from isaac_3d_lidar_bringup.localization_rotation_policy import (
     evidence_from_scan,
     footprint_geometry_hash,
     RotationGateConfig,
+)
+from isaac_3d_lidar_bringup.localization_saved_pose import (
+    load_pose,
+    save_pose,
+    SavedPose,
 )
 
 
@@ -467,6 +473,14 @@ class AutomaticLocalizationManager(Node):
             'probe_speed_rad_s': 0.40,
             'attestation_max_translation_m': 0.05,
             'attestation_max_age_sec': 360.0,
+            # Saved-pose prior (opt-in per launch with robot_not_moved).  The
+            # pose is saved while READY; '' disables saving and the prior.
+            'saved_pose_path': '',
+            'robot_not_moved': False,
+            'saved_pose_period_sec': 5.0,
+            'saved_pose_max_age_sec': 14.0 * 86400.0,
+            'saved_pose_xy_tolerance_m': 0.25,
+            'saved_pose_yaw_tolerance_rad': math.radians(10.0),
             'probe_plan_timeout_sec': 2.0,
             'probe_settle_sec': 1.0,
             'probe_settle_timeout_sec': 5.0,
@@ -575,6 +589,13 @@ class AutomaticLocalizationManager(Node):
             {name: self._parameter(name) for name in names})
         self._strategy = strategy
         self._motion_policy = policy
+        self._robot_not_moved = bool(self._parameter('robot_not_moved'))
+        if self._robot_not_moved and (
+                strategy == Strategy.LEGACY_FULL_ROTATION
+                or not self._parameter('saved_pose_path')):
+            raise ContractError(
+                'robot_not_moved needs stationary_only or segmented_rotation '
+                'and a saved_pose_path')
 
     def _search_config(self):
         return SearchConfig(
@@ -646,9 +667,78 @@ class AutomaticLocalizationManager(Node):
                     self._session, SE2(*self._last_odom_pose), now,
                     float(self._parameter('attestation_max_translation_m')),
                     float(self._parameter('attestation_max_age_sec')))
+        self._load_saved_prior()
         self._search_best = None
         self._search_runner_up = None
         self._transition(State.COLLECT_STATIC)
+
+    def _load_saved_prior(self):
+        """Reset the saved-pose prior; it is loaded at first validation."""
+        self._saved_prior = None
+        self._saved_prior_reason = ''
+        self._saved_prior_loaded = False
+        self._saved_prior_used = False
+        self._session_start_odom = self._last_odom_pose
+
+    def _pose_prior(self, train):
+        """Return the saved pose at the reference keyframe, or None."""
+        if not getattr(self, '_robot_not_moved', False):
+            return None
+        if not self._saved_prior_loaded:
+            # The map hash is known by now (search ran on the map).
+            self._saved_prior_loaded = True
+            pose, reason = load_pose(
+                self._parameter('saved_pose_path'), self._map_hash,
+                time.time(),
+                float(self._parameter('saved_pose_max_age_sec')))
+            if pose is not None and self._session_start_odom is None:
+                pose, reason = None, 'no odometry at session start'
+            self._saved_prior, self._saved_prior_reason = pose, reason
+            self.get_logger().info(
+                'robot_not_moved: using the saved pose as a prior' if pose
+                else f'robot_not_moved: saved pose not used ({reason})')
+        prior = self._saved_prior
+        if prior is None or prior.map_hash != self._map_hash:
+            return None
+        # The robot was attested unmoved at session start; carry the saved
+        # map pose along odometry to the reference keyframe.
+        at_reference = SE2(prior.x, prior.y, prior.yaw).compose(
+            SE2(*self._session_start_odom).inverse()).compose(
+                train[0].T_odom_base)
+        return PosePrior(
+            at_reference,
+            float(self._parameter('saved_pose_xy_tolerance_m')),
+            float(self._parameter('saved_pose_yaw_tolerance_rad')))
+
+    def _maybe_save_pose(self, now):
+        """While READY, keep the latest trusted AMCL pose on disk."""
+        path = self._parameter('saved_pose_path')
+        if (not path or self._state != State.READY
+                or self._latest_amcl_pose is None or not self._map_hash
+                or not self._recent(self._last_amcl_time, now)):
+            return
+        last = getattr(self, '_last_pose_save', None)
+        if last is not None and now - last < self._parameter(
+                'saved_pose_period_sec'):
+            return
+        message = self._latest_amcl_pose.pose
+        covariance = message.covariance
+        xy_std = math.sqrt(max(covariance[0], covariance[7], 0.0))
+        yaw_std = math.sqrt(max(covariance[35], 0.0))
+        if (xy_std > self._parameter('max_amcl_xy_std')
+                or yaw_std > self._parameter('max_amcl_yaw_std')):
+            return
+        self._last_pose_save = now
+        pose = message.pose
+        try:
+            save_pose(path, SavedPose(
+                self._map_hash, pose.position.x, pose.position.y,
+                quaternion_yaw(pose.orientation), time.time(), xy_std,
+                yaw_std))
+        except (OSError, ContractError) as error:
+            if not getattr(self, '_pose_save_warned', False):
+                self._pose_save_warned = True
+                self.get_logger().warn(f'cannot save the pose: {error}')
 
     def _reject(self, reason, detail=''):
         """Stop a confined session with an explicit contract reason."""
@@ -1780,6 +1870,7 @@ class AutomaticLocalizationManager(Node):
             self._publish_zero()
             self._tick_navigation_pause()
 
+        self._maybe_save_pose(now)
         self._publish_status()
 
     def _tf_se2(self, target, source, stamp_ns):
@@ -1921,12 +2012,14 @@ class AutomaticLocalizationManager(Node):
                         self._reject(RejectReason.SENSOR_STALE,
                                      'no qualified HOLDOUT frames')
                     return
+                train = self._frames(FrameRole.TRAIN, now)
                 self._worker.submit(
                     (self._session, self._map_hash), run_validation_job,
-                    self._latest_grid, self._search_result,
-                    self._frames(FrameRole.TRAIN, now), holdout,
+                    self._latest_grid, self._search_result, train, holdout,
                     self._search_config(), self._validation_thresholds(),
-                    self._parameter('verification_timeout_sec'))
+                    self._parameter('verification_timeout_sec'),
+                    None if isinstance(train, Reject)
+                    else self._pose_prior(train))
                 self._validation_submitted = True
                 return
             outcome = self._worker.poll()
@@ -1943,6 +2036,12 @@ class AutomaticLocalizationManager(Node):
                              'stale validation result')
             elif status != 'ok':
                 self._reject(RejectReason.SEARCH_INCOMPLETE, str(decision))
+            elif getattr(decision, 'prior_conflict', False):
+                # Rotating cannot fix this: the attestation or the
+                # localization is wrong.  Hand over to the operator.
+                self._reject(RejectReason.AMBIGUOUS_LOCATION,
+                             'clear winner contradicts the saved pose '
+                             '(robot_not_moved)')
             elif not decision.accepted:
                 self._reject_or_probe(decision.reason, now)
             elif getattr(self, '_force_probe_pending', False):
@@ -1957,6 +2056,11 @@ class AutomaticLocalizationManager(Node):
                     'once anyway (validation test, Nav2 stays inactive)')
                 self._transition(State.PLAN_PROBE)
             else:
+                if getattr(decision, 'prior_used', False):
+                    self._saved_prior_used = True
+                    self.get_logger().info(
+                        'saved pose resolved near-equal candidates '
+                        '(robot_not_moved)')
                 self._accept_confined(decision.winner, now)
 
         elif self._state == State.PLAN_PROBE:
@@ -2171,6 +2275,11 @@ class AutomaticLocalizationManager(Node):
                 else round(guard_travel, 3)),
             'map_hash': self._map_hash,
             'forced_probe_test': getattr(self, '_force_probe_once', False),
+            'robot_not_moved': getattr(self, '_robot_not_moved', False),
+            'saved_pose_prior': (
+                'used' if getattr(self, '_saved_prior_used', False)
+                else 'loaded' if getattr(self, '_saved_prior', None)
+                else getattr(self, '_saved_prior_reason', '') or None),
         }
 
     def _publish_status(self, force=False):

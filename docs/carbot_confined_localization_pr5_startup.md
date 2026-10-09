@@ -20,6 +20,13 @@
 
 `--automatic-activate` 同样可用（定位通过后激活 Nav2，不发目标）。
 
+### 保存位姿先验 `--robot-not-moved`
+
+- **保存**：每次 READY 后，manager 每 5 s 把可信的 AMCL 位姿保存到 Jetson `~/Projects/isaac_ros-dev/state/carbot_last_pose.json`。
+- **使用**：下次启动时加 `--robot-not-moved`，保存的位姿就可以在“分不清的对称位置”之间选出唯一一个，可与 `stationary_only` 或 `segmented_rotation` 组合。
+- **何时不能加**：车被搬动、推动或遥控移动过之后，一律不能加这个参数；不确定时也不要加。不加时行为与之前完全一样。
+- **冲突时**：如果定位得出的明确结果和保存的位姿矛盾，系统会转人工定位，不会自动接受。
+
 ## 受保护旋转的启动检查
 
 在动机器人之前，工作站上依次检查（任一失败直接退出，不连 Jetson）：
@@ -76,6 +83,7 @@
 - **完全回到静止或旧策略**：`--localization-strategy stationary_only` 或不加该参数（`legacy_full_rotation`）。
 - **作废运动配置**：车体外形、`sensors.mid360` 或 `control` 任何一项改变，哈希即不匹配，启动前就会被拒绝；需要重新采集和审核。删除 Jetson `~/Projects/isaac_ros-dev/motion_profiles/` 下的文件不影响其他模式。
 - **卸载**：PR5 只改了启动脚本、容器脚本和新增的 `check_motion_profile.py`；回退这三个文件即可恢复 PR4 状态。地图、固件、全局 scan 参数均未改动。
+- **停用保存位姿先验**：不加 `--robot-not-moved` 即可。删除 `state/carbot_last_pose.json` 只影响下次加了该参数的启动（会报 `no saved pose`，然后照常定位）。
 
 ## 验证
 

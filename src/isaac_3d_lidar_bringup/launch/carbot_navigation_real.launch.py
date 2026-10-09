@@ -43,6 +43,8 @@ def generate_launch_description():
     control_chain_hash = LaunchConfiguration('control_chain_hash')
     operator_rotation_clear = LaunchConfiguration('operator_rotation_clear')
     force_probe_once = LaunchConfiguration('force_probe_once')
+    robot_not_moved = LaunchConfiguration('robot_not_moved')
+    saved_pose_path = LaunchConfiguration('saved_pose_path')
     probe_parameters = {
         'motion_policy': motion_policy,
         'motion_profile_path': motion_profile_path,
@@ -259,6 +261,9 @@ def generate_launch_description():
                 **probe_parameters,
                 'force_probe_once': PythonExpression([
                     "'", force_probe_once, "' == 'true'"]),
+                'robot_not_moved': PythonExpression([
+                    "'", robot_not_moved, "' == 'true'"]),
+                'saved_pose_path': saved_pose_path,
             },
         ],
         condition=IfCondition(automatic_localization),
@@ -442,6 +447,21 @@ def generate_launch_description():
                 'passed. Only with segmented_rotation, guarded motion and '
                 'validation-only localization.'
             ),
+        ),
+        DeclareLaunchArgument(
+            'robot_not_moved',
+            default_value='false',
+            choices=['true', 'false'],
+            description=(
+                'Per-launch operator attestation that the robot has not been '
+                'moved since its pose was saved; lets the saved pose choose '
+                'among near-equal candidates.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'saved_pose_path',
+            default_value='/workspaces/isaac_ros-dev/state/carbot_last_pose.json',
+            description='Where the READY pose is saved for robot_not_moved.',
         ),
         DeclareLaunchArgument(
             'operator_rotation_clear',
