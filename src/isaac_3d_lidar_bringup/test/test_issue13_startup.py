@@ -131,3 +131,20 @@ def test_container_script_passes_guarded_arguments_only_when_valid():
     'start_real_robot_navigation_rviz.sh', 'jetson_nvblox_container.sh'])
 def test_scripts_parse(script):
     subprocess.run(['bash', '-n', str(SCRIPTS / script)], check=True)
+
+
+def test_robot_not_moved_is_plumbed_as_a_per_launch_attestation():
+    start = (SCRIPTS / 'start_real_robot_navigation_rviz.sh').read_text()
+    container = (SCRIPTS / 'jetson_nvblox_container.sh').read_text()
+    launch = (PROJECT_DIR / 'src/isaac_3d_lidar_bringup/launch/'
+              'carbot_navigation_real.launch.py').read_text()
+    assert '--robot-not-moved)' in start
+    assert ('--robot-not-moved requires --localization-strategy '
+            'stationary_only or segmented_rotation.') in start
+    assert 'robot_not_moved was requested but the manager' in start
+    assert '"${robot_not_moved}" >/dev/null' in start
+    assert 'robot_not_moved="${13:-false}"' in container
+    assert 'auto_launch_argument+=" robot_not_moved:=true"' in container
+    block = launch.split("'robot_not_moved',", 1)[1]
+    assert block.lstrip().startswith("default_value='false'")
+    assert '/workspaces/isaac_ros-dev/state/carbot_last_pose.json' in launch

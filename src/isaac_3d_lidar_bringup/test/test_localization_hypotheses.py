@@ -25,6 +25,7 @@ from isaac_3d_lidar_bringup.localization_hypotheses import (
     cell_center_to_world,
     cluster_hypotheses,
     map_hash,
+    PosePrior,
     recheck_hypotheses,
     scan_pose_in_map,
     search_multiview,
@@ -187,6 +188,64 @@ def test_yaw_ambiguity_same_position():
     assert not decision.accepted
     assert decision.reason == RejectReason.AMBIGUOUS_LOCATION.value
     assert decision.winner is None
+
+
+def _symmetric_room():
+    walls = _rectangle(0.2, 0.2, 3.2, 2.2)
+    grid = _grid(walls, 3.4, 2.4)
+    true_pose = SE2(1.7, 1.2, 0.0)
+    train = _frames(walls, true_pose, 'TRAIN')
+    holdout = _frames(walls, true_pose, 'HOLDOUT', start_id=10)
+    return grid, train, holdout, search_multiview(grid, train, FAST)
+
+
+@pytest.mark.parametrize('prior_yaw, xy_tolerance, accepted', [
+    (0.0, 0.25, True),             # one twin at the prior: resolved
+    (math.pi, 0.25, True),         # the other twin is chosen instead
+    (math.pi / 2, 0.25, False),    # neither twin at the prior
+    (0.0, 5.0, False),             # tolerance covers both: still ambiguous
+])
+def test_saved_pose_prior_resolves_only_a_unique_twin(
+        prior_yaw, xy_tolerance, accepted):
+    grid, train, holdout, result = _symmetric_room()
+    yaw_tolerance = math.radians(10) if xy_tolerance < 1 else math.pi
+    prior = PosePrior(SE2(1.7, 1.2, prior_yaw), xy_tolerance, yaw_tolerance)
+    decision = validate_hypotheses(grid, result, train, holdout, FAST,
+                                   ValidationThresholds(), prior=prior)
+    assert decision.accepted is accepted
+    assert decision.prior_used is accepted
+    assert not decision.prior_conflict
+    if accepted:
+        winner = decision.winner
+        assert abs(math.atan2(math.sin(winner.yaw - prior_yaw),
+                              math.cos(winner.yaw - prior_yaw))) < 0.1
+    else:
+        assert decision.reason == RejectReason.AMBIGUOUS_LOCATION.value
+
+
+def test_saved_pose_prior_never_bypasses_a_gate():
+    grid, train, holdout, result = _symmetric_room()
+    strict = ValidationThresholds(min_known=10_000)
+    decision = validate_hypotheses(
+        grid, result, train, holdout, FAST, strict,
+        prior=PosePrior(SE2(1.7, 1.2, 0.0), 0.25, math.radians(10)))
+    assert not decision.accepted and not decision.prior_used
+
+
+def test_clear_winner_away_from_the_prior_is_refused():
+    grid = _grid(ROOM, 3.4, 2.4)
+    true_pose = SE2(1.2, 1.0, 0.4)
+    train = _frames(ROOM, true_pose, 'TRAIN')
+    holdout = _frames(ROOM, true_pose, 'HOLDOUT', start_id=10)
+    result = search_multiview(grid, train, FAST)
+    far = PosePrior(SE2(2.8, 0.6, -2.0), 0.25, math.radians(10))
+    decision = validate_hypotheses(grid, result, train, holdout, FAST,
+                                   ValidationThresholds(), prior=far)
+    assert not decision.accepted and decision.prior_conflict
+    near = PosePrior(SE2(1.2, 1.0, 0.4), 0.25, math.radians(10))
+    decision = validate_hypotheses(grid, result, train, holdout, FAST,
+                                   ValidationThresholds(), prior=near)
+    assert decision.accepted and not decision.prior_used
 
 
 def test_distinct_room_is_accepted_with_bounded_support():

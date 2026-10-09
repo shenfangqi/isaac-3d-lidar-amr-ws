@@ -18,6 +18,7 @@ from isaac_3d_lidar_bringup import localization_hypotheses
 from isaac_3d_lidar_bringup import localization_motion_guard
 from isaac_3d_lidar_bringup import localization_observations
 from isaac_3d_lidar_bringup import localization_rotation_policy
+from isaac_3d_lidar_bringup import localization_saved_pose
 from isaac_3d_lidar_bringup.automatic_localization_quality import (
     angular_difference, quaternion_yaw, trim_time_window,
 )
@@ -56,6 +57,7 @@ def manager():
     scope.update(vars(localization_hypotheses))
     scope.update(vars(localization_motion_guard))
     scope.update(vars(localization_rotation_policy))
+    scope.update(vars(localization_saved_pose))
     scope.update(Enum=Enum, Node=object, time=time, math=math, Time=FakeTime,
                  deque=deque, uuid=__import__('uuid'),
                  ManageLifecycleNodes=FakeManageLifecycleNodes,
@@ -1398,3 +1400,119 @@ def test_probe_stop_rule_counts_only_complete_searches(
         assert manager._reject_reason == 'AMBIGUOUS_LOCATION'
     else:
         assert manager._state == manager.State.PLAN_PROBE
+
+
+def _saved(path, x=1.0, y=2.0, yaw=0.5, map_hash='ab' * 32):
+    localization_saved_pose.save_pose(str(path), localization_saved_pose.SavedPose(
+        map_hash, x, y, yaw, time.time() - 60.0, 0.02, 0.01))
+
+
+@pytest.mark.parametrize('strategy, path, valid', [
+    ('legacy_full_rotation', '/tmp/pose.json', False),
+    ('stationary_only', '', False),
+    ('stationary_only', '/tmp/pose.json', True),
+])
+def test_robot_not_moved_needs_a_confined_strategy_and_a_path(
+        manager, strategy, path, valid):
+    manager.params.update({'localization_strategy': strategy,
+                           'robot_not_moved': True, 'saved_pose_path': path})
+    if valid:
+        manager._configure_strategy()
+        assert manager._robot_not_moved
+    else:
+        with pytest.raises(localization_contracts.ContractError):
+            manager._configure_strategy()
+
+
+def test_validation_receives_the_saved_pose_at_the_reference(
+        stationary, tmp_path):
+    # The robot is attested unmoved since the pose was saved; the prior is
+    # carried along odometry from session start to the reference keyframe.
+    path = tmp_path / 'pose.json'
+    _saved(path, 1.0, 2.0, 0.5)
+    stationary.params.update({'robot_not_moved': True,
+                              'saved_pose_path': str(path)})
+    stationary._configure_strategy()
+    stationary._worker = FakeWorker([_search_result()])
+    _start_to_collect(stationary)
+    _feed(stationary, 3)
+    stationary._tick()
+    stationary._tick()
+    _feed(stationary, 3)
+    stationary._tick()
+    name, arguments = stationary._worker.jobs[-1]
+    assert name == 'run_validation_job'
+    prior = arguments[-1]
+    # Session-start odometry equals the keyframes' odometry in this fixture.
+    assert (prior.pose.x, prior.pose.y, prior.pose.yaw) == (
+        pytest.approx(1.0), pytest.approx(2.0), pytest.approx(0.5))
+    assert stationary._confined_status()['saved_pose_prior'] == 'loaded'
+
+
+@pytest.mark.parametrize('saved_map, expected', [
+    ('cd' * 32, 'saved pose belongs to another map'),
+    (None, 'no saved pose'),
+])
+def test_unusable_saved_pose_gives_no_prior(
+        stationary, tmp_path, saved_map, expected):
+    path = tmp_path / 'pose.json'
+    if saved_map:
+        _saved(path, map_hash=saved_map)
+    stationary.params.update({'robot_not_moved': True,
+                              'saved_pose_path': str(path)})
+    stationary._configure_strategy()
+    stationary._worker = FakeWorker([_search_result()])
+    _start_to_collect(stationary)
+    _feed(stationary, 3)
+    stationary._tick()
+    stationary._tick()
+    _feed(stationary, 3)
+    stationary._tick()
+    assert stationary._worker.jobs[-1][1][-1] is None
+    assert stationary._confined_status()['saved_pose_prior'] == expected
+
+
+def test_prior_conflict_hands_over_without_probing(segmented):
+    manager = segmented
+    conflict = localization_hypotheses.QualityDecision(
+        False, 'AMBIGUOUS_LOCATION', prior_conflict=True)
+    manager._worker = FakeWorker([_search_result(), conflict])
+    _start_to_collect(manager)
+    _feed(manager, 3)
+    manager._tick()
+    manager._tick()
+    _feed(manager, 3)
+    manager._tick()
+    manager._tick()
+    assert manager._state == manager.State.SAFE_STOP
+    assert manager._reject_reason == 'AMBIGUOUS_LOCATION'
+    assert all(r.operation.value != 'ROTATE' for r in manager.requests)
+
+
+def test_ready_pose_is_saved_only_when_amcl_is_confident(manager, tmp_path):
+    path = tmp_path / 'state' / 'pose.json'
+    manager.params['saved_pose_path'] = str(path)
+    manager._state = manager.State.READY
+    manager._map_hash = 'ab' * 32
+    covariance = [0.0] * 36
+    covariance[0] = covariance[7] = 0.5          # 0.7 m: not confident
+    covariance[35] = 0.0004
+    manager._latest_amcl_pose = NS(pose=NS(
+        pose=NS(position=NS(x=-0.77, y=0.1), orientation=_quaternion_ns(-1.6)),
+        covariance=covariance))
+    manager._last_amcl_time = 10.0
+    manager._maybe_save_pose(10.1)
+    assert not path.exists()
+    covariance[0] = covariance[7] = 0.0004       # 2 cm
+    manager._maybe_save_pose(10.2)
+    saved, reason = localization_saved_pose.load_pose(
+        str(path), 'ab' * 32, time.time(), 60.0)
+    assert reason == '' and saved.x == pytest.approx(-0.77)
+    assert saved.yaw == pytest.approx(-1.6)
+    # Not again within the save period, and never outside READY.
+    manager._latest_amcl_pose.pose.pose.position.x = 3.0
+    manager._maybe_save_pose(10.3)
+    manager._state = manager.State.SAFE_STOP
+    manager._maybe_save_pose(20.0)
+    assert localization_saved_pose.load_pose(
+        str(path), 'ab' * 32, time.time(), 60.0)[0].x == pytest.approx(-0.77)
