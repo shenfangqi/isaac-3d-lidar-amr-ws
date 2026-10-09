@@ -54,6 +54,11 @@ class SearchConfig:
     cluster_xy_m: float = 0.30
     cluster_yaw_rad: float = math.pi / 12.0
     max_refined_clusters: int = 8
+    # Beyond max_refined_clusters, clusters are refined one at a time only
+    # while an unrefined one can still compete, up to this many more
+    # (2026-10-09: a wrongly leading basin lowered the floor so 11-30 clusters
+    # competed and every search at one placement was incomplete).
+    max_extra_refined_clusters: int = 16
     # A cluster left unrefined still competes when its coarse score is this
     # close to the best coarse score among clusters that refined into the
     # winner's basin.
@@ -547,34 +552,65 @@ def search_multiview_cached(grid, train_frames, config, deadline=None,
 
     field = distance_field(grid, config.occupied_threshold)
     refined = []
-    for cluster in clusters[:config.max_refined_clusters]:
-        outcome, stop = refine_cluster(
-            grid, cluster['seed'], frames, reference, config, deadline,
-            cancel_token, field)
-        if stop is not None:
-            return SearchOutput(_incomplete(session, digest, evaluated,
-                                            started, stop), cache)
-        pose, metrics = outcome
-        evaluated += config.refine_evaluations + config.polish_evaluations
-        refined.append((cluster, pose, metrics))
-    refined.sort(key=lambda item: _ranking(item[2]), reverse=True)
+    refined_ids = set()
 
     def same_basin(first, second):
         return _same_basin(first, second, config)
 
-    # Neighbouring coarse clusters may refine into the same optimum.  That
-    # is one solution, not an independent alternative; keep the best copy.
-    distinct = []
-    for item in refined:
-        if not any(same_basin(item[1], kept[1]) for kept in distinct):
-            distinct.append(item)
-    # The winner's coarse evidence is the best coarse score of every cluster
-    # that refined into its basin.  Taking only the copy that happened to
-    # refine highest let frame noise pick a weak duplicate and lower the
-    # competition floor below unrelated clusters (2026-10-05 real replay).
-    winner_coarse = max(cluster['seed'][0] for cluster, pose, _metrics
-                        in refined if same_basin(pose, distinct[0][1]))
-    refined = distinct
+    def summarize():
+        ranked = sorted(refined, key=lambda item: _ranking(item[2]),
+                        reverse=True)
+        # Neighbouring coarse clusters may refine into the same optimum.
+        # That is one solution, not an independent alternative; keep the
+        # best copy.
+        distinct = []
+        for item in ranked:
+            if not any(same_basin(item[1], kept[1]) for kept in distinct):
+                distinct.append(item)
+        # The winner's coarse evidence is the best coarse score of every
+        # cluster that refined into its basin.  Taking only the copy that
+        # happened to refine highest let frame noise pick a weak duplicate
+        # and lower the competition floor below unrelated clusters
+        # (2026-10-05 real replay).
+        winner_coarse = max(cluster['seed'][0] for cluster, pose, _metrics
+                            in refined if same_basin(pose, distinct[0][1]))
+
+        def represented(seed):
+            # Inside the basin of an already refined solution: not
+            # independent.
+            return any(
+                math.hypot(seed[1] - item[1].x, seed[2] - item[1].y)
+                <= config.cluster_xy_m
+                and _angle_distance(seed[3], item[1].yaw)
+                <= config.cluster_yaw_rad
+                for item in distinct)
+
+        competitors = [
+            cluster for cluster in clusters
+            if cluster['cluster_id'] not in refined_ids
+            and cluster['seed'][0] >= winner_coarse
+            - config.coarse_competition_margin
+            and not represented(cluster['seed'])]
+        return distinct, competitors
+
+    queue = list(clusters[:config.max_refined_clusters])
+    limit = config.max_refined_clusters + config.max_extra_refined_clusters
+    while True:
+        for cluster in queue:
+            outcome, stop = refine_cluster(
+                grid, cluster['seed'], frames, reference, config, deadline,
+                cancel_token, field)
+            if stop is not None:
+                return SearchOutput(_incomplete(session, digest, evaluated,
+                                                started, stop), cache)
+            pose, metrics = outcome
+            evaluated += config.refine_evaluations + config.polish_evaluations
+            refined.append((cluster, pose, metrics))
+            refined_ids.add(cluster['cluster_id'])
+        distinct, competitors = summarize()
+        if not competitors or len(refined) >= limit:
+            break
+        queue = competitors[:1]           # strongest competitor next
 
     hypotheses = tuple(
         Hypothesis(
@@ -582,21 +618,9 @@ def search_multiview_cached(grid, train_frames, config, deadline=None,
             score=metrics['score'], coverage=metrics['coverage'],
             conflict=metrics['conflict'], cluster_id=cluster['cluster_id'],
             per_view=metrics['per_view'], support_bounds=())
-        for cluster, pose, metrics in refined)
+        for cluster, pose, metrics in distinct)
 
-    def represented(seed):
-        # Inside the basin of an already refined solution: not independent.
-        return any(
-            math.hypot(seed[1] - item[1].x, seed[2] - item[1].y)
-            <= config.cluster_xy_m
-            and _angle_distance(seed[3], item[1].yaw)
-            <= config.cluster_yaw_rad
-            for item in refined)
-
-    unrefined = clusters[config.max_refined_clusters:]
-    if any(cluster['seed'][0] >= winner_coarse
-           - config.coarse_competition_margin
-           and not represented(cluster['seed']) for cluster in unrefined):
+    if competitors:
         return SearchOutput(_incomplete(
             session, digest, evaluated, started,
             RejectReason.SEARCH_INCOMPLETE, hypotheses), cache)

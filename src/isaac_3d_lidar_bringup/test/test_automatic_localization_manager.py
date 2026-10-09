@@ -1377,3 +1377,24 @@ def test_guard_and_manager_share_session_limits(manager):
         config)
     assert localization_rotation_policy.ProbeBudgetLimits().max_session_s == (
         manager.params['session_timeout_sec'])
+
+
+@pytest.mark.parametrize('complete, rejected', [(True, True), (False, False)])
+def test_probe_stop_rule_counts_only_complete_searches(
+        segmented, complete, rejected):
+    # 2026-10-09: incomplete searches always report the capped 8 clusters,
+    # which stopped the probes after two segments without any evidence.
+    manager = segmented
+    manager._begin_confined_session(time.monotonic())
+    manager._latest_safety_scan = _room_scan(manager)
+    reason = 'AMBIGUOUS_LOCATION' if complete else 'SEARCH_INCOMPLETE'
+    for _ in range(3):
+        manager._state = manager.State.VERIFY_HYPOTHESES
+        manager._search_result = _search_result(
+            complete, '' if complete else reason)
+        manager._reject_or_probe(reason, time.monotonic())
+    if rejected:
+        assert manager._state == manager.State.SAFE_STOP
+        assert manager._reject_reason == 'AMBIGUOUS_LOCATION'
+    else:
+        assert manager._state == manager.State.PLAN_PROBE

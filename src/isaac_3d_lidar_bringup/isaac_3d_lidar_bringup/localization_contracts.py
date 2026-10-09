@@ -715,6 +715,8 @@ def validate_confined_parameters(parameters):
     for name in ('train_frames_per_view', 'holdout_frames_per_view',
                  'max_views', 'max_probe_segments', 'max_refined_clusters'):
         _integer(p[name], name, minimum=1)
+    _integer(p['max_extra_refined_clusters'], 'max_extra_refined_clusters',
+             minimum=0)
     angles = p['probe_angles_rad']
     if not isinstance(angles, (list, tuple)) or not angles:
         _fail('probe_angles_rad must be a non-empty list')
