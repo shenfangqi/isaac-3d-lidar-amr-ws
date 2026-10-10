@@ -5,9 +5,10 @@ Pure logic (numpy/scipy), no ROS.  A stationary 3D cloud is scored at every
 free position (from the navigation map) and heading of a coarse grid
 against a precomputed fit field of the map surface: ``exp(-d^2 / 2 sigma^2)``
 of the distance ``d`` to the nearest surface sample, cut to zero beyond
-``cap_m``.  One table lookup per point and pose makes the whole map cheap
-(about 1 s on the workstation for 610 positions x 36 headings x 1500
-points, 2026-10-10).
+``cap_m``, with ``sigma`` matched to the grid (see SurfaceSearchConfig).
+One table lookup per point and pose makes the whole map cheap (about 1 s
+on the workstation for 610 positions x 36 headings x 1500 points,
+2026-10-10).
 
 This only *generates* candidates.  Every candidate within ``margin`` of
 the best coarse score is returned, after one-per-neighbourhood suppression,
@@ -26,11 +27,22 @@ from .localization_contracts import ContractError
 
 @dataclass(frozen=True)
 class SurfaceSearchConfig:
-    """Coarse map-wide 3D search; provisional values (one site)."""
+    """
+    Coarse map-wide 3D search; provisional values (one site).
+
+    The coarse fit is deliberately blurred (``sigma_m`` near the grid
+    spacing) so that a node up to half a cell from the true pose still
+    scores close to it.  With sigma 0.05 m the node next to a true pose in a
+    corner (scan ranges of ~0.7 m) scored up to 0.26 below the best, so the
+    truth fell outside the margin and a wrong corner was accepted
+    (2026-10-10 synthetic analysis).  With 0.15 m the loss stayed <= 0.063
+    in 1098 synthetic views and all 8 labelled bags, and every true pose
+    was among the candidates (at most 26 of them).
+    """
 
     voxel_m: float = .05
-    sigma_m: float = .05
-    cap_m: float = .25
+    sigma_m: float = .15
+    cap_m: float = .45
     position_step_m: float = .20
     clearance_m: float = .15
     yaw_step_rad: float = math.radians(10)
