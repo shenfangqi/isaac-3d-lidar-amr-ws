@@ -125,6 +125,11 @@ from isaac_3d_lidar_bringup.localization_surface_check import (
     transform,
 )
 from isaac_3d_lidar_bringup.localization_surface_model import load_surface_model
+from isaac_3d_lidar_bringup.localization_surface_search import (
+    build_surface_field,
+    free_positions,
+    SurfaceSearchConfig,
+)
 from isaac_3d_lidar_bringup.localization_surface_validation import (
     run_surface_decision_job,
     SurfaceConflictConfig,
@@ -569,6 +574,9 @@ class AutomaticLocalizationManager(Node):
             'surface_spacing_m': 0.02,
             # Map-derived cache; '' = next to the mesh.
             'surface_cache_dir': '',
+            # Stage D: union = the 3D decision also covers every place the
+            # map-wide 3D search finds within its margin; off = 2D only.
+            'surface_search_policy': 'union',
             'surface_max_points_per_cloud': 6000,
             'surface_min_composite_gap': 0.15,
             'surface_min_leader_composite': 0.70,
@@ -784,6 +792,13 @@ class AutomaticLocalizationManager(Node):
                     f'3D re-check disabled, mesh unusable ({path}): {error}')
                 policy = 'off'
         self._surface_policy = policy
+        search = str(self._parameter('surface_search_policy'))
+        if search not in ('off', 'union'):
+            raise ContractError('surface_search_policy must be off or union')
+        self._surface_search_config = SurfaceSearchConfig()
+        self._surface_search_field = (
+            build_surface_field(self._surface_vertices, self._surface_search_config)
+            if search == 'union' and self._surface_vertices is not None else None)
 
     def _on_cloud(self, message):
         """Keep deskewed clouds taken while stopped during localization."""
@@ -919,7 +934,11 @@ class AutomaticLocalizationManager(Node):
             float(self._parameter('surface_max_2d_conflict')),
             self._surface_rank_config, self._surface_config,
             float(self._parameter('surface_decision_timeout_sec')), tuple(seeds),
-            self._surface_sensor_origin(train, now))
+            self._surface_sensor_origin(train, now), SurfaceConflictConfig(),
+            None if self._surface_search_field is None else (
+                self._surface_search_field,
+                free_positions(self._latest_grid, self._surface_search_config),
+                self._surface_search_config))
         self._surface_stage = 'deciding'
         return True
 

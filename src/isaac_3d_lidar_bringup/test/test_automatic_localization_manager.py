@@ -23,6 +23,7 @@ from isaac_3d_lidar_bringup import localization_saved_pose
 from isaac_3d_lidar_bringup import localization_route_planner
 from isaac_3d_lidar_bringup import localization_surface_check
 from isaac_3d_lidar_bringup import localization_surface_model
+from isaac_3d_lidar_bringup import localization_surface_search
 from isaac_3d_lidar_bringup import localization_surface_validation
 from isaac_3d_lidar_bringup import localization_translation_contracts
 from isaac_3d_lidar_bringup import localization_translation_guard
@@ -67,6 +68,7 @@ def manager():
     scope.update(vars(localization_saved_pose))
     scope.update(vars(localization_surface_check))
     scope.update(vars(localization_surface_model))
+    scope.update(vars(localization_surface_search))
     scope.update(vars(localization_surface_validation))
     scope.update(vars(localization_route_planner))
     scope.update(vars(localization_translation_contracts))
@@ -1565,9 +1567,10 @@ def _two_candidates():
 
 
 def _surface_session(manager, tmp_path, policy, results, points=30000,
-                     reason='AMBIGUOUS_LOCATION'):
+                     reason='AMBIGUOUS_LOCATION', search='off'):
     manager.params.update({'surface_recheck_policy': policy,
-                           'surface_mesh_path': str(_mesh(tmp_path))})
+                           'surface_mesh_path': str(_mesh(tmp_path)),
+                           'surface_search_policy': search})
     manager._configure_surface_check()
     refused = localization_hypotheses.QualityDecision(
         False, reason, runner_up_score=0.88, holdout=((0, 0.9), (1, 0.88)))
@@ -1617,6 +1620,29 @@ def test_record_mode_logs_the_3d_decision_and_keeps_the_2d_verdict(segmented, tm
     assert status['resolved'] and not status['used']
     assert status['leader_pose_at_reference'] == {'x': 4.02, 'y': 6.01, 'yaw': -2.61}
     assert [job[0] for job in manager._worker.jobs].count('run_validation_job') == 1
+
+
+def test_union_search_gives_the_3d_job_a_field_and_the_free_positions(segmented, tmp_path):
+    manager = segmented
+    grid = NS(data=[0] * 400, info=NS(
+        width=20, height=20, resolution=.1,
+        origin=NS(position=NS(x=0., y=0., z=0.), orientation=NS(w=1.))))
+    original = manager._start_surface_check
+
+    def start(decision, train, holdout, now):
+        manager._latest_grid = grid            # the fixture's grid has no cells
+        return original(decision, train, holdout, now)
+    manager._start_surface_check = start
+    _surface_session(manager, tmp_path, 'record', [_decision(True)], search='union')
+    assert manager._surface_search_field is not None
+    name, arguments = manager._worker.jobs[-1]
+    assert name == 'run_surface_decision_job'
+    field, positions, config = arguments[-1]
+    assert field is manager._surface_search_field
+    assert len(positions) > 0 and config.margin > 0
+    manager.params['surface_search_policy'] = 'sometimes'
+    with pytest.raises(localization_contracts.ContractError):
+        manager._configure_surface_check()
 
 
 @pytest.mark.parametrize('reason', ['AMBIGUOUS_LOCATION', 'NO_VALID_CANDIDATE'])
@@ -1717,7 +1743,8 @@ def test_route_candidate_budget_or_missing_rank_refuses_planning(segmented, miss
 
 def _incomplete_session(manager, tmp_path, policy, results, unrefined=((0.5, 0.2, 1.0),)):
     manager.params.update({'surface_recheck_policy': policy,
-                           'surface_mesh_path': str(_mesh(tmp_path))})
+                           'surface_mesh_path': str(_mesh(tmp_path)),
+                           'surface_search_policy': 'off'})
     manager._configure_surface_check()
     incomplete = localization_hypotheses.QualityDecision(False, 'SEARCH_INCOMPLETE')
     manager._worker = FakeWorker([_incomplete_candidates(unrefined), incomplete, *results])
@@ -1755,7 +1782,7 @@ def test_a_budget_limited_search_gives_its_seeds_to_the_3d_decision(
     name, arguments = manager._worker.jobs[-1]
     assert name == 'run_surface_decision_job'
     assert arguments[3] == ((1.0, 2.0, 0.5), (4.0, 6.0, -2.6))
-    assert arguments[-2] == ((0.5, 0.2, 1.0),)      # seeds, then sensor origin
+    assert arguments[-4] == ((0.5, 0.2, 1.0),)      # seeds, origin, see-through, search
     _guard(manager, 'STOPPED')
     manager._tick()
     status = manager._confined_status()['surface_recheck']
