@@ -45,6 +45,10 @@ def generate_launch_description():
     force_probe_once = LaunchConfiguration('force_probe_once')
     robot_not_moved = LaunchConfiguration('robot_not_moved')
     saved_pose_path = LaunchConfiguration('saved_pose_path')
+    surface_recheck_policy = LaunchConfiguration('surface_recheck_policy')
+    translation_policy = LaunchConfiguration('translation_policy')
+    linear_profile_path = LaunchConfiguration('linear_profile_path')
+    surface_mesh_path = LaunchConfiguration('surface_mesh_path')
     probe_parameters = {
         'motion_policy': motion_policy,
         'motion_profile_path': motion_profile_path,
@@ -52,6 +56,9 @@ def generate_launch_description():
         'control_chain_hash': control_chain_hash,
         'operator_rotation_clear': PythonExpression([
             "'", operator_rotation_clear, "' == 'true'"]),
+        # Phase 3 translation; the guard also needs the linear profile.
+        'translation_policy': translation_policy,
+        'linear_profile_path': linear_profile_path,
     }
     complex_route_braking_profile = LaunchConfiguration(
         'complex_route_braking_profile')
@@ -264,6 +271,11 @@ def generate_launch_description():
                 'robot_not_moved': PythonExpression([
                     "'", robot_not_moved, "' == 'true'"]),
                 'saved_pose_path': saved_pose_path,
+                'surface_recheck_policy': surface_recheck_policy,
+                # Default: the nvblox mesh exported next to the map YAML.
+                'surface_mesh_path': PythonExpression([
+                    "'", surface_mesh_path, "' or '", map_yaml,
+                    "'.rsplit('.', 1)[0] + '.ply'"]),
             },
         ],
         condition=IfCondition(automatic_localization),
@@ -457,6 +469,32 @@ def generate_launch_description():
                 'moved since its pose was saved; lets the saved pose choose '
                 'among near-equal candidates.'
             ),
+        ),
+        DeclareLaunchArgument(
+            'translation_policy',
+            default_value='forbid',
+            choices=['forbid', 'guarded'],
+            description=(
+                'Guarded translation probes; needs motion_policy guarded and an '
+                'ACCEPTED linear profile matching this robot.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'linear_profile_path', default_value='',
+            description='ACCEPTED linear (translation) profile (JSON).'),
+        DeclareLaunchArgument(
+            'surface_recheck_policy',
+            default_value='record',
+            choices=['off', 'record', 'decide'],
+            description=(
+                'Static 3D decision when 2D refuses (ambiguous, no valid or '
+                'budget-limited search): record logs evidence only; decide may '
+                'accept an independent 3D decision with a 2D sanity check.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'surface_mesh_path', default_value='',
+            description='ASCII PLY mesh of the map; empty = MAP_YAML with .ply.',
         ),
         DeclareLaunchArgument(
             'saved_pose_path',

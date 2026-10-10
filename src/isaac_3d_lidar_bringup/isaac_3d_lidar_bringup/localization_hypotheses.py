@@ -456,9 +456,10 @@ def refine_cluster(grid, seed, frames, reference_odom, config,
     return (outcome[0], standard(outcome[0])), None
 
 
-def _incomplete(session, digest, evaluated, started, reason, hypotheses=()):
+def _incomplete(session, digest, evaluated, started, reason, hypotheses=(),
+                unrefined=()):
     return SearchResult(session, digest, False, tuple(hypotheses), evaluated,
-                        time.monotonic() - started, reason.value)
+                        time.monotonic() - started, reason.value, tuple(unrefined))
 
 
 def _train_frames(train_frames):
@@ -672,7 +673,9 @@ def search_multiview_cached(grid, train_frames, config, deadline=None,
     if competitors:
         return SearchOutput(_incomplete(
             session, digest, evaluated, started,
-            RejectReason.SEARCH_INCOMPLETE, hypotheses), cache)
+            RejectReason.SEARCH_INCOMPLETE, hypotheses,
+            tuple((float(c['seed'][1]), float(c['seed'][2]), float(c['seed'][3]))
+                  for c in competitors)), cache)
     return SearchOutput(SearchResult(session, digest, True, hypotheses,
                                      evaluated, time.monotonic() - started,
                                      ''), cache)
@@ -748,7 +751,7 @@ def _support_extent(evaluate, center, floor, direction, step, limit):
 
 def validate_hypotheses(grid, result, train_frames, holdout_frames, config,
                         thresholds, deadline=None, cancel_token=None,
-                        prior=None):
+                        prior=None, gate_frames=()):
     """
     Re-score every refined cluster on independent HOLDOUT frames.
 
@@ -756,6 +759,12 @@ def validate_hypotheses(grid, result, train_frames, holdout_frames, config,
     that would be ambiguous are resolved only if exactly one of them lies at
     the prior and passes every gate; a clear winner away from the prior is
     refused.  The prior never lowers a gate.
+
+    ``gate_frames`` (HOLDOUT frames of earlier views, after a translation)
+    are not part of the margin, which stays on the current view like after
+    a rotation; the winner must pass the absolute gates in each of their
+    views and in the current one, so a good fit at one place cannot hide a
+    contradiction at another.
     """
     if not result.complete:
         return QualityDecision(False, result.reason or
@@ -853,6 +862,17 @@ def validate_hypotheses(grid, result, train_frames, holdout_frames, config,
     if yaw_extent is None or yaw_extent > thresholds.max_support_yaw_rad:
         return QualityDecision(False, RejectReason.UNOBSERVABLE_AXIS.value,
                                runner_up_score=runner_up, holdout=summary)
+    if gate_frames:
+        views = {}
+        for frame in tuple(gate_frames) + holdout:
+            if frame.role != FrameRole.HOLDOUT or frame.id in train_ids:
+                raise ContractError('gate frames must be independent HOLDOUT frames')
+            views.setdefault(frame.view_id, []).append(frame)
+        for frames in views.values():
+            if not passes(score_pose(grid, best_pose, frames, reference, config,
+                                     config.refine_beams)):
+                return QualityDecision(False, RejectReason.NO_VALID_CANDIDATE.value,
+                                       runner_up_score=runner_up, holdout=summary)
     support = (max(abs(math.cos(a)) * e for a, e in extents),
                max(abs(math.sin(a)) * e for a, e in extents), yaw_extent)
     winner = Hypothesis(
@@ -881,12 +901,12 @@ def run_recheck_job(grid, previous, previous_reference, train_frames, config,
 
 
 def run_validation_job(grid, result, train_frames, holdout_frames, config,
-                       thresholds, timeout_s, prior=None):
+                       thresholds, timeout_s, prior=None, gate_frames=()):
     """Worker entry point for validate_hypotheses."""
     return validate_hypotheses(grid, result, train_frames, holdout_frames,
                                config, thresholds,
                                deadline=time.monotonic() + timeout_s,
-                               prior=prior)
+                               prior=prior, gate_frames=gate_frames)
 
 
 def _worker_main(connection, function, arguments):

@@ -33,11 +33,14 @@ operator_rotation_clear=false
 operator_present=false
 force_probe_once=false
 robot_not_moved=false
+surface_recheck=record
+localization_translation=forbid
+linear_profile=""
 map_argument_seen=false
 
 usage() {
   cat <<EOF
-Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [--complex-route-validation] [--localization-strategy STRATEGY] [--localization-motion forbid|guarded --motion-profile JSON [--operator-rotation-clear] --operator-present] [--robot-not-moved] [MAP_YAML]
+Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [--complex-route-validation] [--localization-strategy STRATEGY] [--localization-motion forbid|guarded --motion-profile JSON [--operator-rotation-clear] --operator-present] [--robot-not-moved] [--surface-recheck off|record|decide] [--localization-translation forbid|guarded --linear-profile JSON] [MAP_YAML]
 
 Start saved-map navigation for the physical Carbot and open RViz.
 
@@ -78,6 +81,20 @@ Options:
                   a clear result contradicting it is refused. Do not use after
                   carrying or pushing the robot. Needs stationary_only or
                   segmented_rotation.
+  --surface-recheck off|record|decide
+                  Static 3D decision against the map mesh when 2D refuses
+                  (ambiguous, no valid candidate, or a budget-limited search).
+                  record (default) only logs the evidence; decide may accept an
+                  independent 3D decision that also passes a 2D sanity check,
+                  then AMCL verifies as usual. decide needs stationary_only or
+                  segmented_rotation.
+  --localization-translation forbid|guarded
+                  guarded allows short forward probes chosen by the commonly
+                  safe route planner. Needs --localization-motion guarded,
+                  --operator-present and --linear-profile.
+  --linear-profile JSON
+                  Workstation path of an ACCEPTED linear (translation) profile
+                  matching the current geometry, extrinsics and control chain.
   -h, --help      Show this help.
 
 Environment overrides:
@@ -138,6 +155,30 @@ while (( $# > 0 )); do
       ;;
     --robot-not-moved)
       robot_not_moved=true
+      ;;
+    --localization-translation)
+      if (( $# < 2 )); then
+        echo "--localization-translation needs forbid or guarded." >&2
+        exit 2
+      fi
+      localization_translation="$2"
+      shift
+      ;;
+    --linear-profile)
+      if (( $# < 2 )); then
+        echo "--linear-profile needs a path." >&2
+        exit 2
+      fi
+      linear_profile="$2"
+      shift
+      ;;
+    --surface-recheck)
+      if (( $# < 2 )); then
+        echo "--surface-recheck needs off, record or decide." >&2
+        exit 2
+      fi
+      surface_recheck="$2"
+      shift
       ;;
     --validation-only|--automatic)
       automatic_localization=true
@@ -213,6 +254,36 @@ if [[ "${localization_motion}" == "guarded" ]]; then
   motion_hashes_json="$(python3 "${script_dir}/check_motion_profile.py" "${motion_profile}")" || exit 2
 elif [[ -n "${motion_profile}" || "${operator_rotation_clear}" == "true" || "${force_probe_once}" == "true" ]]; then
   echo "--motion-profile, --operator-rotation-clear and --force-probe-once require --localization-motion guarded." >&2
+  exit 2
+fi
+case "${localization_translation}" in
+  forbid) [[ -z "${linear_profile}" ]] || { echo "--linear-profile requires --localization-translation guarded." >&2; exit 2; } ;;
+  guarded)
+    if [[ "${localization_motion}" != "guarded" ]]; then
+      echo "--localization-translation guarded requires --localization-motion guarded." >&2
+      exit 2
+    fi
+    if [[ -z "${linear_profile}" || ! -f "${linear_profile}" ]]; then
+      echo "--localization-translation guarded requires an existing --linear-profile." >&2
+      exit 2
+    fi
+    # ACCEPTED status and hash binding are checked before anything starts.
+    python3 "${script_dir}/check_linear_profile.py" "${linear_profile}" >/dev/null || exit 2
+    ;;
+  *)
+    echo "--localization-translation must be forbid or guarded." >&2
+    exit 2
+    ;;
+esac
+case "${surface_recheck}" in
+  off|record|decide) ;;
+  *)
+    echo "--surface-recheck must be off, record or decide." >&2
+    exit 2
+    ;;
+esac
+if [[ "${surface_recheck}" == "decide" && "${localization_strategy}" == "legacy_full_rotation" ]]; then
+  echo "--surface-recheck decide requires --localization-strategy stationary_only or segmented_rotation." >&2
   exit 2
 fi
 if [[ "${robot_not_moved}" == "true" && "${localization_strategy}" == "legacy_full_rotation" ]]; then
@@ -640,6 +711,22 @@ run_automatic_localization() {
     return 1
   fi
   verify_motion_guard || return 1
+  if [[ "${localization_translation}" == "guarded" ]]; then
+    local translation
+    translation="$(remote_param_get /automatic_localization_manager translation_policy)" || return 1
+    if [[ "${translation}" != *"String value is: guarded"* ]]; then
+      echo "translation guarded was requested but the manager reports ${translation}." >&2
+      return 1
+    fi
+  fi
+  if [[ "${surface_recheck}" == "decide" ]]; then
+    local surface
+    surface="$(remote_param_get /automatic_localization_manager surface_recheck_policy)" || return 1
+    if [[ "${surface}" != *"String value is: decide"* ]]; then
+      echo "surface_recheck decide was requested but the manager reports ${surface}." >&2
+      return 1
+    fi
+  fi
   if [[ "${robot_not_moved}" == "true" ]]; then
     local attested
     attested="$(remote_param_get /automatic_localization_manager robot_not_moved)" || return 1
@@ -767,6 +854,9 @@ if [[ "${localization_motion}" == "guarded" ]]; then
   echo "受保护旋转已开启：定位有歧义时小车可能原地转动，现场必须有人看护、可随时急停。"
   echo "Placement attestation (operator_rotation_clear): ${operator_rotation_clear}"
 fi
+if [[ "${automatic_localization}" == "true" ]]; then
+  echo "3D re-check: ${surface_recheck}"
+fi
 if [[ "${robot_not_moved}" == "true" ]]; then
   echo "已声明小车自上次保存位姿后未被移动：保存的位姿可用于区分对称位置。"
   echo "Attestation robot_not_moved: the saved pose may choose among near-equal candidates."
@@ -815,12 +905,25 @@ if [[ "${localization_motion}" == "guarded" ]]; then
     false
   fi
 fi
+remote_linear_profile=""
+if [[ "${localization_translation}" == "guarded" ]]; then
+  remote_linear_profile="${jetson_workspace}/motion_profiles/$(basename "${linear_profile}")"
+  remote mkdir -p "${jetson_workspace}/motion_profiles"
+  scp "${ssh_options[@]}" "${linear_profile}" "${jetson_host}:${remote_linear_profile}" >/dev/null
+  local_sum="$(sha256sum "${linear_profile}" | cut -d' ' -f1)"
+  remote_sum="$(remote sha256sum "${remote_linear_profile}" | cut -d' ' -f1)"
+  if [[ "${local_sum}" != "${remote_sum}" ]]; then
+    echo "Linear profile copy on the Jetson does not match the local file." >&2
+    false
+  fi
+fi
 remote "${jetson_workspace}/scripts/jetson_nvblox_container.sh" \
   recreate navigation-safe "${map_yaml}" "${initialization_mode}" "${complex_route_mode}" \
   "${localization_strategy}" "${localization_motion}" "${remote_profile}" \
   "${extrinsics_hash}" "${control_chain_hash}" "${operator_rotation_clear}" \
   "$([[ "${force_probe_once}" == "true" ]] && echo force-probe-once)" \
-  "${robot_not_moved}" >/dev/null
+  "${robot_not_moved}" "${surface_recheck}" \
+  "${localization_translation}" "${remote_linear_profile}" >/dev/null
 
 echo "[4/8] Running the non-motion hardware preflight..."
 run_preflight_with_readiness_retry

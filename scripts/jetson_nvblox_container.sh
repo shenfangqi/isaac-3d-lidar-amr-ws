@@ -11,7 +11,7 @@ time_gate="${workspace}/scripts/wait_for_mapping_time_sync.py"
 
 usage() {
   echo "Usage: $0 {start|recreate|stop|status|logs} [compact|full|mapping]" >&2
-  echo "       $0 {start|recreate} navigation-safe MAP_YAML [manual|auto|auto-activate] [none|complex-route-validation] [legacy_full_rotation|stationary_only|segmented_rotation] [forbid|guarded PROFILE_JSON EXTRINSICS_HASH CONTROL_CHAIN_HASH true|false [force-probe-once]] [ROBOT_NOT_MOVED true|false]" >&2
+  echo "       $0 {start|recreate} navigation-safe MAP_YAML [manual|auto|auto-activate] [none|complex-route-validation] [legacy_full_rotation|stationary_only|segmented_rotation] [forbid|guarded PROFILE_JSON EXTRINSICS_HASH CONTROL_CHAIN_HASH true|false [force-probe-once]] [ROBOT_NOT_MOVED true|false] [SURFACE_RECHECK off|record|decide] [TRANSLATION forbid|guarded LINEAR_PROFILE_JSON]" >&2
   echo "       $0 {start|recreate} navigation-diagnostic MAP_YAML" >&2
   echo "       Append 'auto' for validation or 'auto-activate' for guarded Nav2 activation." >&2
 }
@@ -93,6 +93,45 @@ case "${mode}" in
       echo "robot_not_moved needs automatic stationary_only or segmented_rotation localization." >&2
       exit 2
     fi
+    surface_recheck="${14:-record}"
+    case "${surface_recheck}" in
+      off|record|decide) ;;
+      *)
+        echo "surface_recheck must be off, record or decide." >&2
+        exit 2
+        ;;
+    esac
+    if [[ "${surface_recheck}" == "decide" && ( "${localization_strategy}" == "legacy_full_rotation" || "${initialization}" == "manual" ) ]]; then
+      echo "surface_recheck decide needs automatic stationary_only or segmented_rotation localization." >&2
+      exit 2
+    fi
+    translation="${15:-forbid}"
+    linear_profile="${16:-}"
+    translation_launch_argument=""
+    if [[ "${translation}" == "guarded" ]]; then
+      if [[ "${motion_policy}" != "guarded" ]]; then
+        echo "translation guarded needs motion_policy guarded." >&2
+        exit 2
+      fi
+      linear_profile="$(realpath -m "${linear_profile}")"
+      case "${linear_profile}" in
+        "${workspace}/"*) ;;
+        *)
+          echo "Linear profile must be inside ${workspace}: ${linear_profile}" >&2
+          exit 2
+          ;;
+      esac
+      if [[ ! -f "${linear_profile}" ]]; then
+        echo "Linear profile does not exist: ${linear_profile}" >&2
+        exit 2
+      fi
+      container_linear="/workspaces/isaac_ros-dev${linear_profile#${workspace}}"
+      printf -v quoted_container_linear '%q' "${container_linear}"
+      translation_launch_argument=" translation_policy:=guarded linear_profile_path:=${quoted_container_linear}"
+    elif [[ "${translation}" != "forbid" ]]; then
+      echo "translation must be forbid or guarded." >&2
+      exit 2
+    fi
     if [[ "${motion_policy}" != "forbid" && "${motion_policy}" != "guarded" ]]; then
       echo "Motion policy must be 'forbid' or 'guarded'." >&2
       exit 2
@@ -156,6 +195,7 @@ case "${mode}" in
       if [[ "${robot_not_moved}" == "true" ]]; then
         auto_launch_argument+=" robot_not_moved:=true"
       fi
+      auto_launch_argument+=" surface_recheck_policy:=${surface_recheck}${translation_launch_argument}"
     fi
     diagnostic_launch_argument=""
     if [[ "${diagnostic_mode}" == "complex-route-validation" ]]; then

@@ -82,7 +82,11 @@ def test_velocity_publisher_is_created_only_after_permission_and_handshake():
     assert source.count(creation) == 1
     # Only the control cycle creates it, never the constructor.
     assert source.index(creation) > source.index('def _control_cycle')
-    assert 'elif permitted and session and self._publisher is None' in source
+    # Created only with a permitted, handshaken rotation or translation
+    # session (translation needs its own ACCEPTED linear profile).
+    assert "rotation_open = self._core.permission.permitted and session" in source
+    assert "linear_open = self._linear.permitted and linear_session" in source
+    assert 'elif (rotation_open or linear_open) and self._publisher is None' in source
     assert 'self.destroy_publisher(self._publisher)' in source
 
 
@@ -274,5 +278,143 @@ def test_guard_without_carbot_msgs_never_permits_motion(ros_context,
     ])
     try:
         assert guard._core.permission.permitted is False
+    finally:
+        guard.destroy_node()
+
+
+def test_translation_round_trip_follows_map_evidence(ros_context, tmp_path):
+    rclpy, context = ros_context
+    from geometry_msgs.msg import Twist
+    from nav_msgs.msg import Odometry
+    from rclpy.executors import MultiThreadedExecutor
+    from rclpy.node import Node
+    from rclpy.parameter import Parameter
+    from rclpy.qos import (DurabilityPolicy, QoSProfile, ReliabilityPolicy,
+                           qos_profile_sensor_data)
+    from std_msgs.msg import Bool, String
+    from carbot_msgs.msg import CarbotStatus
+
+    import isaac_3d_lidar_bringup.localization_motion_guard_node as module
+    from isaac_3d_lidar_bringup.localization_translation_contracts import (
+        encode_linear_profile, encode_route_evidence, encode_translation_request,
+        RouteEvidence, TranslationRequest,
+    )
+    from isaac_3d_lidar_bringup.localization_translation_guard import LinearProfile
+
+    # Synthetic ACCEPTED linear profile for this test robot only.
+    linear = LinearProfile(GEOMETRY, EXTRINSICS, CONTROL, ('synthetic-test',),
+                           0.08, 0.1, 0.02, 0.6, 0.05, 'ACCEPTED')
+    linear_path = tmp_path / 'linear.json'
+    linear_path.write_text(encode_linear_profile(linear))
+    guard = module.MotionGuardNode(context=context, parameter_overrides=[
+        Parameter('extrinsics_hash', value=EXTRINSICS),
+        Parameter('control_chain_hash', value=CONTROL),
+        Parameter('linear_profile_path', value=str(linear_path)),
+        Parameter('request_topic', value=f'{NS}/motion_request_t'),
+        Parameter('status_topic', value=f'{NS}/motion_status_t'),
+        Parameter('cmd_vel_topic', value=f'{NS}/cmd_vel_command_t'),
+        Parameter('odom_topic', value=f'{NS}/odom_t'),
+        Parameter('scan_topic', value=f'{NS}/scan_t'),
+        Parameter('emergency_topic', value=f'{NS}/emergency_stop_t'),
+        Parameter('chassis_status_topic', value=f'{NS}/carbot_status_t'),
+        Parameter('translation_request_topic', value=f'{NS}/translation_request'),
+        Parameter('route_evidence_topic', value=f'{NS}/route_evidence'),
+        Parameter('translation_status_topic', value=f'{NS}/translation_status'),
+    ])
+    assert guard._core.permission.permitted is False      # rotation forbidden
+    assert guard._linear.permitted is True
+
+    harness = Node('translation_harness', context=context)
+    state = {'x': 0.0, 'speed': 0.0, 'linear': [], 'angular': [], 'status': [],
+             'request': None, 'clear': True}
+    harness.create_subscription(
+        Twist, f'{NS}/cmd_vel_command_t',
+        lambda m: (state['linear'].append(m.linear.x),
+                   state['angular'].append(m.angular.z)), 10)
+    harness.create_subscription(
+        String, f'{NS}/translation_status',
+        lambda m: state['status'].append(json.loads(m.data)), 10)
+    requests = harness.create_publisher(String, f'{NS}/translation_request', 10)
+    evidence = harness.create_publisher(String, f'{NS}/route_evidence', 10)
+    odom = harness.create_publisher(Odometry, f'{NS}/odom_t', qos_profile_sensor_data)
+    latched = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                         durability=DurabilityPolicy.TRANSIENT_LOCAL)
+    harness.create_publisher(Bool, f'{NS}/emergency_stop_t',
+                             latched).publish(Bool(data=False))
+    chassis = harness.create_publisher(CarbotStatus, f'{NS}/carbot_status_t',
+                                       qos_profile_sensor_data)
+
+    def publish_chassis():
+        message = CarbotStatus()
+        message.agent_connected = True
+        message.motion_blocked = False
+        chassis.publish(message)
+
+    def publish_inputs():
+        state['x'] += state['speed'] * 0.05
+        stamp = harness.get_clock().now()
+        message = Odometry()
+        message.header.stamp = stamp.to_msg()
+        message.pose.pose.position.x = state['x']
+        message.pose.pose.orientation.w = 1.0
+        message.twist.twist.linear.x = state['speed']
+        odom.publish(message)
+        if state['linear']:
+            state['speed'] = state['linear'][-1]
+        if state['request'] is not None:
+            requests.publish(String(data=encode_translation_request(state['request'])))
+            remaining = max(0.0, 0.4 - state['x'])
+            evidence.publish(String(data=encode_route_evidence(RouteEvidence(
+                'translation0001', state['request'].sequence, stamp.nanoseconds,
+                state['x'], 0.0, 0.0, remaining + 1e-3, 1.0,
+                state['clear'], '' if state['clear'] else 'OBSTACLE_IN_SWEEP',
+                'd' * 64, 'e' * 64))))
+
+    harness.create_timer(0.5, publish_chassis)
+    harness.create_timer(0.05, publish_inputs)
+    executor = MultiThreadedExecutor(num_threads=4, context=context)
+    executor.add_node(guard)
+    executor.add_node(harness)
+    spinner = threading.Thread(target=executor.spin, daemon=True)
+    spinner.start()
+    try:
+        time.sleep(1.5)
+        assert harness.count_publishers(f'{NS}/cmd_vel_command_t') == 0
+        state['request'] = TranslationRequest('translation0001', 1, 'STOP')
+        time.sleep(2.0)
+        assert harness.count_publishers(f'{NS}/cmd_vel_command_t') == 1
+        assert state['status'][-1]['state'] == 'STOPPED', state['status'][-1]
+        state['request'] = TranslationRequest('translation0001', 2, 'MOVE', 0.4,
+                                              0.05, linear.digest)
+        time.sleep(1.5)
+        assert max(state['linear']) > 0.01, state['status'][-1]
+        assert max(abs(a) for a in state['angular']) == 0.0
+        state['clear'] = False                      # the map path is refused
+        time.sleep(0.5)
+        assert state['linear'][-1] == 0.0
+        assert state['status'][-1]['state'] == 'FAULT'
+        assert state['status'][-1]['reason'] == 'OBSTACLE_IN_SWEEP'
+    finally:
+        executor.shutdown()
+        guard.destroy_node()
+        harness.destroy_node()
+
+
+def test_translation_without_a_linear_profile_never_opens_a_publisher(
+        ros_context, tmp_path):
+    rclpy, context = ros_context
+    from rclpy.parameter import Parameter
+
+    import isaac_3d_lidar_bringup.localization_motion_guard_node as module
+
+    guard = module.MotionGuardNode(context=context, parameter_overrides=[
+        Parameter('cmd_vel_topic', value=f'{NS}/cmd_vel_command_n'),
+        Parameter('linear_profile_path', value=str(tmp_path / 'missing.json')),
+    ])
+    try:
+        assert guard._linear.permitted is False
+        guard._linear.request('STOP', 'translation0002', 1, time.monotonic())
+        guard._control_cycle()
+        assert guard._publisher is None
     finally:
         guard.destroy_node()
