@@ -350,3 +350,15 @@ def test_a_unique_room_has_no_nearby_competitor():
         deadline=time.monotonic() + 30, check_config=RANK,
         refine_config=SurfaceRefineConfig())
     assert result.supported, result.reason
+
+
+def test_a_candidate_starts_refinement_from_its_best_local_peak():
+    # A coarse node 0.2 m and 6 deg off: the sharp-field seed lands next to
+    # the true pose before the exact refinement starts.
+    rng = np.random.default_rng(11)
+    scan = _room_scan(rng)
+    tree = validation.surface_tree(room())
+    seed = validation.best_local_seed(tree, scan, (0.2, -0.15, math.radians(6)),
+                                      validation.SurfaceNearbyConfig())
+    assert math.hypot(seed[0], seed[1]) <= .06
+    assert abs(seed[2]) <= math.radians(3)
