@@ -281,5 +281,5 @@
 2. 实测 Jetson 上的三维决策耗时（含拟合场和表面模型缓存的首次生成），确认在 120 s 的单次上限内。
 3. 排查 `/odom` 延迟和 DDS 发现丢失：`carbot-description` 参与者丢失、ros2 守护进程损坏。这些是验收的前置条件。
 4. **窗帘**：请先决定窗帘的常态，然后按常态重新建图，或者把底墙一带标为易变区域。
-5. 用 record 模式在退化分析标为红色或橙色的区域、地图边缘和门口补采样本，用 `scripts/sample_run` 的“先定位、后补录”流程；再按 `analyze_localizability_3d.py` 的分布图声明支持区域。
+5. 用 record 模式在退化分析标为红色或橙色的区域、地图边缘和门口补采样本，用 `scripts/record_localization_sample.sh`（PR #45）的“先定位、后补录”流程；再按 `analyze_localizability_3d.py` 的分布图声明支持区域。
 6. 按计划阶段 F：准备一个独立的新场景，冻结参数后验证。
