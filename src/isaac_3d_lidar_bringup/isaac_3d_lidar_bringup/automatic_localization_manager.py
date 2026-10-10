@@ -774,8 +774,16 @@ class AutomaticLocalizationManager(Node):
                                State.VERIFY_HYPOTHESES):
             return
         now = time.monotonic()
-        if not self._stopped(now):
+        if self._stationary_since is None or self._moving_since is not None:
+            # Motion: start over.
             self._surface_clouds.clear()
+            self._surface_cloud_counts['cleared_on_motion'] += 1
+            return
+        if not self._stopped(now):
+            # Stillness not (yet) confirmed, e.g. a late /odom under load
+            # (2026-10-10 on the robot: up to 1.7 s).  Skip only this cloud;
+            # each kept cloud is placed with the odometry at its own stamp.
+            self._surface_cloud_counts['skipped_unconfirmed'] += 1
             return
         stamp = message.header.stamp
         stamp_ns = stamp.sec * 10**9 + stamp.nanosec
@@ -785,6 +793,7 @@ class AutomaticLocalizationManager(Node):
         except ContractError:
             return
         self._surface_clouds.append((stamp_ns, message.header.frame_id, xyz, now))
+        self._surface_cloud_counts['kept'] += 1
 
     def _surface_points(self, train, now):
         """All stationary cloud points in the reference keyframe's base frame."""
@@ -870,6 +879,7 @@ class AutomaticLocalizationManager(Node):
                 'policy': self._surface_policy, 'resolved': False, 'used': False,
                 'reason': 'TOO_FEW_CANDIDATES' if len(ranked) < 2 else 'TOO_FEW_POINTS',
                 'points': [int(len(first)), int(len(second))],
+                'clouds': dict(self._surface_cloud_counts),
                 'search_complete': result.complete}
             return False
         self._surface_poses = tuple((h.x, h.y, h.yaw) for h in ranked) + tuple(seeds)
@@ -917,6 +927,7 @@ class AutomaticLocalizationManager(Node):
                  'yaw': round(leader[2], 4)}),
             'metrics_2d': dict(result.metrics_2d),
             'candidate_count': len(self._surface_poses),
+            'clouds': dict(self._surface_cloud_counts),
             'search_complete': self._search_result.complete,
             'used': use}
         self.get_logger().info(
@@ -1068,6 +1079,8 @@ class AutomaticLocalizationManager(Node):
         self._diagnostic_decision = None
         self._validation_inputs = ((), (), ())
         self._surface_clouds = deque(maxlen=80)
+        self._surface_cloud_counts = dict.fromkeys(
+            ('kept', 'skipped_unconfirmed', 'cleared_on_motion'), 0)
         self._surface_stage = None
         self._surface_original = None
         self._surface_inputs = None
@@ -2883,6 +2896,7 @@ class AutomaticLocalizationManager(Node):
             else None)
         self._view_id += 1
         self._surface_clouds.clear()
+        self._surface_cloud_counts = dict.fromkeys(self._surface_cloud_counts, 0)
         self._surface_stage = None
         self._diagnostic_train = ()
         self._diagnostic_holdout = ()
