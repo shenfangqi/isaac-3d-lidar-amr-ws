@@ -169,6 +169,27 @@ def test_surface_recheck_is_plumbed_with_record_as_the_default():
     assert "'.rsplit('.', 1)[0] + '.ply'" in launch
 
 
+def test_surface_recheck_off_reaches_the_manager_as_a_string():
+    # 2026-10-10 on the robot: 'off' became YAML false and the manager died
+    # with InvalidParameterTypeException (BOOL for a STRING parameter).
+    from launch.substitutions import TextSubstitution
+    from launch_ros.parameter_descriptions import ParameterValue
+    from launch_ros.utilities import evaluate_parameters, normalize_parameters
+    from launch import LaunchContext
+
+    def evaluate(value):
+        return evaluate_parameters(LaunchContext(), normalize_parameters(
+            [{'surface_recheck_policy': value}]))[0]['surface_recheck_policy']
+    launch = (PROJECT_DIR / 'src/isaac_3d_lidar_bringup/launch/'
+              'carbot_navigation_real.launch.py').read_text()
+    assert ("'surface_recheck_policy': ParameterValue(\n"
+            "                    surface_recheck_policy, value_type=str)") in launch
+    assert evaluate(TextSubstitution(text='off')) is False
+    for policy in ('off', 'record', 'decide'):
+        value = ParameterValue(TextSubstitution(text=policy), value_type=str)
+        assert evaluate(value) == policy
+
+
 def test_translation_is_plumbed_and_needs_an_accepted_linear_profile():
     start = (SCRIPTS / 'start_real_robot_navigation_rviz.sh').read_text()
     container = (SCRIPTS / 'jetson_nvblox_container.sh').read_text()
