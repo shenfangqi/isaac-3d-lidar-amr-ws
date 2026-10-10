@@ -31,6 +31,8 @@ from isaac_3d_lidar_bringup import localization_hypotheses as lh  # noqa: E402
 from isaac_3d_lidar_bringup import localization_surface_check as surface  # noqa: E402
 from isaac_3d_lidar_bringup.localization_surface_model import (  # noqa: E402
     load_surface_model)
+from isaac_3d_lidar_bringup.localization_surface_search import (  # noqa: E402
+    build_surface_field, free_positions, search_surface, SurfaceSearchConfig)
 from isaac_3d_lidar_bringup.localization_surface_validation import (  # noqa: E402
     decide_surface)
 from recheck_candidates_3d import chain_to_base, read_clouds  # noqa: E402
@@ -102,6 +104,8 @@ def main():
     parser.add_argument('--exclude-m', type=float, default=1.2)
     parser.add_argument('--max-conflict', type=float, default=.35)
     parser.add_argument('--see-through', choices=('on', 'off'), default='on')
+    parser.add_argument('--search3d', choices=('off', 'union'), default='off',
+                        help='union: add the map-wide 3D search candidates (stage D)')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     grid = load_map(args.map)
@@ -125,6 +129,15 @@ def main():
                if math.hypot(p[0] - truth[0], p[1] - truth[1]) > args.exclude_m]
         far_seeds = [p for p in sample['seeds']
                      if math.hypot(p[0] - truth[0], p[1] - truth[1]) > args.exclude_m]
+        if args.search3d == 'union':
+            config = SurfaceSearchConfig()
+            field = build_surface_field(next(iter(models.values())), config)
+            found = search_surface(field, sample['first'], free_positions(grid, config), config)
+            row['search3d'] = dict(complete=found.complete, reason=found.reason,
+                                   candidates=len(found.candidates))
+            sample['seeds'] = sample['seeds'] + [c[:3] for c in found.candidates]
+            far_seeds += [c[:3] for c in found.candidates
+                          if math.hypot(c[0] - truth[0], c[1] - truth[1]) > args.exclude_m]
         for name, points in models.items():
             on = args.see_through == 'on'
             positive = decide(points, sample, grid, sample['poses'], sample['seeds'],
@@ -146,7 +159,7 @@ def main():
     args.output.write_text(json.dumps(dict(
         schema=1, mode='offline_surface_decision_evaluation', navigation_accepted=False,
         mesh=str(args.mesh), spacings=list(models), exclude_m=args.exclude_m,
-        see_through=args.see_through,
+        see_through=args.see_through, search3d=args.search3d,
         samples=rows), indent=1, default=lambda o: o.tolist() if hasattr(o, 'tolist')
         else asdict(o)) + '\n')
 

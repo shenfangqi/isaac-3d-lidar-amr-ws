@@ -8,6 +8,7 @@ from scipy.spatial import cKDTree
 
 from isaac_3d_lidar_bringup import localization_surface_validation as validation
 from isaac_3d_lidar_bringup.localization_surface_check import SurfaceCheckConfig, SurfaceResult
+from isaac_3d_lidar_bringup.localization_surface_search import SurfaceSearchResult
 from isaac_3d_lidar_bringup.localization_surface_validation import (
     decide_surface,
     refine_surface_pose,
@@ -188,6 +189,33 @@ def test_decision_refuses_a_leader_with_a_poor_absolute_fit(monkeypatch):
         fit_config=SurfaceCheckConfig(min_band_points=20, min_points=100))
     assert not decision.accepted
     assert decision.reason == 'LEADER_FIT_TOO_LOW'
+
+
+def _decide_with_search(monkeypatch, poses, found):
+    rng = np.random.default_rng(5)
+    monkeypatch.setattr(validation, 'score_pose', lambda *args: dict(GOOD))
+    monkeypatch.setattr(validation, 'search_surface', lambda *args: found)
+    return decide_surface(room(), _room_scan(rng), _room_scan(rng), poses, None, (), None,
+                          type('C', (), {'refine_beams': 60})(), _Thresholds(), .35,
+                          deadline=time.monotonic() + 10, check_config=RANK,
+                          fit_config=SurfaceCheckConfig(min_band_points=20, min_points=100),
+                          search=('field', 'positions', 'config'))
+
+
+def test_the_3d_search_adds_a_place_the_2d_candidates_missed(monkeypatch):
+    missed = ((6., 0., 0.), (9., 0., 0.))           # the true place is not among them
+    found = SurfaceSearchResult(True, '', ((.02, .01, 0., .6),), .6, 100)
+    decision = _decide_with_search(monkeypatch, missed, found)
+    assert decision.accepted, decision
+    assert math.hypot(*decision.pose[:2]) <= .015
+    assert decision.validation.origins[decision.leader] == 2      # the search's seed
+
+
+def test_an_incomplete_3d_search_refuses(monkeypatch):
+    found = SurfaceSearchResult(False, 'TOO_MANY_CANDIDATES', (), .6, 100)
+    decision = _decide_with_search(monkeypatch, POSES, found)
+    assert not decision.accepted
+    assert decision.reason == '3D_SEARCH_TOO_MANY_CANDIDATES'
 
 
 # --- See-through evidence (stage B) -------------------------------------------
