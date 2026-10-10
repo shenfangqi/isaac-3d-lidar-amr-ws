@@ -87,8 +87,8 @@ class Renderer:
 _STATE = {}
 
 
-def _init(mesh, spacing, map_path):
-    surface = load_surface_model(mesh, spacing).points.astype(float)
+def _init(mesh, spacing, map_path, cache_dir=None):
+    surface = load_surface_model(mesh, spacing, cache_dir).points.astype(float)
     config = SurfaceSearchConfig()
     _STATE.update(surface=surface, tree=surface_tree(surface),
                   field=build_surface_field(surface, config), config=config,
@@ -189,13 +189,15 @@ def main():
     parser.add_argument('--sensor', type=float, nargs=3, default=(.027, .023, .165),
                         help='sensor position in base_footprint')
     parser.add_argument('--workers', type=int, default=8)
+    parser.add_argument('--cache-dir', type=Path,
+                        help='surface-sample cache (default: next to the mesh)')
     parser.add_argument('--clutter', type=float, default=0.,
                         help='share of points hidden behind unmapped objects')
     parser.add_argument('--no-ceiling', action='store_true',
                         help='drop points above 2 m')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
-    load_surface_model(args.mesh, args.spacing)
+    load_surface_model(args.mesh, args.spacing, args.cache_dir)
     config = SurfaceSearchConfig(position_step_m=args.step, clearance_m=.25)
     positions = free_positions(load_map(args.map), config)
     yaws = np.radians(np.arange(args.headings) * 360. / args.headings + 7.)
@@ -205,7 +207,8 @@ def main():
     print(f'{len(positions)} positions x {len(yaws)} headings = {len(jobs)} views', flush=True)
     rows = []
     with ProcessPoolExecutor(args.workers, initializer=_init,
-                             initargs=(args.mesh, args.spacing, args.map)) as pool:
+                             initargs=(args.mesh, args.spacing, args.map,
+                                       args.cache_dir)) as pool:
         for row in pool.map(analyze, jobs, chunksize=4):
             rows.append(row)
     by_place = {}

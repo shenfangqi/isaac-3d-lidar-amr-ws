@@ -206,6 +206,13 @@ class SurfaceNearbyConfig:
     field_margin: float = .10
     max_peaks: int = 3
     points: int = 3000
+    # Before refinement every candidate moves to the best sharp-field pose
+    # within this window: in periodic structure (shelving, 2026-10-11
+    # warehouse_v3 synthetic analysis) climbing from the coarse node reached
+    # a wrong peak 0.2 m from the truth, the true peak was never refined and
+    # a twin 6 m away was accepted.
+    seed_radius_m: float = .25
+    seed_turn_rad: float = math.radians(10)
 
     def __post_init__(self):
         values = (self.radius_m, self.turn_rad, self.step_m, self.step_rad, self.own_xy_m,
@@ -227,6 +234,18 @@ def _sharp_field(tree):
         _SHARP_FIELDS[key] = build_surface_field(
             tree.data, SurfaceSearchConfig(sigma_m=.05, cap_m=.25))
     return _SHARP_FIELDS[key]
+
+
+def best_local_seed(tree, points, pose, config):
+    """Return the best sharp-field pose within the seed window around ``pose``."""
+    field = _sharp_field(tree)
+    steps = np.arange(-config.seed_radius_m, config.seed_radius_m + 1e-9, config.step_m)
+    turns = np.arange(-config.seed_turn_rad, config.seed_turn_rad + 1e-9, config.step_rad)
+    dx, dy = np.meshgrid(steps, steps, indexing='ij')
+    positions = np.c_[pose[0] + dx.ravel(), pose[1] + dy.ravel()]
+    scores = coarse_scores(field, points, positions, pose[2] + turns)
+    row, column = np.unravel_index(int(np.argmax(scores)), scores.shape)
+    return (float(positions[row][0]), float(positions[row][1]), float(pose[2] + turns[column]))
 
 
 def nearby_peaks(tree, points, leader, config):
@@ -371,9 +390,14 @@ def validate_surface_evidence(vertices, train_points, holdout_points, poses, *,
         train_xyz = np.asarray(train_points, float).reshape(-1, 3)
         train_xyz = train_xyz[np.hypot(train_xyz[:, 0], train_xyz[:, 1])
                               >= check_config.min_range_m]
+        seeds = starts
+        if nearby_config is not None:
+            sample = _subsample(train_xyz, nearby_config.points)
+            seeds = _map(lambda pose: best_local_seed(tree, sample, pose, nearby_config),
+                         starts, refine_config.workers)
         refined = _map(
             lambda pose: refine_surface_pose(tree, train_xyz, pose, refine_config, expired),
-            starts, refine_config.workers)
+            seeds, refine_config.workers)
         if expired():
             return SurfaceValidation(False, 'DEADLINE', -1, None, None)
         unconverged = not all(converged for _, converged in refined)
