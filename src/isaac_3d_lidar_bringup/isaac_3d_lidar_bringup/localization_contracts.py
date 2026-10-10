@@ -314,6 +314,10 @@ class SearchResult:
     evaluated: int
     duration_s: float
     reason: str
+    # Coarse seed poses (x, y, yaw) of clusters that could still compete
+    # when the search stopped only because its refinement budget ran out.
+    # Empty when the coarse scan itself did not finish.
+    unrefined: tuple = ()
 
     def __post_init__(self):
         _session(self.session)
@@ -332,6 +336,13 @@ class SearchResult:
         if not self.complete and not self.reason:
             # A canceled or budget-limited search can never be accepted.
             _fail('an incomplete search must carry a reject reason')
+        if not isinstance(self.unrefined, tuple) or any(
+                not isinstance(seed, tuple) or len(seed) != 3
+                or not all(isinstance(v, float) and math.isfinite(v) for v in seed)
+                for seed in self.unrefined):
+            _fail('unrefined must be a tuple of finite (x, y, yaw) floats')
+        if self.complete and self.unrefined:
+            _fail('a complete search has no unrefined competitors')
 
 
 @dataclass(frozen=True)

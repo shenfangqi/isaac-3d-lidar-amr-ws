@@ -7,9 +7,9 @@ and scored per height band against the vertices of the map's 3D mesh: the
 share of points within ``tolerance_m`` of a vertex.  Bands with too few
 points are excluded for every candidate; the composite is point-weighted.
 
-The result only *nominates* a leader.  The manager then re-runs the full 2D
-validation with that leader as a prior, so every 2D gate and the corridor
-check still apply, and a clear 2D winner elsewhere still refuses it.
+These are the scoring primitives.  The localization decision built on
+them (independent cloud windows, refined candidates, bounded support and a
+2D sanity check) is ``localization_surface_validation.decide_surface``.
 """
 
 from dataclasses import dataclass

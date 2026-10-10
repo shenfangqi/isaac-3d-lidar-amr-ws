@@ -456,9 +456,10 @@ def refine_cluster(grid, seed, frames, reference_odom, config,
     return (outcome[0], standard(outcome[0])), None
 
 
-def _incomplete(session, digest, evaluated, started, reason, hypotheses=()):
+def _incomplete(session, digest, evaluated, started, reason, hypotheses=(),
+                unrefined=()):
     return SearchResult(session, digest, False, tuple(hypotheses), evaluated,
-                        time.monotonic() - started, reason.value)
+                        time.monotonic() - started, reason.value, tuple(unrefined))
 
 
 def _train_frames(train_frames):
@@ -672,7 +673,9 @@ def search_multiview_cached(grid, train_frames, config, deadline=None,
     if competitors:
         return SearchOutput(_incomplete(
             session, digest, evaluated, started,
-            RejectReason.SEARCH_INCOMPLETE, hypotheses), cache)
+            RejectReason.SEARCH_INCOMPLETE, hypotheses,
+            tuple((float(c['seed'][1]), float(c['seed'][2]), float(c['seed'][3]))
+                  for c in competitors)), cache)
     return SearchOutput(SearchResult(session, digest, True, hypotheses,
                                      evaluated, time.monotonic() - started,
                                      ''), cache)

@@ -82,10 +82,12 @@ Options:
                   carrying or pushing the robot. Needs stationary_only or
                   segmented_rotation.
   --surface-recheck off|record|decide
-                  Static 3D re-check of near-equal 2D candidates against the map
-                  mesh. record (default) only logs the evidence; decide lets its
-                  leader be re-validated by the full 2D gates as a prior. decide
-                  needs stationary_only or segmented_rotation.
+                  Static 3D decision against the map mesh when 2D refuses
+                  (ambiguous, no valid candidate, or a budget-limited search).
+                  record (default) only logs the evidence; decide may accept an
+                  independent 3D decision that also passes a 2D sanity check,
+                  then AMCL verifies as usual. decide needs stationary_only or
+                  segmented_rotation.
   --localization-translation forbid|guarded
                   guarded allows short forward probes chosen by the commonly
                   safe route planner. Needs --localization-motion guarded,

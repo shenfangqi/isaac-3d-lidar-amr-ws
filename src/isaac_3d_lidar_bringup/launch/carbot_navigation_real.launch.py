@@ -487,8 +487,9 @@ def generate_launch_description():
             default_value='record',
             choices=['off', 'record', 'decide'],
             description=(
-                'Static 3D re-check of near-equal 2D candidates: record logs '
-                'evidence only; decide lets its leader be re-validated in 2D.'
+                'Static 3D decision when 2D refuses (ambiguous, no valid or '
+                'budget-limited search): record logs evidence only; decide may '
+                'accept an independent 3D decision with a 2D sanity check.'
             ),
         ),
         DeclareLaunchArgument(

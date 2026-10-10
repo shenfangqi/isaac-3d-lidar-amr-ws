@@ -22,6 +22,7 @@ from isaac_3d_lidar_bringup import localization_rotation_policy
 from isaac_3d_lidar_bringup import localization_saved_pose
 from isaac_3d_lidar_bringup import localization_route_planner
 from isaac_3d_lidar_bringup import localization_surface_check
+from isaac_3d_lidar_bringup import localization_surface_validation
 from isaac_3d_lidar_bringup import localization_translation_contracts
 from isaac_3d_lidar_bringup import localization_translation_guard
 from isaac_3d_lidar_bringup.automatic_localization_quality import (
@@ -64,6 +65,7 @@ def manager():
     scope.update(vars(localization_rotation_policy))
     scope.update(vars(localization_saved_pose))
     scope.update(vars(localization_surface_check))
+    scope.update(vars(localization_surface_validation))
     scope.update(vars(localization_route_planner))
     scope.update(vars(localization_translation_contracts))
     scope.update(vars(localization_translation_guard))
@@ -1560,15 +1562,17 @@ def _two_candidates():
         'x' * 16, 'ab' * 32, True, (first, second), 10, 0.1, '')
 
 
-def _surface_session(manager, tmp_path, policy, results, points=30000):
+def _surface_session(manager, tmp_path, policy, results, points=30000,
+                     reason='AMBIGUOUS_LOCATION'):
     manager.params.update({'surface_recheck_policy': policy,
                            'surface_mesh_path': str(_mesh(tmp_path))})
     manager._configure_surface_check()
-    ambiguous = localization_hypotheses.QualityDecision(
-        False, 'AMBIGUOUS_LOCATION', runner_up_score=0.88,
-        holdout=((0, 0.9), (1, 0.88)))
-    manager._worker = FakeWorker([_two_candidates(), ambiguous, *results])
-    manager._surface_points = lambda train, now: np.zeros((points, 3))
+    refused = localization_hypotheses.QualityDecision(
+        False, reason, runner_up_score=0.88, holdout=((0, 0.9), (1, 0.88)))
+    manager._worker = FakeWorker([_two_candidates(), refused, *results])
+    manager._surface_points = lambda train, now: np.zeros((2 * points, 3))
+    manager._surface_point_sets = lambda train, now: (np.zeros((points, 3)),
+                                                      np.ones((points, 3)))
     _start_to_collect(manager)
     _feed(manager, 3)
     manager._tick()                     # search submitted
@@ -1577,7 +1581,7 @@ def _surface_session(manager, tmp_path, policy, results, points=30000):
     manager._tick()                     # validation submitted
     manager._latest_safety_scan = _room_scan(manager)
     _guard(manager, 'STOPPED')
-    manager._tick()                     # ambiguous -> 3D re-check (or not)
+    manager._tick()                     # refused -> 3D decision (or not)
 
 
 def _surface(resolved, leader=1, gap=0.23):
@@ -1586,69 +1590,216 @@ def _surface(resolved, leader=1, gap=0.23):
         (0.58, 0.81), gap, (1000,) * 7, (True,) * 6 + (False,), 30000)
 
 
-def test_record_mode_logs_the_3d_result_and_keeps_the_2d_verdict(segmented, tmp_path):
+def _decision(accepted, leader=1, reason=''):
+    refined = ((1.01, 2.0, 0.5), (4.02, 6.01, -2.61))
+    validation = localization_surface_validation.SurfaceValidation(
+        accepted, reason, leader, _surface(True, leader), _surface(True, leader),
+        (0.05, 0.025, 0.05, 0.025, 0.035), 0.6, refined, (0, 1))
+    return localization_surface_validation.SurfaceDecision(
+        accepted, reason, leader, refined[leader] if accepted else (), validation,
+        {'score': 0.72, 'coverage': 1.0, 'known': 120, 'conflict': 0.29,
+         'fit_3d': 0.76} if accepted else {})
+
+
+def test_record_mode_logs_the_3d_decision_and_keeps_the_2d_verdict(segmented, tmp_path):
     manager = segmented
-    _surface_session(manager, tmp_path, 'record', [_surface(True)])
-    assert manager._worker.jobs[-1][0] == 'run_surface_check_job'
+    _surface_session(manager, tmp_path, 'record', [_decision(True)])
+    name, arguments = manager._worker.jobs[-1]
+    assert name == 'run_surface_decision_job'
+    assert arguments[3] == ((1.0, 2.0, 0.5), (4.0, 6.0, -2.6))      # every candidate
+    assert arguments[1].shape == arguments[2].shape == (30000, 3)    # two windows
     _guard(manager, 'STOPPED')
-    manager._tick()                     # 3D result recorded only
+    manager._tick()                     # 3D decision recorded only
     assert manager._state == manager.State.PLAN_PROBE
     status = manager._confined_status()['surface_recheck']
     assert status['resolved'] and not status['used']
-    assert status['leader_pose_at_reference'] == {'x': 4.0, 'y': 6.0, 'yaw': -2.6}
+    assert status['leader_pose_at_reference'] == {'x': 4.02, 'y': 6.01, 'yaw': -2.61}
     assert [job[0] for job in manager._worker.jobs].count('run_validation_job') == 1
 
 
-def test_decide_mode_revalidates_the_3d_leader_as_a_prior(segmented, tmp_path):
+@pytest.mark.parametrize('reason', ['AMBIGUOUS_LOCATION', 'NO_VALID_CANDIDATE'])
+def test_decide_mode_accepts_an_independent_3d_decision(segmented, tmp_path, reason):
     manager = segmented
-    winner = localization_contracts.Hypothesis(
-        4.0, 6.0, -2.6, 0.88, 0.9, 0.0, 1, (0.88,), (0.05, 0.05, 0.02))
-    accepted = localization_hypotheses.QualityDecision(
-        True, '', winner, prior_used=True)
-    _surface_session(manager, tmp_path, 'decide', [_surface(True), accepted])
+    _surface_session(manager, tmp_path, 'decide', [_decision(True)], reason=reason)
     _guard(manager, 'STOPPED')
-    manager._tick()                     # 3D leader -> 2D validation with prior
-    name, arguments = manager._worker.jobs[-1]
-    assert name == 'run_validation_job'
-    prior, gates = arguments[7], arguments[8]
-    assert gates == ()                      # no translation in this session
-    assert (prior.pose.x, prior.pose.y) == (4.0, 6.0)
-    assert prior.xy_tolerance_m == pytest.approx(0.05)
-    _guard(manager, 'STOPPED')
-    manager._tick()                     # accepted through the full 2D gates
+    manager._tick()                     # accepted 3D decision -> seed AMCL
     assert manager._state == manager.State.STOP_AND_VERIFY
-    assert manager._confined_status()['surface_recheck']['used'] is True
+    assert [job[0] for job in manager._worker.jobs].count('run_validation_job') == 1
+    status = manager._confined_status()['surface_recheck']
+    assert status['used'] is True
+    best = manager._search_best
+    assert best['cluster_id'] == 1
+    assert best['wall_conflict_ratio'] == pytest.approx(0.29)
+    assert best['support_bounds'] == pytest.approx(
+        [0.05, max(0.025 * 0.7071067811865476, 0.05, 0.025 * 0.7071067811865476), 0.035])
     assert not manager._saved_prior_used
     assert all(r.operation.value != 'ROTATE' for r in manager.requests)
 
 
-def test_a_3d_leader_that_fails_2d_validation_changes_nothing(segmented, tmp_path):
+def test_a_refused_3d_decision_keeps_the_2d_verdict(segmented, tmp_path):
     manager = segmented
-    refused = localization_hypotheses.QualityDecision(False, 'UNOBSERVABLE_AXIS')
-    _surface_session(manager, tmp_path, 'decide', [_surface(True), refused])
-    _guard(manager, 'STOPPED')
-    manager._tick()
+    _surface_session(manager, tmp_path, 'decide',
+                     [_decision(False, reason='WIDE_3D_SUPPORT')])
     _guard(manager, 'STOPPED')
     manager._tick()
     assert manager._state == manager.State.PLAN_PROBE     # original ambiguity
-    assert manager._confined_status()['surface_recheck']['used'] is False
+    status = manager._confined_status()['surface_recheck']
+    assert status['used'] is False and status['reason'] == 'WIDE_3D_SUPPORT'
 
 
-def test_an_unresolved_3d_result_in_decide_mode_keeps_the_2d_verdict(segmented, tmp_path):
+def test_a_failed_3d_job_keeps_the_2d_verdict(segmented, tmp_path):
     manager = segmented
-    _surface_session(manager, tmp_path, 'decide', [_surface(False, gap=0.05)])
+    _surface_session(manager, tmp_path, 'decide', [])
+    manager._worker.poll = lambda: ((manager._session, manager._map_hash), 'error',
+                                    'boom')
+    manager.get_logger = lambda: NS(info=lambda m: None, warn=lambda m: None,
+                                    error=lambda m: None)
     _guard(manager, 'STOPPED')
     manager._tick()
     assert manager._state == manager.State.PLAN_PROBE
-    assert [job[0] for job in manager._worker.jobs].count('run_validation_job') == 1
+    assert manager._confined_status()['surface_recheck']['reason'] == 'JOB_FAILED'
 
 
-def test_too_few_cloud_points_skip_the_3d_recheck(segmented, tmp_path):
+def test_other_2d_verdicts_do_not_get_the_3d_decision(segmented, tmp_path):
+    manager = segmented
+    _surface_session(manager, tmp_path, 'decide', [], reason='UNOBSERVABLE_AXIS')
+    assert manager._state == manager.State.PLAN_PROBE
+    assert all(job[0] != 'run_surface_decision_job' for job in manager._worker.jobs)
+
+
+def test_too_few_cloud_points_skip_the_3d_decision(segmented, tmp_path):
     manager = segmented
     _surface_session(manager, tmp_path, 'decide', [], points=100)
     assert manager._state == manager.State.PLAN_PROBE
-    assert all(job[0] != 'run_surface_check_job' for job in manager._worker.jobs)
+    assert all(job[0] != 'run_surface_decision_job' for job in manager._worker.jobs)
     assert manager._confined_status()['surface_recheck']['reason'] == 'TOO_FEW_POINTS'
+
+
+def test_surface_point_sets_split_clouds_by_source_time(segmented):
+    manager = segmented
+    parts = [(30, np.full((2, 3), 3.0)), (10, np.full((2, 3), 1.0)),
+             (40, np.full((2, 3), 4.0)), (20, np.full((2, 3), 2.0))]
+    manager._surface_cloud_parts = lambda train, now: parts
+    first, second = manager._surface_point_sets(None, 0.0)
+    assert set(first[:, 0]) == {1.0, 2.0} and set(second[:, 0]) == {3.0, 4.0}
+
+
+def _incomplete_candidates(unrefined=((0.5, 0.2, 1.0),)):
+    complete = _two_candidates()
+    return localization_contracts.SearchResult(
+        complete.session, complete.map_hash, False, complete.hypotheses,
+        10, 0.1, 'SEARCH_INCOMPLETE', unrefined)
+
+
+def test_surface_candidate_budget_does_not_silently_drop_competitors(segmented, tmp_path):
+    manager = segmented
+    manager.params['surface_max_candidates'] = 1
+    _surface_session(manager, tmp_path, 'decide', [])
+    assert manager._surface_status['reason'] == 'CANDIDATE_SET_INCOMPLETE'
+    assert not manager._surface_status['used']
+    assert all(name != 'run_surface_decision_job' for name, _ in manager._worker.jobs)
+
+
+@pytest.mark.parametrize('missing_rank', [False, True])
+def test_route_candidate_budget_or_missing_rank_refuses_planning(segmented, missing_rank):
+    manager = segmented
+    manager._search_result = _two_candidates()
+    manager._last_odom_pose = (0., 0., 0.)
+    manager.params['route_max_candidates'] = 1 if not missing_rank else 24
+    manager._diagnostic_decision = localization_hypotheses.QualityDecision(
+        False, 'AMBIGUOUS_LOCATION',
+        holdout=((0, .9),) if missing_rank else ((0, .9), (1, .88)))
+    assert manager._route_candidates() == ((), ())
+    assert manager._route_status['status'] == 'CANDIDATE_SET_INCOMPLETE'
+
+
+def _incomplete_session(manager, tmp_path, policy, results, unrefined=((0.5, 0.2, 1.0),)):
+    manager.params.update({'surface_recheck_policy': policy,
+                           'surface_mesh_path': str(_mesh(tmp_path))})
+    manager._configure_surface_check()
+    incomplete = localization_hypotheses.QualityDecision(False, 'SEARCH_INCOMPLETE')
+    manager._worker = FakeWorker([_incomplete_candidates(unrefined), incomplete, *results])
+    manager._surface_point_sets = lambda train, now: (np.zeros((30000, 3)),
+                                                      np.ones((30000, 3)))
+    _start_to_collect(manager)
+    _feed(manager, 3)
+    manager._tick()                     # search submitted
+    manager._tick()                     # budget-limited: collect HOLDOUT anyway
+
+
+def _seed_decision(accepted=True, leader_origin=2):
+    poses = ((1.01, 2.0, 0.5), (4.02, 6.01, -2.61), (0.52, 0.21, 1.01))
+    validation = localization_surface_validation.SurfaceValidation(
+        accepted, '', 2, _surface(True, 2), _surface(True, 2),
+        (0.05, 0.025, 0.05, 0.025, 0.035), 0.6, poses, (0, 1, leader_origin))
+    return localization_surface_validation.SurfaceDecision(
+        accepted, '' if accepted else 'TRAIN_LEADER_GAP_TOO_SMALL', 2,
+        poses[2] if accepted else (), validation,
+        {'score': 0.72, 'coverage': 1.0, 'known': 120, 'conflict': 0.29,
+         'fit_3d': 0.76} if accepted else {})
+
+
+@pytest.mark.parametrize('policy', ['record', 'decide'])
+def test_a_budget_limited_search_gives_its_seeds_to_the_3d_decision(
+        segmented, tmp_path, policy):
+    manager = segmented
+    _incomplete_session(manager, tmp_path, policy, [_seed_decision()])
+    assert manager._state == manager.State.VERIFY_HYPOTHESES
+    _feed(manager, 3)
+    manager._tick()                     # 2D validation: SEARCH_INCOMPLETE
+    manager._latest_safety_scan = _room_scan(manager)
+    _guard(manager, 'STOPPED')
+    manager._tick()                     # -> 3D decision over hypotheses + seeds
+    name, arguments = manager._worker.jobs[-1]
+    assert name == 'run_surface_decision_job'
+    assert arguments[3] == ((1.0, 2.0, 0.5), (4.0, 6.0, -2.6))
+    assert arguments[-1] == ((0.5, 0.2, 1.0),)
+    _guard(manager, 'STOPPED')
+    manager._tick()
+    status = manager._confined_status()['surface_recheck']
+    assert status['search_complete'] is False and status['candidate_count'] == 3
+    if policy == 'record':
+        assert manager._state == manager.State.PLAN_PROBE
+        assert not status['used']
+    else:
+        assert manager._state == manager.State.STOP_AND_VERIFY
+        assert status['used']
+        assert manager._search_best['cluster_id'] == 2     # the seed, a new id
+        assert (manager._search_best['x'], manager._search_best['y']) != (0.5, 0.2)
+
+
+def test_a_refused_seed_decision_keeps_the_incomplete_verdict(segmented, tmp_path):
+    manager = segmented
+    _incomplete_session(manager, tmp_path, 'decide', [_seed_decision(accepted=False)])
+    _feed(manager, 3)
+    manager._tick()
+    manager._latest_safety_scan = _room_scan(manager)
+    _guard(manager, 'STOPPED')
+    manager._tick()
+    _guard(manager, 'STOPPED')
+    manager._tick()
+    assert manager._state == manager.State.PLAN_PROBE
+    assert manager._probe_reason == 'SEARCH_INCOMPLETE'
+
+
+def test_an_unfinished_coarse_scan_never_reaches_the_3d_decision(segmented, tmp_path):
+    manager = segmented
+    _incomplete_session(manager, tmp_path, 'decide', [], unrefined=())
+    assert manager._state == manager.State.PLAN_PROBE
+    assert [job[0] for job in manager._worker.jobs] == ['run_search_job']
+
+
+def test_an_incomplete_search_without_the_3d_policy_probes_directly(segmented):
+    manager = segmented
+    manager._worker = FakeWorker([_incomplete_candidates()])
+    _start_to_collect(manager)
+    _feed(manager, 3)
+    manager._tick()
+    manager._latest_safety_scan = _room_scan(manager)
+    _guard(manager, 'STOPPED')
+    manager._tick()
+    assert manager._state == manager.State.PLAN_PROBE
+    assert [job[0] for job in manager._worker.jobs] == ['run_search_job']
 
 
 @pytest.mark.parametrize('strategy, policy, mesh_ok, outcome', [
