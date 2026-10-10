@@ -1832,11 +1832,22 @@ def test_clouds_are_kept_only_while_stopped_during_localization(stationary):
                fields=[NS(name=n, offset=4 * i, datatype=7) for i, n in enumerate('xyz')],
                is_bigendian=False, width=1, height=1, point_step=12,
                data=b'\x00\x00\x80?' * 3)
+    manager._stationary_since, manager._moving_since = time.monotonic(), None
     manager._on_cloud(cloud)
     assert len(manager._surface_clouds) == 1
+    # Stillness not confirmed (a late /odom under load): skip only this one.
     manager._stopped = lambda now: False
     manager._on_cloud(cloud)
+    assert len(manager._surface_clouds) == 1
+    manager._moving_since = time.monotonic()
+    manager._on_cloud(cloud)
     assert len(manager._surface_clouds) == 0          # motion discards them
+    assert manager._surface_cloud_counts == {
+        'kept': 1, 'skipped_unconfirmed': 1, 'cleared_on_motion': 1}
+    manager._moving_since, manager._stationary_since = None, None
+    manager._on_cloud(cloud)
+    assert manager._surface_cloud_counts['cleared_on_motion'] == 2
+    manager._stationary_since = time.monotonic()
     manager._stopped = lambda now: True
     manager._state = manager.State.READY
     manager._on_cloud(cloud)
@@ -1845,6 +1856,7 @@ def test_clouds_are_kept_only_while_stopped_during_localization(stationary):
     manager._on_cloud(cloud)
     manager._start_next_view()
     assert len(manager._surface_clouds) == 0          # a new view starts afresh
+    assert set(manager._surface_cloud_counts.values()) == {0}
 
 
 # --- Phase 3 translation probes --------------------------------------------
