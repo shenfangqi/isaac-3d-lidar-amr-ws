@@ -146,6 +146,18 @@ def test_current_state_reads_a_latched_status(publish, expected, code):
         rclpy.shutdown(context=context)
 
 
+def test_samples_localize_without_a_bag_then_record_the_still_scene():
+    # 2026-10-10: a bag on the Jetson during localization delayed /odom.
+    source = (SCRIPTS / 'record_localization_sample.sh').read_text()
+    start = source.index('start_real_robot_navigation_rviz.sh" --automatic')
+    record = source.index('ros2 bag record')
+    assert start < record
+    assert '--surface-recheck record' in source
+    assert 'publish_pose_markers.py' in source
+    markers = (SCRIPTS / 'publish_pose_markers.py').read_text()
+    assert 'TRANSIENT_LOCAL' in markers and 'cmd_vel' not in markers
+
+
 def test_force_probe_once_is_plumbed_as_a_guarded_validation_test():
     start = (SCRIPTS / 'start_real_robot_navigation_rviz.sh').read_text()
     container = (SCRIPTS / 'jetson_nvblox_container.sh').read_text()
@@ -173,7 +185,8 @@ def test_container_script_passes_guarded_arguments_only_when_valid():
 
 
 @pytest.mark.parametrize('script', [
-    'start_real_robot_navigation_rviz.sh', 'jetson_nvblox_container.sh'])
+    'start_real_robot_navigation_rviz.sh', 'jetson_nvblox_container.sh',
+    'record_localization_sample.sh'])
 def test_scripts_parse(script):
     subprocess.run(['bash', '-n', str(SCRIPTS / script)], check=True)
 
