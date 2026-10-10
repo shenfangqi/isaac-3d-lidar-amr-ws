@@ -7,7 +7,7 @@ import pytest
 from scipy.spatial import cKDTree
 
 from isaac_3d_lidar_bringup import localization_surface_validation as validation
-from isaac_3d_lidar_bringup.localization_surface_check import SurfaceCheckConfig
+from isaac_3d_lidar_bringup.localization_surface_check import SurfaceCheckConfig, SurfaceResult
 from isaac_3d_lidar_bringup.localization_surface_validation import (
     decide_surface,
     refine_surface_pose,
@@ -188,3 +188,83 @@ def test_decision_refuses_a_leader_with_a_poor_absolute_fit(monkeypatch):
         fit_config=SurfaceCheckConfig(min_band_points=20, min_points=100))
     assert not decision.accepted
     assert decision.reason == 'LEADER_FIT_TOO_LOW'
+
+
+# --- See-through evidence (stage B) -------------------------------------------
+
+def _wall(x0, y0, x1, y1, z0=0.0, z1=2.0, step=.04):
+    length = math.hypot(x1 - x0, y1 - y0)
+    s, z = np.meshgrid(np.linspace(0, 1, max(2, int(length / step))),
+                       np.arange(z0, z1 + 1e-9, step))
+    return np.c_[x0 + s.ravel() * (x1 - x0), y0 + s.ravel() * (y1 - y0), z.ravel()]
+
+
+CONFLICT = validation.SurfaceConflictConfig()
+
+
+def test_rays_through_mapped_structure_count_and_added_objects_do_not():
+    occupancy = validation.surface_occupancy(_wall(3, -2, 3, 2), CONFLICT)
+    origin = (0., 0., .2)
+    beyond = np.c_[np.full(50, 6.0), np.linspace(-1, 1, 50), np.full(50, 1.0)]
+    added = np.c_[np.full(50, 1.5), np.linspace(-1, 1, 50), np.full(50, 1.0)]
+    on_wall = np.c_[np.full(50, 3.0), np.linspace(-1, 1, 50), np.full(50, 1.0)]
+    assert validation.see_through_ratio(occupancy, beyond, origin, (0, 0, 0), CONFLICT) == 1.
+    # A new object shortens rays: never a contradiction.
+    assert validation.see_through_ratio(occupancy, added, origin, (0, 0, 0), CONFLICT) == 0.
+    assert validation.see_through_ratio(occupancy, on_wall, origin, (0, 0, 0), CONFLICT) == 0.
+    # The same rays placed where the wall is not in their way.
+    assert validation.see_through_ratio(occupancy, beyond, origin, (0, 10, 0), CONFLICT) == 0.
+
+
+def test_floor_and_ceiling_grazing_is_not_a_contradiction():
+    floor = np.array([(x, y, 0.) for x in np.arange(0, 8, .04) for y in np.arange(-1, 1, .04)])
+    occupancy = validation.surface_occupancy(np.r_[floor, floor + (0, 0, 2.3)], CONFLICT)
+    low = np.c_[np.linspace(2, 7, 60), np.zeros(60), np.full(60, .15)]
+    high = np.c_[np.linspace(2, 7, 60), np.zeros(60), np.full(60, 2.25)]
+    for points in (low, high):
+        ratio = validation.see_through_ratio(occupancy, points, (0, 0, .2), (0, 0, 0), CONFLICT)
+        assert ratio == 0.
+
+
+def test_rerank_excludes_contradicted_candidates():
+    check = SurfaceCheckConfig(min_composite_gap=.15, min_leader_composite=.5)
+    base = SurfaceResult(False, 'LEADER_GAP_TOO_SMALL', 0, (.70, .68, .40), .02, (), (), 0)
+    assert validation._rerank(base, [0, 2], check).resolved
+    assert validation._rerank(base, [0, 2], check).composite_gap == pytest.approx(.30)
+    single = validation._rerank(base, [1], check)
+    assert single.resolved and single.leader == 1
+    assert validation._rerank(base, [], check).reason == 'ALL_CANDIDATES_SEE_THROUGH'
+
+
+def test_a_twin_room_whose_rays_cross_a_closed_wall_is_excluded():
+    # Rooms A (y 0-4) and B (y 10-14) look alike from inside; A's right wall
+    # has a door through which the scan sees a far wall at x = 8, B's right
+    # wall is closed.  The inlier share cannot tell them apart; the rays
+    # through B's closed wall can.
+    def room(y0, door):
+        right = ([_wall(4, y0, 4, y0 + 1), _wall(4, y0 + 3, 4, y0 + 4)] if door
+                 else [_wall(4, y0, 4, y0 + 4)])
+        return [_wall(0, y0, 0, y0 + 4), _wall(0, y0, 4, y0), _wall(0, y0 + 4, 4, y0 + 4),
+                *right]
+    surface = np.concatenate(room(0, True) + room(10, False) + [_wall(8, -1, 8, 15)])
+    rng = np.random.default_rng(2)
+    walls = np.concatenate(room(0, True))
+    walls = walls[rng.choice(len(walls), 9000, replace=False)]
+    far = _wall(8, 1.3, 8, 2.7)                # seen through the door
+    seen = np.r_[walls, far] + rng.normal(0, .005, (len(walls) + len(far), 3))
+    scan = seen - (2, 2, 0)                    # robot at (2, 2, 0) facing +x
+    keep = np.hypot(scan[:, 0], scan[:, 1]) > .6
+    scan = scan[keep]
+    train, held = scan[::2], scan[1::2]
+    poses = [(2., 2., 0.), (2., 12., 0.)]
+    check = SurfaceCheckConfig(tolerance_m=.05, min_points=1000, min_band_points=100,
+                               min_leader_composite=.01)
+    blind = validation.validate_surface_evidence(
+        surface, train, held, poses, deadline=time.monotonic() + 60, check_config=check)
+    assert blind.reason == 'TRAIN_LEADER_GAP_TOO_SMALL'
+    seeing = validation.validate_surface_evidence(
+        surface, train, held, poses, deadline=time.monotonic() + 60, check_config=check,
+        sensor_origin=(0., 0., .2))
+    assert seeing.see_through[0][0] < .02 and seeing.see_through[0][1] > .08
+    assert seeing.leader == 0
+    assert seeing.train.resolved and seeing.holdout.resolved

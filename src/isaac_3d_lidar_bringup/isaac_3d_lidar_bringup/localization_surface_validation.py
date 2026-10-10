@@ -6,16 +6,15 @@ AMCL and requires its own post-seed checks.  Temporal TRAIN/HOLDOUT
 separation, candidate completeness, source transforms and map identity
 belong to the caller.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
 import time
 
 import numpy as np
-from scipy.spatial import cKDTree
-
 from .localization_contracts import ContractError, SE2
 from .localization_hypotheses import score_pose
-from .localization_surface_check import SurfaceCheckConfig, check_surfaces, planar
+from .localization_surface_check import (
+    SurfaceCheckConfig, check_surfaces, planar, surface_tree)
 
 
 @dataclass(frozen=True)
@@ -75,6 +74,107 @@ class SurfaceRefineConfig:
                 or type(self.max_points) is not int or self.max_points < 1
                 or type(self.max_evaluations) is not int or self.max_evaluations < 1):
             raise ContractError('invalid refinement schedule')
+
+
+@dataclass(frozen=True)
+class SurfaceConflictConfig:
+    """
+    See-through contradictions: rays that pass through mapped structure.
+
+    A ray from the sensor to an observed point must not cross a mapped
+    surface well before its end.  At a wrong pose many rays do; added
+    objects (a closed curtain, a box) only shorten rays and never cause it,
+    unlike the inlier share.  Only structure between ``min_z_m`` and
+    ``max_z_m`` (map frame) counts and the last ``end_margin_m`` of every
+    ray is ignored: floor and ceiling grazing and surface thickness near the
+    end point produced most crossings at true poses (2026-10-10).
+
+    ``max_ratio`` is provisional: twice the largest ratio of the eight
+    operator-labelled true poses of 2026-10-09/10 (0.042), all on one site.
+    """
+
+    voxel_m: float = .05
+    start_m: float = .3
+    end_margin_m: float = .5
+    min_z_m: float = .25
+    max_z_m: float = 2.0
+    max_range_m: float = 8.0
+    min_point_z_m: float = .1
+    max_points: int = 2000
+    max_ratio: float = .08
+
+    def __post_init__(self):
+        values = (self.voxel_m, self.start_m, self.end_margin_m, self.max_range_m,
+                  self.max_ratio)
+        if (any(not math.isfinite(v) or v <= 0 for v in values)
+                or not self.min_z_m < self.max_z_m
+                or type(self.max_points) is not int or self.max_points < 1):
+            raise ContractError('invalid see-through limits')
+
+
+def surface_occupancy(surface_points, config):
+    """Sorted voxel keys of mapped structure within the height band."""
+    points = np.asarray(surface_points, float).reshape(-1, 3)
+    points = points[(points[:, 2] >= config.min_z_m) & (points[:, 2] <= config.max_z_m)]
+    return np.unique(_voxel_keys(points, config.voxel_m))
+
+
+def _voxel_keys(points, voxel):
+    cells = np.floor(points / voxel).astype(np.int64) + (1 << 20)
+    return (cells[..., 0] << 42) | (cells[..., 1] << 21) | cells[..., 2]
+
+
+def see_through_ratio(occupancy, points, origin, pose, config):
+    """
+    Share of rays crossing mapped structure before their last metres.
+
+    ``points`` are in the reference base frame and ``origin`` is the sensor
+    position there; ``pose`` places them in the map.  Returns ``nan`` if no
+    ray has a segment to test.
+    """
+    points = np.asarray(points, float).reshape(-1, 3)
+    points = points[(points[:, 2] > config.min_point_z_m)]
+    points = _subsample(points, config.max_points)
+    if not len(points):
+        return float('nan')
+    matrix = planar(*pose)
+    world = (matrix @ np.c_[points, np.ones(len(points))].T).T[:, :3]
+    start = (matrix @ np.r_[np.asarray(origin, float), 1.])[:3]
+    delta = world - start
+    length = np.linalg.norm(delta, axis=1)
+    direction = delta / np.maximum(length, 1e-9)[:, None]
+    end = np.minimum(length - config.end_margin_m, config.max_range_m)
+    steps = np.arange(config.start_m, max(float(end.max()), config.start_m), config.voxel_m / 2)
+    tested = end > config.start_m
+    if not tested.any() or not len(steps):
+        return float('nan')
+    if not len(occupancy):
+        return 0.            # no mapped structure in the band to cross
+    samples = start + direction[:, None, :] * steps[None, :, None]
+    inside = steps[None, :] < end[:, None]
+    keys = _voxel_keys(samples, config.voxel_m)
+    slot = np.searchsorted(occupancy, keys)
+    hit = (occupancy[np.minimum(slot, len(occupancy) - 1)] == keys) & inside
+    return float(hit[tested].any(1).mean())
+
+
+def _rerank(result, survivors, config):
+    """Retake leader and gap of a check result among ``survivors`` only."""
+    if result.reason in ('TOO_FEW_POINTS', 'NO_USABLE_BAND'):
+        return result
+    if not survivors:
+        return replace(result, resolved=False, reason='ALL_CANDIDATES_SEE_THROUGH',
+                       leader=-1, composite_gap=0.)
+    order = sorted(survivors, key=lambda k: -result.composite[k])
+    leader = order[0]
+    gap = (result.composite[leader] - result.composite[order[1]] if len(order) > 1
+           else result.composite[leader])
+    reason = ('' if gap >= config.min_composite_gap
+              and result.composite[leader] >= config.min_leader_composite
+              else 'LEADER_GAP_TOO_SMALL' if gap < config.min_composite_gap
+              else 'LEADER_FIT_TOO_LOW')
+    return replace(result, resolved=not reason, reason=reason, leader=leader,
+                   composite_gap=round(float(gap), 4))
 
 
 def _subsample(points, count):
@@ -144,12 +244,15 @@ class SurfaceValidation:
     poses: tuple = ()
     # Index of each pose in the input order (``poses`` then ``seed_poses``).
     origins: tuple = ()
+    # See-through ratio of every pose on the TRAIN and HOLDOUT points.
+    see_through: tuple = ()
 
 
 def validate_surface_evidence(vertices, train_points, holdout_points, poses, *,
                               deadline, check_config=SurfaceCheckConfig(),
                               support_config=SurfaceSupportConfig(),
-                              refine_config=None, seed_poses=()):
+                              refine_config=None, seed_poses=(), sensor_origin=None,
+                              conflict_config=SurfaceConflictConfig()):
     """
     Require independent ranking agreement and bounded x/y/yaw support.
 
@@ -163,6 +266,11 @@ def validate_surface_evidence(vertices, train_points, holdout_points, poses, *,
     refined poses (returned in ``poses``).  A candidate that does not
     converge refuses the result, since it could be under-scored, and the
     leader must stay near the candidate it started from.
+
+    With ``sensor_origin`` (the sensor position in the reference base
+    frame), a candidate whose rays see through mapped structure in either
+    window (:class:`SurfaceConflictConfig`) is excluded before ranking; the
+    leader and the gap are then taken among the remaining candidates.
     """
     if not math.isfinite(deadline):
         raise ContractError('finite validation deadline required')
@@ -171,7 +279,7 @@ def validate_surface_evidence(vertices, train_points, holdout_points, poses, *,
         return time.monotonic() >= deadline
     if expired():
         return SurfaceValidation(False, 'DEADLINE', -1, None, None)
-    tree = cKDTree(vertices)
+    tree = surface_tree(vertices)
     starts = tuple(tuple(float(v) for v in pose) for pose in tuple(poses) + tuple(seed_poses))
     origins = tuple(range(len(starts)))
     unconverged = False
@@ -199,14 +307,30 @@ def validate_surface_evidence(vertices, train_points, holdout_points, poses, *,
     if len(poses) < 2:
         return SurfaceValidation(False, 'TOO_FEW_DISTINCT_CANDIDATES', -1, None, None,
                                  poses=poses, origins=origins)
-    train = check_surfaces(vertices, train_points, poses, check_config)
+    train = check_surfaces(tree, train_points, poses, check_config)
     if expired():
         return SurfaceValidation(False, 'DEADLINE', -1, train, None)
-    held = check_surfaces(vertices, holdout_points, poses, check_config)
+    held = check_surfaces(tree, holdout_points, poses, check_config)
+    see_through = ()
+    if sensor_origin is not None:
+        occupancy = surface_occupancy(tree.data, conflict_config)
+        see_through = tuple(
+            tuple(round(see_through_ratio(occupancy, part, sensor_origin, pose,
+                                          conflict_config), 4) for pose in poses)
+            for part in (train_points, holdout_points))
+        if expired():
+            return SurfaceValidation(False, 'DEADLINE', -1, train, held, poses=poses,
+                                     origins=origins, see_through=see_through)
+        # nan (nothing to test) never excludes a candidate.
+        survivors = [k for k in range(len(poses))
+                     if not any(ratios[k] > conflict_config.max_ratio
+                                for ratios in see_through)]
+        train = _rerank(train, survivors, check_config)
+        held = _rerank(held, survivors, check_config)
 
     def result(reason, extents=(), fit=0.):
         return SurfaceValidation(not reason, reason, train.leader, train, held,
-                                 tuple(extents), fit, poses, origins)
+                                 tuple(extents), fit, poses, origins, see_through)
     if expired():
         return result('DEADLINE')
     if not train.resolved:
@@ -293,7 +417,8 @@ def decide_surface(vertices, train_points, holdout_points, poses, grid, holdout_
                    reference, search_config, thresholds, max_conflict, *, deadline,
                    check_config=RANK_CHECK, fit_config=FIT_CHECK,
                    support_config=SurfaceSupportConfig(),
-                   refine_config=SurfaceRefineConfig(), seed_poses=()):
+                   refine_config=SurfaceRefineConfig(), seed_poses=(), sensor_origin=None,
+                   conflict_config=SurfaceConflictConfig()):
     """
     Accept a pose from independent 3D evidence plus a 2D sanity check.
 
@@ -307,15 +432,26 @@ def decide_surface(vertices, train_points, holdout_points, poses, grid, holdout_
     ``max_conflict`` (a gross-contradiction cap; the labelled true poses
     reached 0.275 against the 0.25 2D gate).
     """
+    tree = surface_tree(vertices)
+    # The leader must be the candidate it started from, and the 2D search
+    # treats poses within its cluster radius as one candidate.  A fixed
+    # 0.15 m / 6 deg refused the true pose of 2026-10-10 record_02, whose 2D
+    # candidate was 0.14 m / 9.5 deg from the 3D optimum.
+    refine_config = replace(
+        refine_config,
+        leader_shift_m=getattr(search_config, 'cluster_xy_m', refine_config.leader_shift_m),
+        leader_turn_rad=getattr(search_config, 'cluster_yaw_rad',
+                                refine_config.leader_turn_rad))
     validation = validate_surface_evidence(
-        vertices, train_points, holdout_points, poses, deadline=deadline,
+        tree, train_points, holdout_points, poses, deadline=deadline,
         check_config=check_config, support_config=support_config,
-        refine_config=refine_config, seed_poses=seed_poses)
+        refine_config=refine_config, seed_poses=seed_poses,
+        sensor_origin=sensor_origin, conflict_config=conflict_config)
     if not validation.supported:
         return SurfaceDecision(False, validation.reason, validation.leader, (),
                                validation, {})
     pose = validation.poses[validation.leader]
-    fit = check_surfaces(vertices, holdout_points, (pose, pose), fit_config).composite
+    fit = check_surfaces(tree, holdout_points, (pose, pose), fit_config).composite
     if not fit or fit[0] < fit_config.min_leader_composite:
         return SurfaceDecision(False, 'LEADER_FIT_TOO_LOW', validation.leader, pose,
                                validation, {'fit_3d': fit[0] if fit else 0.})
@@ -334,10 +470,12 @@ def decide_surface(vertices, train_points, holdout_points, poses, grid, holdout_
 def run_surface_decision_job(vertices, train_points, holdout_points, poses, grid,
                              holdout_frames, reference, search_config, thresholds,
                              max_conflict, check_config, fit_config, timeout_s,
-                             seed_poses=()):
+                             seed_poses=(), sensor_origin=None,
+                             conflict_config=SurfaceConflictConfig()):
     """Worker entry point for :func:`decide_surface`."""
     return decide_surface(vertices, train_points, holdout_points, poses, grid,
                           holdout_frames, reference, search_config, thresholds,
                           max_conflict, deadline=time.monotonic() + timeout_s,
                           check_config=check_config, fit_config=fit_config,
-                          seed_poses=seed_poses)
+                          seed_poses=seed_poses, sensor_origin=sensor_origin,
+                          conflict_config=conflict_config)
