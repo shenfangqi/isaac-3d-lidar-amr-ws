@@ -1,7 +1,8 @@
 """Unit and timestamp conversion helpers for IMU messages."""
 
-import math
+from bisect import bisect_left, insort
 from collections import deque
+import math
 
 STANDARD_GRAVITY_MPS2 = 9.80665
 
@@ -17,7 +18,11 @@ class StationaryBiasEstimator:
         if max_abs_value <= 0.0 or not math.isfinite(max_abs_value):
             raise ValueError("max_abs_value must be finite and positive")
         self._min_samples = int(min_samples)
-        self._samples = deque(maxlen=int(window_samples))
+        self._window = int(window_samples)
+        self._samples = deque()
+        # The same samples kept sorted, so the median costs O(1) per IMU
+        # message instead of a full sort (200 Hz on the Jetson).
+        self._ordered = []
         self._max_abs_value = float(max_abs_value)
 
     @property
@@ -32,7 +37,7 @@ class StationaryBiasEstimator:
     def bias(self):
         if not self._samples:
             return 0.0
-        ordered = sorted(self._samples)
+        ordered = self._ordered
         middle = len(ordered) // 2
         if len(ordered) % 2:
             return ordered[middle]
@@ -45,7 +50,11 @@ class StationaryBiasEstimator:
             and math.isfinite(value)
             and abs(value) <= self._max_abs_value
         ):
+            if len(self._samples) == self._window:
+                oldest = self._samples.popleft()
+                del self._ordered[bisect_left(self._ordered, oldest)]
             self._samples.append(value)
+            insort(self._ordered, value)
         return value - self.bias
 
 

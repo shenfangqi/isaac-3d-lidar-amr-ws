@@ -743,10 +743,19 @@ run_automatic_localization() {
       "timeout --kill-after=1s 30s ros2 service call ${service} std_srvs/srv/Trigger '{}'"; then
     # The request can take effect while its response is lost in DDS.
     # Continue only if the manager's latched status shows it has left
-    # WAIT_FOR_START; otherwise this is a real failure.
-    local state
-    state="$(remote_ros "timeout 10s ros2 topic echo --once --full-length /automatic_localization/status std_msgs/msg/String --field data" 2>/dev/null \
-      | python3 -c 'import json, sys; text = sys.stdin.read().strip().splitlines(); print(json.loads(text[0]).get("state", "") if text else "")' 2>/dev/null || true)"
+    # WAIT_FOR_START; otherwise this is a real failure.  Read it with rclpy
+    # inside the navigation container, as the wait below does: the host CLI
+    # path failed on 2026-10-10 (stale ros2 daemon, and "A message was lost"
+    # lines ahead of the data), tearing down a localization in progress.
+    local state="" attempt
+    for attempt in 1 2 3; do
+      state="$(remote docker exec carbot-nvblox bash -lc \
+        "source /opt/ros/humble/setup.bash; source /workspaces/isaac_ros-dev/install/setup.bash; exec python3 /tmp/jetson_navigation_wait.py --current-state --timeout 10" \
+        2>/dev/null | tail -n 1 || true)"
+      [[ -n "${state}" && "${state}" != "NO_STATUS" ]] && break
+      state=""
+      sleep 2
+    done
     if [[ -z "${state}" || "${state}" == "WAIT_FOR_START" ]]; then
       echo "${service} failed and the manager did not start (state: ${state:-unknown})." >&2
       return 1
