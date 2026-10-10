@@ -9,6 +9,7 @@ from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -271,7 +272,10 @@ def generate_launch_description():
                 'robot_not_moved': PythonExpression([
                     "'", robot_not_moved, "' == 'true'"]),
                 'saved_pose_path': saved_pose_path,
-                'surface_recheck_policy': surface_recheck_policy,
+                # 'off' would otherwise be read as YAML false and the
+                # manager would refuse a BOOL for its STRING parameter.
+                'surface_recheck_policy': ParameterValue(
+                    surface_recheck_policy, value_type=str),
                 # Default: the nvblox mesh exported next to the map YAML.
                 'surface_mesh_path': PythonExpression([
                     "'", surface_mesh_path, "' or '", map_yaml,
