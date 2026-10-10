@@ -101,6 +101,51 @@ def test_lost_start_response_falls_back_to_manager_state():
     assert '"${state}" == "WAIT_FOR_START"' in source
 
 
+def test_lost_start_response_reads_the_latched_state_in_the_container():
+    # 2026-10-10: the host CLI fallback failed (stale ros2 daemon, "A message
+    # was lost" lines) and tore down a localization already in SEARCH.
+    source = (SCRIPTS / 'start_real_robot_navigation_rviz.sh').read_text()
+    block = source.split('response is lost in DDS', 1)[1].split('NOTICE:', 1)[0]
+    assert 'jetson_navigation_wait.py --current-state' in block
+    assert 'docker exec carbot-nvblox' in block
+    assert 'for attempt in 1 2 3' in block
+    assert 'ros2 topic echo' not in block
+
+
+@pytest.mark.parametrize('publish, expected, code', [
+    ('SEARCH_MULTI_VIEW', 'SEARCH_MULTI_VIEW', 0),
+    (None, 'NO_STATUS', 2),
+])
+def test_current_state_reads_a_latched_status(publish, expected, code):
+    rclpy = pytest.importorskip('rclpy')
+    import os
+    from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+    from std_msgs.msg import String
+    domain = 88
+    context = rclpy.Context()
+    rclpy.init(context=context, domain_id=domain)
+    try:
+        node = rclpy.create_node('fake_manager', context=context)
+        if publish:
+            publisher = node.create_publisher(String, '/automatic_localization/status', QoSProfile(
+                depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                durability=DurabilityPolicy.TRANSIENT_LOCAL))
+            publisher.publish(String(data=json.dumps({'state': publish})))
+        env = dict(os.environ, ROS_DOMAIN_ID=str(domain))
+        process = subprocess.Popen(
+            ['python3', str(SCRIPTS / 'jetson_navigation_wait.py'), '--current-state',
+             '--timeout', '6'], env=env, stdout=subprocess.PIPE, text=True)
+        executor = rclpy.executors.SingleThreadedExecutor(context=context)
+        executor.add_node(node)
+        while process.poll() is None:
+            executor.spin_once(timeout_sec=0.1)
+        assert process.stdout.read().strip().splitlines()[-1] == expected
+        assert process.returncode == code
+        node.destroy_node()
+    finally:
+        rclpy.shutdown(context=context)
+
+
 def test_force_probe_once_is_plumbed_as_a_guarded_validation_test():
     start = (SCRIPTS / 'start_real_robot_navigation_rviz.sh').read_text()
     container = (SCRIPTS / 'jetson_nvblox_container.sh').read_text()
