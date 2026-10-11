@@ -83,7 +83,9 @@
 
 **采用标准**（下部门、右下窗帘用的是同一标准）：0 错误，而且区域在“没有变化”时让全图少接受的视角，不能多于它在“变化时”换来的。右下窗帘少了 19 个，换来 0 个；下部门少了 0 个（多 1 个），换来 2 个。
 
-## 以后加区域：`scripts/check_variable_regions.py`
+## 以后加区域：`scripts/open_region_editor.sh` + `scripts/check_variable_regions.py`
+
+- 画框：`bash scripts/open_region_editor.sh`。在工作站屏幕上打开 RViz：橙色是正在使用的区域，拖动黄、紫两个角点调整新框，在角点上右键选 “save region” 保存，结果写到 `calibration_data/region_editor/new_regions.yaml`。编辑器在独立容器里运行（ROS domain 78，只用本机），工作区只读，不会连到实车。关闭：`docker rm -f carbot-region-editor`。
 
 - `quick <区域文件> --only <名字>`：实车样本（含反例），加该区域附近“关上”的合成检查，约 15 分钟。只说明框画得对不对，**不说明可以采用**。
 - `full <区域文件>`：每个区域附近关上、开着都查，加多时间窗重复和全图退化分析。**通过后才能写进正式配置。**
