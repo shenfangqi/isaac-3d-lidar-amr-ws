@@ -71,6 +71,9 @@ class SurfaceField:
     origin: np.ndarray        # (3,) corner of voxel (0, 0, 0)
     voxel_m: float
     fit: np.ndarray           # (nx, ny, nz) float32 in [0, 1]
+    # Variable regions: their surface is not in ``fit`` and observed points
+    # that land in them are not scored.
+    regions: object = None
 
 
 @dataclass(frozen=True)
@@ -84,10 +87,12 @@ class SurfaceSearchResult:
     evaluated: int
 
 
-def build_surface_field(surface_points, config=SurfaceSearchConfig()):
+def build_surface_field(surface_points, config=SurfaceSearchConfig(), regions=None):
     """Fit field of the surface points (map-derived; depends on the map only)."""
     from scipy import ndimage
     points = np.asarray(surface_points, float).reshape(-1, 3)
+    if regions is not None:
+        points = points[~regions.contains(points)]
     if not len(points):
         raise ContractError('the 3D search needs a non-empty surface')
     pad = config.cap_m + config.voxel_m
@@ -99,7 +104,7 @@ def build_surface_field(surface_points, config=SurfaceSearchConfig()):
     distance = ndimage.distance_transform_edt(empty, sampling=config.voxel_m)
     fit = np.exp(-.5 * (np.minimum(distance, config.cap_m) / config.sigma_m) ** 2)
     fit[distance >= config.cap_m] = 0.
-    return SurfaceField(origin, config.voxel_m, fit.astype(np.float32))
+    return SurfaceField(origin, config.voxel_m, fit.astype(np.float32), regions)
 
 
 def free_positions(grid, config=SurfaceSearchConfig()):
@@ -136,7 +141,14 @@ def coarse_scores(field, points, positions, yaws):
                   & (z >= 0) & (z < shape[2]))
         values = np.zeros(inside.shape, np.float32)
         values[inside] = field.fit[index[..., 0][inside], index[..., 1][inside], z[inside]]
-        scores[:, column] = values.mean(1)
+        if field.regions is None:
+            scores[:, column] = values.mean(1)
+        else:
+            heights = np.broadcast_to(points[:, 2], world.shape[:2])
+            scored = ~field.regions.contains(
+                np.c_[world.reshape(-1, 2), heights.reshape(-1)]).reshape(world.shape[:2])
+            scores[:, column] = ((values * scored).sum(1)
+                                 / np.maximum(scored.sum(1), 1))
     return scores
 
 

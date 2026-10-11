@@ -50,6 +50,7 @@ def generate_launch_description():
     translation_policy = LaunchConfiguration('translation_policy')
     linear_profile_path = LaunchConfiguration('linear_profile_path')
     surface_mesh_path = LaunchConfiguration('surface_mesh_path')
+    surface_variable_regions = LaunchConfiguration('surface_variable_regions')
     probe_parameters = {
         'motion_policy': motion_policy,
         'motion_profile_path': motion_profile_path,
@@ -280,6 +281,13 @@ def generate_launch_description():
                 'surface_mesh_path': PythonExpression([
                     "'", surface_mesh_path, "' or '", map_yaml,
                     "'.rsplit('.', 1)[0] + '.ply'"]),
+                # Default: config/localization/<map stem>_variable_regions.yaml;
+                # a map without such a file has no variable regions.
+                'surface_variable_regions': PythonExpression([
+                    "'", surface_variable_regions, "' or '",
+                    os.path.join(bringup_dir, 'config', 'localization', ''), "' + '",
+                    map_yaml, "'.rsplit('/', 1)[-1].rsplit('.', 1)[0]",
+                    " + '_variable_regions.yaml'"]),
             },
         ],
         condition=IfCondition(automatic_localization),
@@ -499,6 +507,11 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'surface_mesh_path', default_value='',
             description='ASCII PLY mesh of the map; empty = MAP_YAML with .ply.',
+        ),
+        DeclareLaunchArgument(
+            'surface_variable_regions', default_value='',
+            description=('Variable-region YAML ignored by the 3D scoring; empty = '
+                         'config/localization/<map stem>_variable_regions.yaml if present.'),
         ),
         DeclareLaunchArgument(
             'saved_pose_path',

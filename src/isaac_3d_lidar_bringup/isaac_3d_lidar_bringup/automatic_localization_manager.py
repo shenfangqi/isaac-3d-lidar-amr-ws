@@ -6,6 +6,7 @@ from enum import Enum
 import hashlib
 import json
 import math
+import os
 import time
 import uuid
 
@@ -124,7 +125,10 @@ from isaac_3d_lidar_bringup.localization_surface_check import (
     SurfaceCheckConfig,
     transform,
 )
-from isaac_3d_lidar_bringup.localization_surface_model import load_surface_model
+from isaac_3d_lidar_bringup.localization_surface_model import (
+    file_sha256,
+    load_surface_model,
+)
 from isaac_3d_lidar_bringup.localization_surface_search import (
     build_surface_field,
     free_positions,
@@ -143,6 +147,7 @@ from isaac_3d_lidar_bringup.localization_translation_contracts import (
     TranslationLink,
 )
 from isaac_3d_lidar_bringup.localization_translation_guard import LinearProbeGuard
+from isaac_3d_lidar_bringup.localization_variable_regions import load_variable_regions
 
 
 LOCALIZATION_MANAGER = '/lifecycle_manager_localization/manage_nodes'
@@ -577,6 +582,10 @@ class AutomaticLocalizationManager(Node):
             # Stage D: union = the 3D decision also covers every place the
             # map-wide 3D search finds within its margin; off = 2D only.
             'surface_search_policy': 'union',
+            # Map regions that change in use (curtains, doors), ignored by
+            # the 3D scoring; '' = none.  YAML bound to the mesh SHA-256
+            # (localization_variable_regions).
+            'surface_variable_regions': '',
             'surface_max_points_per_cloud': 6000,
             'surface_min_composite_gap': 0.15,
             'surface_min_leader_composite': 0.70,
@@ -759,6 +768,7 @@ class AutomaticLocalizationManager(Node):
         if policy not in ('off', 'record', 'decide'):
             raise ContractError('surface_recheck_policy must be off, record or decide')
         self._surface_vertices = None
+        self._surface_regions = None
         self._surface_config = SurfaceCheckConfig(
             min_composite_gap=float(self._parameter('surface_min_composite_gap')),
             min_leader_composite=float(self._parameter('surface_min_leader_composite')))
@@ -785,6 +795,24 @@ class AutomaticLocalizationManager(Node):
                         f'(mesh {model.mesh_sha256[:12]}, cache {model.report["cache"]})')
                 else:
                     self._surface_vertices = load_ply_vertices(path)
+                regions_path = self._parameter('surface_variable_regions')
+                if regions_path and not os.path.exists(regions_path):
+                    # The launch default names a per-map file; most maps
+                    # have none.
+                    self.get_logger().info(f'no 3D variable regions ({regions_path})')
+                    regions_path = ''
+                if regions_path:
+                    self._surface_regions = load_variable_regions(
+                        regions_path,
+                        model.mesh_sha256 if spacing > 0 else file_sha256(path))
+                    self.get_logger().info(
+                        f'3D variable regions ignored by scoring: '
+                        f'{", ".join(self._surface_regions.names)}')
+            except ContractError as error:
+                if policy == 'decide':
+                    raise
+                self.get_logger().warn(f'3D variable regions not used: {error}')
+                self._surface_regions = None
             except (OSError, ValueError) as error:
                 if policy == 'decide':
                     raise ContractError(f'3D re-check mesh unusable: {error}') from error
@@ -797,7 +825,8 @@ class AutomaticLocalizationManager(Node):
             raise ContractError('surface_search_policy must be off or union')
         self._surface_search_config = SurfaceSearchConfig()
         self._surface_search_field = (
-            build_surface_field(self._surface_vertices, self._surface_search_config)
+            build_surface_field(self._surface_vertices, self._surface_search_config,
+                                self._surface_regions)
             if search == 'union' and self._surface_vertices is not None else None)
 
     def _on_cloud(self, message):
@@ -938,7 +967,8 @@ class AutomaticLocalizationManager(Node):
             None if self._surface_search_field is None else (
                 self._surface_search_field,
                 free_positions(self._latest_grid, self._surface_search_config),
-                self._surface_search_config))
+                self._surface_search_config),
+            self._surface_regions)
         self._surface_stage = 'deciding'
         return True
 

@@ -1,0 +1,19 @@
+# Variable regions of the real map carbot_map_20260928_215841 (see
+# isaac_3d_lidar_bringup/localization_variable_regions.py).  Localization
+# ignores the mapped surface inside them and observed points that land in
+# them, for every candidate alike.
+mesh_sha256: 9eb7d03511da787bca357c115403c0c29e3e5bc5b6daa3a226ec7367a2d4a8e7
+regions:
+  - name: bottom-wall curtains
+    min: [-1.25, -0.55, 0.30]
+    max: [1.30, -0.30, 2.00]
+    # Open when mapped (2026-09-28), closed in use (2026-10-10).  Closed,
+    # they stood at y = -0.42 m (p5-p95 -0.47..-0.32), x -1.15..1.2 m,
+    # 0.36..1.8 m high (scripts/check_scene_consistency.py on samples 11
+    # and 13).  Only the curtain plane is variable: the window recess
+    # behind it (mesh y -1.0..-0.55) stays mapped, because rays stop at a
+    # closed curtain and see the recess as mapped when it is open.  A
+    # region that also covered the recess let a wrong pose drop 28% of its
+    # points and its see-through crossings and be accepted (A_01 with the
+    # truth removed, 3 of 42 window pairs).  Robot centres so far: y >= -0.05.
+    reason: curtains change between mapping and use; operator, 2026-10-10

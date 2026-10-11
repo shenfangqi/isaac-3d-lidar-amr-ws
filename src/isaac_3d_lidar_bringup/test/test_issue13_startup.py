@@ -190,6 +190,15 @@ def test_surface_recheck_off_reaches_the_manager_as_a_string():
         assert evaluate(value) == policy
 
 
+def test_variable_regions_default_to_a_per_map_file():
+    launch = (PROJECT_DIR / 'src/isaac_3d_lidar_bringup/launch/'
+              'carbot_navigation_real.launch.py').read_text()
+    assert "'surface_variable_regions': PythonExpression([" in launch
+    assert "'_variable_regions.yaml'" in launch
+    assert (PROJECT_DIR / 'src/isaac_3d_lidar_bringup/config/localization/'
+            'carbot_map_20260928_215841_variable_regions.yaml').exists()
+
+
 def test_translation_is_plumbed_and_needs_an_accepted_linear_profile():
     start = (SCRIPTS / 'start_real_robot_navigation_rviz.sh').read_text()
     container = (SCRIPTS / 'jetson_nvblox_container.sh').read_text()

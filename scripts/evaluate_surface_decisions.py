@@ -35,6 +35,11 @@ from isaac_3d_lidar_bringup.localization_surface_search import (  # noqa: E402
     build_surface_field, free_positions, search_surface, SurfaceSearchConfig)
 from isaac_3d_lidar_bringup.localization_surface_validation import (  # noqa: E402
     decide_surface)
+from isaac_3d_lidar_bringup.localization_variable_regions import (  # noqa: E402
+    load_variable_regions)
+
+# Variable regions applied to every decision (--variable-regions).
+REGIONS = None
 from recheck_candidates_3d import chain_to_base, read_clouds  # noqa: E402
 from replay_localization_surface_decision import (  # noqa: E402
     reconstruct_frames, reconstruct_points, same_pose)
@@ -74,7 +79,7 @@ def decide(surface_points, sample, grid, poses, seeds, max_conflict, see_through
         surface_points, sample['first'], sample['second'], poses, grid,
         sample['holdout'], sample['train'][0].T_odom_base, config, thresholds,
         max_conflict, deadline=time.monotonic() + 600, seed_poses=seeds,
-        sensor_origin=sample['origin'] if see_through else None)
+        sensor_origin=sample['origin'] if see_through else None, regions=REGIONS)
     validation = decision.validation
     leader = (decision.pose or (validation.poses[validation.leader]
                                 if validation and 0 <= validation.leader < len(validation.poses)
@@ -104,11 +109,17 @@ def main():
     parser.add_argument('--exclude-m', type=float, default=1.2)
     parser.add_argument('--max-conflict', type=float, default=.35)
     parser.add_argument('--see-through', choices=('on', 'off'), default='on')
+    parser.add_argument('--variable-regions', type=Path,
+                        help='variable-region YAML for the mesh (map regions to ignore)')
     parser.add_argument('--search3d', choices=('off', 'union'), default='off',
                         help='union: add the map-wide 3D search candidates (stage D)')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     grid = load_map(args.map)
+    global REGIONS
+    if args.variable_regions:
+        from isaac_3d_lidar_bringup.localization_surface_model import file_sha256
+        REGIONS = load_variable_regions(args.variable_regions, file_sha256(args.mesh))
     models = {}
     for text in args.spacings.split(','):
         spacing = float(text)
@@ -131,7 +142,7 @@ def main():
                      if math.hypot(p[0] - truth[0], p[1] - truth[1]) > args.exclude_m]
         if args.search3d == 'union':
             config = SurfaceSearchConfig()
-            field = build_surface_field(next(iter(models.values())), config)
+            field = build_surface_field(next(iter(models.values())), config, REGIONS)
             found = search_surface(field, sample['first'], free_positions(grid, config), config)
             row['search3d'] = dict(complete=found.complete, reason=found.reason,
                                    candidates=len(found.candidates))
@@ -160,6 +171,7 @@ def main():
         schema=1, mode='offline_surface_decision_evaluation', navigation_accepted=False,
         mesh=str(args.mesh), spacings=list(models), exclude_m=args.exclude_m,
         see_through=args.see_through, search3d=args.search3d,
+        variable_regions=str(args.variable_regions or ''),
         samples=rows), indent=1, default=lambda o: o.tolist() if hasattr(o, 'tolist')
         else asdict(o)) + '\n')
 
