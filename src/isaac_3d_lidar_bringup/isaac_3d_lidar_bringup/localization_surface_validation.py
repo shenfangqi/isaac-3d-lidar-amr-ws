@@ -459,6 +459,28 @@ def validate_surface_evidence(vertices, train_points, holdout_points, poses, *,
         return result('HOLDOUT_' + held.reason)
     if train.leader != held.leader:
         return result('INDEPENDENT_LEADER_DISAGREEMENT')
+    full = getattr(tree, 'full', None)
+    if full is not None:
+        # Variable regions may widen the leader's margin but never choose
+        # it: a region next to a twin can hide exactly the evidence that
+        # tells the twins apart (2026-10-11: a door region let the twin of
+        # sample_13 be accepted with the truth removed).  Without the
+        # regions the same candidate must lead, among the candidates that
+        # see-through does not exclude, in both windows.
+        plain = [check_surfaces(full, part, scored, check_config, workers)
+                 for part in (train_points, holdout_points)]
+        if sensor_origin is not None:
+            occupancy = surface_occupancy(full.data, conflict_config)
+            ratios = [_map(lambda pose: see_through_ratio(
+                occupancy, part, sensor_origin, pose, conflict_config), poses, workers)
+                for part in (train_points, holdout_points)]
+            survivors = [k for k in range(len(poses))
+                         if not any(r[k] > conflict_config.max_ratio for r in ratios)]
+            plain = [_rerank(p, survivors, check_config) for p in plain]
+        elif len(poses) == 1:
+            plain = [_rerank(p, [0], check_config) for p in plain]
+        if any(p.leader != train.leader for p in plain):
+            return result('VARIABLE_REGIONS_CHANGE_LEADER')
     if unconverged:
         return result('CANDIDATE_NOT_CONVERGED')
     if refine_config is not None and (

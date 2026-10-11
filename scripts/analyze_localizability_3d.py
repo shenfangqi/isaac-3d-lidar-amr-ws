@@ -245,6 +245,8 @@ def main():
                                        args.add_surface)) as pool:
         for row in pool.map(analyze, jobs, chunksize=4):
             rows.append(row)
+            if len(rows) % 100 == 0:
+                print(f'{len(rows)}/{len(jobs)} views', flush=True)
     by_place = {}
     for row in rows:
         by_place.setdefault((round(row['pose'][0], 2), round(row['pose'][1], 2)), []).append(row)

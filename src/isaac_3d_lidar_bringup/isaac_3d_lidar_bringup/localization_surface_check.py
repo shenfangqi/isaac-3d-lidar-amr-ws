@@ -217,6 +217,9 @@ class MaskedSurface:
         self.regions = regions
         self.tree = cKDTree(points[~regions.contains(points)])
         self.data = self.tree.data
+        # The whole surface, to check that the regions do not change the
+        # leader (localization_surface_validation).
+        self.full = cKDTree(points)
 
     def query(self, points, **kwargs):
         return self.tree.query(points, **kwargs)

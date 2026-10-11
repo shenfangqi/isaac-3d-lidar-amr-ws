@@ -56,3 +56,39 @@ def test_surface_and_points_in_a_region_are_not_scored():
     config = SurfaceCheckConfig(min_points=100, min_band_points=10, min_leader_composite=.01)
     assert check_surfaces(plain, seen, (pose, pose), config).composite[0] < .5
     assert check_surfaces(masked, seen, (pose, pose), config).composite[0] > .95
+
+
+def test_a_region_may_not_choose_the_leader():
+    # Rooms A (y 0-4) and B (y 10-14) are alike, but B has a pillar.  The
+    # robot is in A; its candidates are B and a poor pose.  Without regions
+    # B's rays cross the pillar and B is excluded.  A region over the pillar
+    # hides that evidence: B would lead and pass, so the decision refuses.
+    import time
+    from isaac_3d_lidar_bringup import localization_surface_validation as validation
+
+    def wall(x0, y0, x1, y1):
+        n = max(2, int(np.hypot(x1 - x0, y1 - y0) / .04))
+        s, z = np.meshgrid(np.linspace(0, 1, n), np.arange(0., 2., .04))
+        return np.c_[x0 + s.ravel() * (x1 - x0), y0 + s.ravel() * (y1 - y0), z.ravel()]
+
+    def room(y0):
+        return [wall(0, y0, 0, y0 + 4), wall(0, y0, 4, y0), wall(0, y0 + 4, 4, y0 + 4),
+                wall(4, y0, 4, y0 + 4)]
+    pillar = wall(2.6, 11.4, 2.6, 12.6)
+    surface = np.concatenate(room(0) + room(10) + [pillar])
+    rng = np.random.default_rng(3)
+    seen = np.concatenate(room(0))
+    seen = seen[rng.choice(len(seen), 12000, replace=False)] - (2, 2, 0)
+    seen = seen[np.hypot(seen[:, 0], seen[:, 1]) > .6]
+    train, held = seen[::2], seen[1::2]
+    poses = [(2., 12., 0.), (2.6, 1.3, .9)]
+    check = SurfaceCheckConfig(tolerance_m=.05, min_points=1000, min_band_points=100,
+                               min_leader_composite=.01)
+    pillar_region = VariableRegions(np.array([[2.5, 11.3, 0., 2.7, 12.7, 2.]]), ('pillar',))
+    kwargs = dict(deadline=time.monotonic() + 60, check_config=check,
+                  sensor_origin=(0., 0., .2))
+    plain = validation.validate_surface_evidence(surface, train, held, poses, **kwargs)
+    assert plain.leader != 0
+    masked = validation.validate_surface_evidence(
+        surface_tree(surface, pillar_region), train, held, poses, **kwargs)
+    assert masked.reason == 'VARIABLE_REGIONS_CHANGE_LEADER'
