@@ -153,13 +153,24 @@ def pointcloud2_xyz(message, max_points=None):
     return xyz
 
 
+def outside_variable(tree, world):
+    """Points not in a variable region of ``tree`` (all, if it has none)."""
+    regions = getattr(tree, 'regions', None)
+    return np.ones(len(world), bool) if regions is None else ~regions.contains(world)
+
+
 def band_inliers(base_points, pose, tree, bands, tolerance):
-    """[(points, inliers)] per band for ``base_points`` placed at ``pose``."""
+    """
+    [(points, inliers)] per band for ``base_points`` placed at ``pose``.
+
+    Points that land in a variable region of ``tree`` are not counted.
+    """
     world = (planar(*pose) @ np.c_[base_points, np.ones(len(base_points))].T).T[:, :3]
     distance, _ = tree.query(world, distance_upper_bound=tolerance * 2.0)
-    near = distance <= tolerance
+    scored = outside_variable(tree, world)
+    near = (distance <= tolerance) & scored
     heights = base_points[:, 2]
-    return [(int(mask.sum()), int((near & mask).sum()))
+    return [(int((mask & scored).sum()), int((near & mask).sum()))
             for mask in ((heights >= lo) & (heights < hi) for lo, hi in bands)]
 
 
@@ -176,8 +187,10 @@ def compare(per_candidate, min_points):
                     dtype=float)
     used = counts[0] >= min_points
     shares = np.divide(hits, counts, out=np.zeros_like(hits), where=counts > 0)
-    weights = counts[0] * used
-    composite = (shares * weights).sum(1) / max(weights.sum(), 1)
+    # Each candidate weights the bands by its own scored points; they differ
+    # only when variable regions drop points at some poses.
+    weights = counts * used
+    composite = (shares * weights).sum(1) / np.maximum(weights.sum(1), 1)
     order = list(np.argsort(-composite, kind='stable'))
     best = order[0]
     runner = order[1] if len(order) > 1 else None
@@ -195,16 +208,37 @@ def compare(per_candidate, min_points):
     }
 
 
-def surface_tree(surface):
+class MaskedSurface:
+    """A surface KD-tree without its variable regions, which it remembers."""
+
+    def __init__(self, points, regions):
+        from scipy.spatial import cKDTree
+        points = np.asarray(points, float).reshape(-1, 3)
+        self.regions = regions
+        self.tree = cKDTree(points[~regions.contains(points)])
+        self.data = self.tree.data
+        # The whole surface, to check that the regions do not change the
+        # leader (localization_surface_validation).
+        self.full = cKDTree(points)
+
+    def query(self, points, **kwargs):
+        return self.tree.query(points, **kwargs)
+
+
+def surface_tree(surface, regions=None):
     """
     KD-tree of the map surface points; a prebuilt tree is returned as is.
 
     ``surface`` is either the (N, 3) surface points (mesh vertices or the
     dense samples of ``localization_surface_model``) or a ``cKDTree`` of
-    them, so one decision builds the tree once.
+    them, so one decision builds the tree once.  With ``regions``
+    (``localization_variable_regions``) the surface inside them is dropped
+    and scoring ignores observed points that land there.
     """
     if hasattr(surface, 'query'):
         return surface
+    if regions is not None:
+        return MaskedSurface(surface, regions)
     from scipy.spatial import cKDTree
     return cKDTree(np.asarray(surface, float))
 

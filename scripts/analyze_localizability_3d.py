@@ -37,6 +37,8 @@ from isaac_3d_lidar_bringup.localization_surface_search import (  # noqa: E402
     build_surface_field, free_positions, search_surface, SurfaceSearchConfig)
 from isaac_3d_lidar_bringup.localization_surface_validation import (  # noqa: E402
     FIT_CHECK, RANK_CHECK, SurfaceRefineConfig, validate_surface_evidence)
+from isaac_3d_lidar_bringup.localization_variable_regions import (  # noqa: E402
+    load_variable_regions)
 
 # MID-360: 360 deg horizontal, -7..+52 deg vertical (datasheet).
 ELEVATIONS = np.radians(np.arange(-7, 52.1, 2.0))
@@ -87,12 +89,30 @@ class Renderer:
 _STATE = {}
 
 
-def _init(mesh, spacing, map_path, cache_dir=None):
-    surface = load_surface_model(mesh, spacing, cache_dir).points.astype(float)
+def _added_surface(boxes):
+    """Points filling ``xmin,ymin,zmin,xmax,ymax,zmax`` boxes (2 cm), e.g. a curtain."""
+    parts = []
+    for box in boxes or ():
+        low, high = np.asarray(box[:3]), np.asarray(box[3:])
+        axes = [np.arange(a, b + 1e-9, .02) if b - a > .02 else np.array([(a + b) / 2])
+                for a, b in zip(low, high)]
+        grid = np.meshgrid(*axes, indexing='ij')
+        parts.append(np.c_[grid[0].ravel(), grid[1].ravel(), grid[2].ravel()])
+    return np.vstack(parts) if parts else np.zeros((0, 3))
+
+
+def _init(mesh, spacing, map_path, cache_dir=None, regions_path=None, added=None):
+    model = load_surface_model(mesh, spacing, cache_dir)
+    surface = model.points.astype(float)
+    regions = (load_variable_regions(regions_path, model.mesh_sha256)
+               if regions_path else None)
     config = SurfaceSearchConfig()
-    _STATE.update(surface=surface, tree=surface_tree(surface),
-                  field=build_surface_field(surface, config), config=config,
-                  renderer=Renderer(surface),
+    # The renderer sees the whole mesh (the scene); scoring ignores regions.
+    _STATE.update(surface=surface, tree=surface_tree(surface, regions),
+                  field=build_surface_field(surface, config, regions), config=config,
+                  # The scene may differ from the map (--add-surface): only
+                  # the renderer sees the added objects.
+                  renderer=Renderer(np.r_[surface, _added_surface(added)]),
                   positions=free_positions(load_map(map_path), config))
 
 
@@ -189,6 +209,15 @@ def main():
     parser.add_argument('--sensor', type=float, nargs=3, default=(.027, .023, .165),
                         help='sensor position in base_footprint')
     parser.add_argument('--workers', type=int, default=8)
+    parser.add_argument('--variable-regions', type=Path,
+                        help='variable-region YAML: ignored by scoring, still rendered')
+    parser.add_argument('--add-surface', action='append', default=[],
+                        type=lambda text: [float(v) for v in text.split(',')],
+                        metavar='XMIN,YMIN,ZMIN,XMAX,YMAX,ZMAX',
+                        help='an object in the scene but not in the map (repeatable)')
+    parser.add_argument('--region-bounds', type=float, nargs=4,
+                        metavar=('XMIN', 'YMIN', 'XMAX', 'YMAX'),
+                        help='analyse only positions inside this map box')
     parser.add_argument('--cache-dir', type=Path,
                         help='surface-sample cache (default: next to the mesh)')
     parser.add_argument('--clutter', type=float, default=0.,
@@ -200,6 +229,10 @@ def main():
     load_surface_model(args.mesh, args.spacing, args.cache_dir)
     config = SurfaceSearchConfig(position_step_m=args.step, clearance_m=.25)
     positions = free_positions(load_map(args.map), config)
+    if args.region_bounds:
+        x0, y0, x1, y1 = args.region_bounds
+        positions = positions[(positions[:, 0] >= x0) & (positions[:, 0] <= x1)
+                              & (positions[:, 1] >= y0) & (positions[:, 1] <= y1)]
     yaws = np.radians(np.arange(args.headings) * 360. / args.headings + 7.)
     jobs = [((float(x), float(y), float(math.atan2(math.sin(a), math.cos(a)))),
              tuple(args.sensor), k, args.clutter, args.no_ceiling) for k, ((x, y), a) in
@@ -208,9 +241,12 @@ def main():
     rows = []
     with ProcessPoolExecutor(args.workers, initializer=_init,
                              initargs=(args.mesh, args.spacing, args.map,
-                                       args.cache_dir)) as pool:
+                                       args.cache_dir, args.variable_regions,
+                                       args.add_surface)) as pool:
         for row in pool.map(analyze, jobs, chunksize=4):
             rows.append(row)
+            if len(rows) % 100 == 0:
+                print(f'{len(rows)}/{len(jobs)} views', flush=True)
     by_place = {}
     for row in rows:
         by_place.setdefault((round(row['pose'][0], 2), round(row['pose'][1], 2)), []).append(row)
@@ -229,6 +265,7 @@ def main():
     args.output.write_text(json.dumps(dict(
         schema=1, mode='offline_localizability_3d', navigation_accepted=False,
         clutter=args.clutter, no_ceiling=args.no_ceiling,
+        variable_regions=str(args.variable_regions or ''), added_surface=args.add_surface,
         assumptions=['scene identical to the map apart from --clutter/--no-ceiling',
                      'MID-360 FOV -7..52 deg',
                      'no robot self-occlusion', '1 cm point noise, two noisy copies'],

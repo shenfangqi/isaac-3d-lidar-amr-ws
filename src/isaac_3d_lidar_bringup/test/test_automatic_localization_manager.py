@@ -24,6 +24,7 @@ from isaac_3d_lidar_bringup import localization_route_planner
 from isaac_3d_lidar_bringup import localization_surface_check
 from isaac_3d_lidar_bringup import localization_surface_model
 from isaac_3d_lidar_bringup import localization_surface_search
+from isaac_3d_lidar_bringup import localization_variable_regions
 from isaac_3d_lidar_bringup import localization_surface_validation
 from isaac_3d_lidar_bringup import localization_translation_contracts
 from isaac_3d_lidar_bringup import localization_translation_guard
@@ -69,13 +70,14 @@ def manager():
     scope.update(vars(localization_surface_check))
     scope.update(vars(localization_surface_model))
     scope.update(vars(localization_surface_search))
+    scope.update(vars(localization_variable_regions))
     scope.update(vars(localization_surface_validation))
     scope.update(vars(localization_route_planner))
     scope.update(vars(localization_translation_contracts))
     scope.update(vars(localization_translation_guard))
     scope.update(Enum=Enum, Node=object, time=time, math=math, Time=FakeTime,
                  deque=deque, uuid=__import__('uuid'), np=__import__('numpy'),
-                 hashlib=__import__('hashlib'), json=__import__('json'),
+                 hashlib=__import__('hashlib'), json=__import__('json'), os=__import__('os'),
                  ManageLifecycleNodes=FakeManageLifecycleNodes,
                  TransformException=LookupError, quaternion_yaw=quaternion_yaw,
                  angular_difference=angular_difference,
@@ -1637,12 +1639,41 @@ def test_union_search_gives_the_3d_job_a_field_and_the_free_positions(segmented,
     assert manager._surface_search_field is not None
     name, arguments = manager._worker.jobs[-1]
     assert name == 'run_surface_decision_job'
-    field, positions, config = arguments[-1]
+    field, positions, config = arguments[-2]
     assert field is manager._surface_search_field
     assert len(positions) > 0 and config.margin > 0
     manager.params['surface_search_policy'] = 'sometimes'
     with pytest.raises(localization_contracts.ContractError):
         manager._configure_surface_check()
+
+
+@pytest.mark.parametrize('policy', ['record', 'decide'])
+def test_variable_regions_must_match_the_mesh(segmented, tmp_path, policy):
+    manager = segmented
+    manager.get_logger = lambda: NS(info=lambda m: None, warn=lambda m: None)
+    mesh = _mesh(tmp_path)
+    digest = localization_surface_model.file_sha256(mesh)
+    regions = tmp_path / 'regions.yaml'
+    regions.write_text(f'mesh_sha256: {digest}\nregions:\n'
+                       '  - {name: curtain, min: [-1, -1, 0.3], max: [1, -0.3, 2]}\n')
+    manager.params.update({'surface_recheck_policy': policy, 'surface_mesh_path': str(mesh),
+                           'surface_spacing_m': 0.0, 'surface_search_policy': 'off',
+                           'surface_variable_regions': str(regions)})
+    manager._configure_surface_check()
+    assert manager._surface_regions.names == ('curtain',)
+    manager.params['surface_variable_regions'] = str(tmp_path / 'none.yaml')
+    manager._configure_surface_check()                  # a map without regions
+    assert manager._surface_regions is None and manager._surface_policy == policy
+    manager.params['surface_variable_regions'] = str(regions)
+    regions.write_text('mesh_sha256: ' + 'cd' * 32 + '\nregions:\n'
+                       '  - {name: curtain, min: [-1, -1, 0.3], max: [1, -0.3, 2]}\n')
+    if policy == 'decide':
+        with pytest.raises(localization_contracts.ContractError):
+            manager._configure_surface_check()
+    else:
+        manager._configure_surface_check()              # warned, not used
+        assert manager._surface_regions is None
+        assert manager._surface_policy == 'record'
 
 
 @pytest.mark.parametrize('reason', ['AMBIGUOUS_LOCATION', 'NO_VALID_CANDIDATE'])
@@ -1782,7 +1813,7 @@ def test_a_budget_limited_search_gives_its_seeds_to_the_3d_decision(
     name, arguments = manager._worker.jobs[-1]
     assert name == 'run_surface_decision_job'
     assert arguments[3] == ((1.0, 2.0, 0.5), (4.0, 6.0, -2.6))
-    assert arguments[-4] == ((0.5, 0.2, 1.0),)      # seeds, origin, see-through, search
+    assert arguments[-5] == ((0.5, 0.2, 1.0),)    # seeds, origin, see-through, search, regions
     _guard(manager, 'STOPPED')
     manager._tick()
     status = manager._confined_status()['surface_recheck']

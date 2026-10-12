@@ -38,6 +38,10 @@ setup(
             os.path.join('share', package_name, 'config/nav2'),
             glob('config/nav2/*.yaml')
         ),
+        (
+            os.path.join('share', package_name, 'config/localization'),
+            glob('config/localization/*.yaml')
+        ),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

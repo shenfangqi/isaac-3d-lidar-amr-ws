@@ -1,0 +1,46 @@
+# Variable regions of the real map carbot_map_20260928_215841 (see
+# isaac_3d_lidar_bringup/localization_variable_regions.py).  Localization
+# ignores the mapped surface inside them and observed points that land in
+# them, for every candidate alike.
+mesh_sha256: 9eb7d03511da787bca357c115403c0c29e3e5bc5b6daa3a226ec7367a2d4a8e7
+regions:
+  - name: bottom-wall curtains
+    min: [-1.25, -0.55, 0.30]
+    max: [1.30, -0.30, 2.00]
+    # Open when mapped (2026-09-28), closed in use (2026-10-10).  Closed,
+    # they stood at y = -0.42 m (p5-p95 -0.47..-0.32), x -1.15..1.2 m,
+    # 0.36..1.8 m high (scripts/check_scene_consistency.py on samples 11
+    # and 13).  Only the curtain plane is variable: the window recess
+    # behind it (mesh y -1.0..-0.55) stays mapped, because rays stop at a
+    # closed curtain and see the recess as mapped when it is open.  A
+    # region that also covered the recess let a wrong pose drop 28% of its
+    # points and its see-through crossings and be accepted (A_01 with the
+    # truth removed, 3 of 42 window pairs).  Robot centres so far: y >= -0.05.
+    reason: curtains change between mapping and use; operator, 2026-10-10
+  - name: top door (x 2.2)
+    min: [2.16, 6.61, -0.03]
+    max: [2.25, 7.35, 1.83]
+    # Door leaf plane in the opening, floor to 1.83 m, drawn by the operator
+    # in RViz (2026-10-11).  Open when mapped.  Closed without this region,
+    # a synthetic scan accepted a pose 5.2 m off at (3.03, 7.03), headings
+    # 127 and 247 deg; with it, 0 wrong (scripts/check_variable_regions.py).
+    reason: door opened and closed in use; operator, 2026-10-11
+  - name: top door (x 0.94)
+    min: [0.90, 6.61, -0.03]
+    max: [0.98, 7.35, 1.83]
+    # Door leaf plane in the opening, drawn by the operator (2026-10-11).
+    # Not regions: the door at x 2.0, y 3.0..3.9 is open in use (a region
+    # there raised a wrong pose's fit and was accepted, sample_13 with the
+    # truth removed), and the bottom-right curtains at y 0.7..0.85 (a
+    # region cost 19 accepted views when open and showed no gain when
+    # closed in synthetic scans; awaiting a real capture with them closed).
+    reason: door opened and closed in use; operator, 2026-10-11
+  - name: bottom door (bedroom-living, x 1.9)
+    min: [1.84, 1.16, 0.00]
+    max: [1.96, 1.79, 1.80]
+    # Door leaf in the opening (jambs at y 1.156 and 1.798, wall faces
+    # x 1.85..1.95), floor to 1.80 m; drawn by the operator (2026-10-11),
+    # thickened to the wall depth.  Open when mapped.  Synthetic scans
+    # near it: closed 778/780 accepted without the region, 780/780 with
+    # it; open 780/780; map-wide degraded 957/1098 (956 without it); 0 wrong.
+    reason: door opened and closed in use; operator, 2026-10-11
