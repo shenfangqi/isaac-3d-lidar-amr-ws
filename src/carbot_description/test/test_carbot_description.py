@@ -101,6 +101,51 @@ def test_body_visual_does_not_cover_tracks(description, parameters):
     assert visual_size[1] / 2.0 < inner_track_edge
 
 
+def test_body_visual_and_base_plate_are_visual_only(description, parameters):
+    base_link = next(
+        link for link in description.findall("link")
+        if link.attrib["name"] == "base_link"
+    )
+    visuals = {visual.attrib["name"]: visual for visual in base_link.findall("visual")}
+    blue = visuals["body_visual"]
+    plate = visuals["body_visual_base_plate"]
+    blue_size = [float(v) for v in blue.find("geometry/box").attrib["size"].split()]
+    plate_size = [float(v) for v in plate.find("geometry/box").attrib["size"].split()]
+    blue_z = float(blue.find("origin").attrib["xyz"].split()[2])
+    plate_z = float(plate.find("origin").attrib["xyz"].split()[2])
+    assert blue_size == pytest.approx([0.11, 0.15, 0.0589])
+    assert plate_size == pytest.approx([0.22, 0.17, 0.01])
+    assert plate_z + plate_size[2] / 2 == pytest.approx(blue_z - blue_size[2] / 2)
+    geometry = parameters["geometry"]
+    front_idler = geometry["wheel_groups"]["front_idler"]
+    track_top_z = (
+        front_idler["z_m"] + front_idler["radius_m"]
+        + geometry["track_thickness_m"] / 2
+    )
+    assert plate_z - plate_size[2] / 2 - track_top_z == pytest.approx(0.02)
+    assert blue_z + blue_size[2] / 2 == pytest.approx(0.07)
+    assert plate.find("material").attrib["name"] == "base_plate_green"
+    assert len(base_link.findall("collision")) == 1
+    collision = base_link.find("collision")
+    assert collision.attrib["name"] == "body_collision"
+    assert [float(v) for v in collision.find("geometry/box").attrib["size"].split()] == pytest.approx(
+        parameters["geometry"]["body_collision"]["size_m"]
+    )
+
+
+def test_track_visual_names_are_unique_for_usd_import(description):
+    visual_names = [
+        visual.attrib["name"]
+        for link in description.findall("link")
+        for visual in link.findall("visual")
+        if "belt" in visual.attrib.get("name", "")
+    ]
+    assert set(visual_names) == {
+        "left_lower_belt", "left_upper_belt",
+        "right_lower_belt", "right_upper_belt",
+    }
+
+
 def test_lidar_housing_top_matches_measured_height(description, parameters):
     geometry = parameters["geometry"]
     lidar = parameters["sensors"]["mid360"]

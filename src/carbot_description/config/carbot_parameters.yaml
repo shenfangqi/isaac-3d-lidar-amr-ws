@@ -25,8 +25,11 @@ geometry:
     size_m: [0.285, 0.266, 0.230]
     position_from_base_link_m: [0.0125, 0.0, 0.035]
   body_visual:
-    size_m: [0.220, 0.170, 0.100]
-    position_from_base_link_m: [0.0, 0.0, 0.020]
+    size_m: [0.110, 0.150, 0.0589]
+    position_from_base_link_m: [0.0, 0.0, 0.04055]
+  body_visual_base_plate:
+    size_m: [0.220, 0.170, 0.010]
+    position_from_base_link_m: [0.0, 0.0, 0.0061]
   wheel_groups:
     front_idler:
       x_m: 0.111250
@@ -113,6 +116,28 @@ hardware_response:
     smoother_angular_acceleration_rad_s2: 2.0
 
 sensors:
+  vl53l5cx_sim_mount:
+    # Eight upright visual prototypes; board dimensions/pose are provisional
+    # until the purchased module and final bracket are measured.
+    parent_frame: base_link
+    edge_inset_m: 0.008
+    front_rear_corner_inset_m: 0.017
+    left_right_corner_inset_m: 0.020
+    center_above_plate_m: 0.006
+    board_size_m: [0.004, 0.012, 0.012]
+    optical_window_size_m: [0.001, 0.0064, 0.003]
+    detection_fov_deg: [45.0, 45.0]
+  d455_sim_mount:
+    # Visual/kinematic prototype. Measure the installed bracket before using
+    # these transforms as real-camera extrinsics.
+    parent_frame: base_link
+    yaw_pivot_xyz_m: [0.110, 0.0, 0.0111]
+    mast_height_m: 0.050
+    yaw_limit_rad: 1.5707963267948966
+    pitch_limit_rad: 0.2617993877991494
+    initial_pitch_rad: 0.2617993877991494
+    camera_body_size_m: [0.026, 0.124, 0.029]
+    camera_center_from_pitch_xyz_m: [0.0, 0.0, 0.0]
   mid360:
     parent_frame: lidar_link
     real_frame: livox_frame
@@ -316,8 +341,8 @@ provenance:
   DESIGN_VALUE_CARBOT_SIMULATION_2026_09_13:
     category: design_value
     status: implemented_design
-    scope: [geometry.body_visual, sensors.mid360.simulation_profile_name, simulation]
-    note: Reviewable body proxy, Isaac articulation paths, and coordinate conventions; not hardware calibration values.
+    scope: [geometry.body_visual, geometry.body_visual_base_plate, sensors.d455_sim_mount, sensors.vl53l5cx_sim_mount, sensors.mid360.simulation_profile_name, simulation]
+    note: Reviewable body proxy and visual-only green base plate, Isaac articulation paths, and coordinate conventions; not hardware calibration values.
   DESIGN_VALUE_CARBOT_OVERHEAD_CLEARANCE_2026_09_20:
     category: design_value
     status: pending_live_validation

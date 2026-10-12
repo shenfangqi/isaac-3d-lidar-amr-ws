@@ -134,14 +134,17 @@ async def load_and_control():
         install_profile,
         mid360_runtime_config,
     )
+    from isaac_sim.carbot_d455_mount import set_d455_mount_angles
     from isaac_sim.overhead_clearance_obstacles import (
         create_overhead_clearance_obstacles,
     )
     from isaacsim.core.api import World
     from isaacsim.core.prims import SingleArticulation
     from isaacsim.core.utils.viewports import set_camera_view
+    from pxr import UsdGeom
 
     parameters = yaml.safe_load(PARAMETER_PATH.read_text(encoding="utf-8"))
+    d455_config = parameters["sensors"]["d455_sim_mount"]
     installed_profile = install_profile(
         PROFILE_PATH, get_extension_path_from_name
     )
@@ -234,10 +237,33 @@ async def load_and_control():
     initial_orientation = quaternion_from_yaw(planar_yaw)
     robot.set_world_pose(initial_position, initial_orientation)
     set_camera_view(
-        eye=[1.7, 2.6, 1.25],
+        eye=[0.85, 1.65, 1.90],
         target=[0.0, 0.984415, 0.08],
         camera_prim_path="/OmniverseKit_Persp",
     )
+
+    d455_yaw_path = (
+        f"{robot_prim_path}/base_link/d455_mount/arm1_yaw"
+    )
+    d455_pitch_path = f"{d455_yaw_path}/arm2_pitch"
+    d455_yaw_api = UsdGeom.XformCommonAPI(stage.GetPrimAtPath(d455_yaw_path))
+    d455_pitch_api = UsdGeom.XformCommonAPI(stage.GetPrimAtPath(d455_pitch_path))
+    if not d455_yaw_api or not d455_pitch_api:
+        raise RuntimeError("D455 two-axis mount is missing from Carbot USD")
+    d455_command = {"sequence": 0, "angles": (0.0, 0.0)}
+
+    def receive_d455_command(message):
+        if len(message.data) != 2:
+            node.get_logger().warning("D455 gimbal command needs [yaw, pitch]")
+            return
+        try:
+            from isaac_sim.carbot_d455_mount import clamp_gimbal_angles
+            d455_command["angles"] = clamp_gimbal_angles(
+                d455_config, float(message.data[0]), float(message.data[1])
+            )
+            d455_command["sequence"] += 1
+        except ValueError as error:
+            node.get_logger().warning(str(error))
 
     if not rclpy.ok():
         rclpy.init(args=None)
@@ -254,7 +280,14 @@ async def load_and_control():
         receive_obstacle_command,
         10,
     )
+    node.create_subscription(
+        Float64MultiArray,
+        "/isaac_sim/d455_gimbal_cmd",
+        receive_d455_command,
+        10,
+    )
     applied_obstacle_sequence = 0
+    applied_d455_sequence = 0
     limiter = CarbotCommandLimiter(limits, response_model=response_model)
     last_publish_time = float("-inf")
     previous_simulation_time = world.current_time
@@ -274,6 +307,12 @@ async def load_and_control():
                 continue
             previous_simulation_time = simulation_time
             rclpy.spin_once(node, timeout_sec=0.0)
+            if d455_command["sequence"] != applied_d455_sequence:
+                set_d455_mount_angles(
+                    d455_yaw_api, d455_pitch_api, d455_config,
+                    *d455_command["angles"],
+                )
+                applied_d455_sequence = d455_command["sequence"]
             if obstacle_command["sequence"] != applied_obstacle_sequence:
                 stage_obstacle_command = list(obstacle_command["values"])
                 for index in range(0, len(stage_obstacle_command), 7):

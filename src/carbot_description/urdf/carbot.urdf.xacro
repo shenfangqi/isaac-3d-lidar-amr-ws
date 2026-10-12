@@ -4,6 +4,7 @@
   <xacro:property name="p" value="${xacro.load_yaml('$(arg parameters_file)')}"/>
   <xacro:property name="body" value="${p['geometry']['body_collision']}"/>
   <xacro:property name="body_visual" value="${p['geometry']['body_visual']}"/>
+  <xacro:property name="body_visual_base_plate" value="${p['geometry']['body_visual_base_plate']}"/>
   <xacro:property name="wheels" value="${p['geometry']['wheel_groups']}"/>
   <xacro:property name="track_y" value="${p['geometry']['physical_track_separation_m'] / 2.0}"/>
   <xacro:property name="track_width" value="${p['geometry']['track_width_m']}"/>
@@ -19,6 +20,9 @@
 
   <material name="carbot_blue">
     <color rgba="0.08 0.24 0.55 1.0"/>
+  </material>
+  <material name="base_plate_green">
+    <color rgba="0.05 0.65 0.12 1.0"/>
   </material>
   <material name="track_black">
     <color rgba="0.035 0.035 0.04 1.0"/>
@@ -51,6 +55,13 @@
       </geometry>
       <material name="carbot_blue"/>
     </visual>
+    <visual name="body_visual_base_plate">
+      <origin xyz="${body_visual_base_plate['position_from_base_link_m'][0]} ${body_visual_base_plate['position_from_base_link_m'][1]} ${body_visual_base_plate['position_from_base_link_m'][2]}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${body_visual_base_plate['size_m'][0]} ${body_visual_base_plate['size_m'][1]} ${body_visual_base_plate['size_m'][2]}"/>
+      </geometry>
+      <material name="base_plate_green"/>
+    </visual>
     <collision name="body_collision">
       <origin xyz="${body['position_from_base_link_m'][0]} ${body['position_from_base_link_m'][1]} ${body['position_from_base_link_m'][2]}" rpy="0 0 0"/>
       <geometry>
@@ -68,12 +79,12 @@
   <!-- The belt is visual-only. Wheel cylinders provide the first-stage contact model. -->
   <xacro:macro name="track_visual" params="side y">
     <link name="${side}_track_visual_link">
-      <visual name="lower_belt">
+      <visual name="${side}_lower_belt">
         <origin xyz="0 0 ${track_bottom_z}" rpy="0 0 0"/>
         <geometry><box size="${track_length} ${track_width} ${track_thickness}"/></geometry>
         <material name="track_black"/>
       </visual>
-      <visual name="upper_belt">
+      <visual name="${side}_upper_belt">
         <origin xyz="0 0 ${track_top_z}" rpy="0 0 0"/>
         <geometry><box size="${track_visual_length} ${track_width} ${track_thickness}"/></geometry>
         <material name="track_black"/>

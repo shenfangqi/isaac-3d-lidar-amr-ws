@@ -60,3 +60,20 @@ loads and controls Carbot inside the same streaming Kit process and disables
 the warehouse's legacy Carter ROS graph, preserving single publishers for
 odometry and dynamic TF. For RViz, launch `description.launch.py` with
 `use_sim_time:=true`, then open `configs/rviz/carbot_phase_c.rviz`.
+
+The front-center green plate carries a visual D455 prototype on a two-axis
+mount. `/isaac_sim/d455_gimbal_cmd` accepts a `std_msgs/Float64MultiArray`
+`[yaw_rad, pitch_rad]`; positive yaw turns left and positive pitch looks up.
+The runtime clamps yaw to ±90° and pitch to ±15°.
+The D455 body uses the manufacturer's nominal 124 × 29 × 26 mm dimensions.
+The bracket dimensions and placement are provisional until the real mount is
+measured. The nested `d455_depth_camera` USD Camera prim follows both axes,
+but no D455 RGB/depth ROS publisher or collision/inertia is enabled yet.
+Its center starts 5 cm above the green plate with a 15° upward tilt.
+
+The green plate also has eight upright VL53L5CX visual mounts: two near the
+corners of each front, rear, left, and right edge. Each has a distinct
+`sensor_origin`; the front pair angles 12.5° outward and the other six angle
+22.5° toward their adjacent corners. Their breakout-board dimensions are provisional;
+the VL53L5CX chip size and detection FoV come from the ST datasheet. No range
+data publisher is enabled yet.
