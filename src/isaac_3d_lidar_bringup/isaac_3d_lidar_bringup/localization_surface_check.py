@@ -209,7 +209,16 @@ def surface_tree(surface):
     return cKDTree(np.asarray(surface, float))
 
 
-def check_surfaces(vertices, base_points, poses, config=SurfaceCheckConfig()):
+def _map(function, items, workers):
+    """``map`` on a thread pool; KD-tree queries release the GIL."""
+    if workers <= 1 or len(items) < 2:
+        return [function(item) for item in items]
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(min(workers, len(items))) as pool:
+        return list(pool.map(function, items))
+
+
+def check_surfaces(vertices, base_points, poses, config=SurfaceCheckConfig(), workers=1):
     """
     Score candidate poses (at the reference keyframe) against the map surface.
 
@@ -226,8 +235,9 @@ def check_surfaces(vertices, base_points, poses, config=SurfaceCheckConfig()):
     if len(points) < config.min_points:
         return SurfaceResult(False, 'TOO_FEW_POINTS', -1, (), 0.0, (), (), len(points))
     tree = surface_tree(vertices)
-    per_candidate = [band_inliers(points, pose, tree, config.bands, config.tolerance_m)
-                     for pose in poses]
+    per_candidate = _map(
+        lambda pose: band_inliers(points, pose, tree, config.bands, config.tolerance_m),
+        poses, workers)
     result = compare(per_candidate, config.min_band_points)
     if not any(result['bands_used']):
         return SurfaceResult(False, 'NO_USABLE_BAND', -1, tuple(result['composite']),

@@ -296,3 +296,17 @@ def test_a_twin_room_whose_rays_cross_a_closed_wall_is_excluded():
     assert seeing.see_through[0][0] < .02 and seeing.see_through[0][1] > .08
     assert seeing.leader == 0
     assert seeing.train.resolved and seeing.holdout.resolved
+
+
+def test_candidates_converging_to_one_place_are_unique_not_refused():
+    # Two starts a few cm apart refine to the same pose and merge: one
+    # distinct place, nothing competes; support and fit still decide.
+    rng = np.random.default_rng(9)
+    scan = _room_scan(rng)
+    result = validation.validate_surface_evidence(
+        room(), scan, _room_scan(rng), ((0.02, 0.01, 0.), (-0.02, 0., 0.01)),
+        deadline=time.monotonic() + 30, check_config=RANK,
+        refine_config=SurfaceRefineConfig())
+    assert len(result.poses) == 1
+    assert result.supported, result.reason
+    assert result.train.composite_gap == pytest.approx(result.train.composite[0])

@@ -14,7 +14,7 @@ import numpy as np
 from .localization_contracts import ContractError, SE2
 from .localization_hypotheses import score_pose
 from .localization_surface_check import (
-    SurfaceCheckConfig, check_surfaces, planar, surface_tree)
+    _map, SurfaceCheckConfig, check_surfaces, planar, surface_tree)
 from .localization_surface_search import search_surface
 
 
@@ -64,6 +64,10 @@ class SurfaceRefineConfig:
     # 3000 points refine to the same poses as 8000 at 2.5x less cost
     # (2026-10-10 capture_02 benchmark).
     max_points: int = 3000
+    # Candidates refined and scored in parallel threads (KD-tree queries
+    # release the GIL); the decision process also lowers its priority so
+    # the sensor pipeline keeps the CPU (the Jetson ran at 70-90%).
+    workers: int = 3
 
     def __post_init__(self):
         values = (self.sigma_m, self.max_shift_m, self.max_turn_rad,
@@ -73,6 +77,7 @@ class SurfaceRefineConfig:
             raise ContractError('refinement limits must be finite and positive')
         if (len(self.steps_m) != len(self.steps_rad) or not self.steps_m
                 or type(self.max_points) is not int or self.max_points < 1
+                or type(self.workers) is not int or self.workers < 1
                 or type(self.max_evaluations) is not int or self.max_evaluations < 1):
             raise ContractError('invalid refinement schedule')
 
@@ -288,8 +293,9 @@ def validate_surface_evidence(vertices, train_points, holdout_points, poses, *,
         train_xyz = np.asarray(train_points, float).reshape(-1, 3)
         train_xyz = train_xyz[np.hypot(train_xyz[:, 0], train_xyz[:, 1])
                               >= check_config.min_range_m]
-        refined = [refine_surface_pose(tree, train_xyz, pose, refine_config, expired)
-                   for pose in starts]
+        refined = _map(
+            lambda pose: refine_surface_pose(tree, train_xyz, pose, refine_config, expired),
+            starts, refine_config.workers)
         if expired():
             return SurfaceValidation(False, 'DEADLINE', -1, None, None)
         unconverged = not all(converged for _, converged in refined)
@@ -305,19 +311,26 @@ def validate_surface_evidence(vertices, train_points, holdout_points, poses, *,
         origins = tuple(merged)
     else:
         poses = starts
-    if len(poses) < 2:
+    if len(poses) < 2 and refine_config is None:
         return SurfaceValidation(False, 'TOO_FEW_DISTINCT_CANDIDATES', -1, None, None,
                                  poses=poses, origins=origins)
-    train = check_surfaces(tree, train_points, poses, check_config)
+    # Every candidate converged to one place: nothing competes, so its gap
+    # is its own composite; the fit, support and 2D checks still apply.
+    scored = poses if len(poses) > 1 else poses * 2
+    workers = refine_config.workers if refine_config is not None else 1
+    train = check_surfaces(tree, train_points, scored, check_config, workers)
     if expired():
         return SurfaceValidation(False, 'DEADLINE', -1, train, None)
-    held = check_surfaces(tree, holdout_points, poses, check_config)
+    held = check_surfaces(tree, holdout_points, scored, check_config, workers)
+    if len(poses) == 1:
+        train = _rerank(train, [0], check_config)
+        held = _rerank(held, [0], check_config)
     see_through = ()
     if sensor_origin is not None:
         occupancy = surface_occupancy(tree.data, conflict_config)
         see_through = tuple(
-            tuple(round(see_through_ratio(occupancy, part, sensor_origin, pose,
-                                          conflict_config), 4) for pose in poses)
+            tuple(_map(lambda pose: round(see_through_ratio(
+                occupancy, part, sensor_origin, pose, conflict_config), 4), poses, workers))
             for part in (train_points, holdout_points))
         if expired():
             return SurfaceValidation(False, 'DEADLINE', -1, train, held, poses=poses,
@@ -484,6 +497,11 @@ def run_surface_decision_job(vertices, train_points, holdout_points, poses, grid
                              seed_poses=(), sensor_origin=None,
                              conflict_config=SurfaceConflictConfig(), search=None):
     """Worker entry point for :func:`decide_surface`."""
+    import os
+    try:
+        os.nice(10)                  # the sensor pipeline first (own process)
+    except OSError:
+        pass
     return decide_surface(vertices, train_points, holdout_points, poses, grid,
                           holdout_frames, reference, search_config, thresholds,
                           max_conflict, deadline=time.monotonic() + timeout_s,
