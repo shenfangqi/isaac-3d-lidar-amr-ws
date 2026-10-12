@@ -37,6 +37,8 @@ from isaac_3d_lidar_bringup.localization_surface_search import (  # noqa: E402
     build_surface_field, free_positions, search_surface, SurfaceSearchConfig)
 from isaac_3d_lidar_bringup.localization_surface_validation import (  # noqa: E402
     FIT_CHECK, RANK_CHECK, SurfaceRefineConfig, validate_surface_evidence)
+from isaac_3d_lidar_bringup.localization_surface_additions import (  # noqa: E402
+    load_surface_additions)
 from isaac_3d_lidar_bringup.localization_variable_regions import (  # noqa: E402
     load_variable_regions)
 
@@ -101,18 +103,25 @@ def _added_surface(boxes):
     return np.vstack(parts) if parts else np.zeros((0, 3))
 
 
-def _init(mesh, spacing, map_path, cache_dir=None, regions_path=None, added=None):
+def _init(mesh, spacing, map_path, cache_dir=None, regions_path=None, added=None,
+          additions_path=None):
     model = load_surface_model(mesh, spacing, cache_dir)
     surface = model.points.astype(float)
     regions = (load_variable_regions(regions_path, model.mesh_sha256)
                if regions_path else None)
+    # Surface additions are real structure the mesh missed: the scene has
+    # them and the fit uses them, but they are never solid for see-through.
+    additions = (load_surface_additions(additions_path, model.mesh_sha256)
+                 if additions_path else np.zeros((0, 3)))
+    fitted = np.r_[surface, additions]
     config = SurfaceSearchConfig()
     # The renderer sees the whole mesh (the scene); scoring ignores regions.
-    _STATE.update(surface=surface, tree=surface_tree(surface, regions),
-                  field=build_surface_field(surface, config, regions), config=config,
+    _STATE.update(surface=surface,
+                  tree=surface_tree(surface, regions, additions if len(additions) else None),
+                  field=build_surface_field(fitted, config, regions), config=config,
                   # The scene may differ from the map (--add-surface): only
                   # the renderer sees the added objects.
-                  renderer=Renderer(np.r_[surface, _added_surface(added)]),
+                  renderer=Renderer(np.r_[fitted, _added_surface(added)]),
                   positions=free_positions(load_map(map_path), config))
 
 
@@ -211,6 +220,8 @@ def main():
     parser.add_argument('--workers', type=int, default=8)
     parser.add_argument('--variable-regions', type=Path,
                         help='variable-region YAML: ignored by scoring, still rendered')
+    parser.add_argument('--surface-additions', type=Path,
+                        help='surface-additions NPZ: in the scene and fitted, never solid')
     parser.add_argument('--add-surface', action='append', default=[],
                         type=lambda text: [float(v) for v in text.split(',')],
                         metavar='XMIN,YMIN,ZMIN,XMAX,YMAX,ZMAX',
@@ -242,7 +253,7 @@ def main():
     with ProcessPoolExecutor(args.workers, initializer=_init,
                              initargs=(args.mesh, args.spacing, args.map,
                                        args.cache_dir, args.variable_regions,
-                                       args.add_surface)) as pool:
+                                       args.add_surface, args.surface_additions)) as pool:
         for row in pool.map(analyze, jobs, chunksize=4):
             rows.append(row)
             if len(rows) % 100 == 0:
@@ -266,6 +277,7 @@ def main():
         schema=1, mode='offline_localizability_3d', navigation_accepted=False,
         clutter=args.clutter, no_ceiling=args.no_ceiling,
         variable_regions=str(args.variable_regions or ''), added_surface=args.add_surface,
+        surface_additions=str(args.surface_additions or ''),
         assumptions=['scene identical to the map apart from --clutter/--no-ceiling',
                      'MID-360 FOV -7..52 deg',
                      'no robot self-occlusion', '1 cm point noise, two noisy copies'],

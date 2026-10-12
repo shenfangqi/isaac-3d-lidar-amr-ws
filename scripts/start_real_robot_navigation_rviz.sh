@@ -503,8 +503,19 @@ run_preflight_with_readiness_retry() {
   fi
 
   echo
-  echo "Readiness-only preflight failure detected; waiting 5 seconds and retrying once..."
-  sleep 5
+  if grep -q '^FAIL: base_footprint -> livox_frame$' <<<"${failure_lines}"; then
+    # 2026-10-12: twice the carbot-description service was still running
+    # but its static TF no longer reached new subscribers, so FAST-LIO's
+    # base adapter waited for base_footprint -> imu_link and /odom never
+    # came.  Restarting the service restored it both times.  It publishes
+    # only static transforms; nothing moves.
+    echo "Static TF missing; restarting carbot-description.service, waiting 10 seconds and retrying once..."
+    remote systemctl --user restart carbot-description.service
+    sleep 10
+  else
+    echo "Readiness-only preflight failure detected; waiting 5 seconds and retrying once..."
+    sleep 5
+  fi
   remote bash /tmp/carbot_nav_preflight.sh
 }
 
@@ -619,17 +630,21 @@ activate_navigation() {
 remote_param_get() {
   # Restarting the workstation DDS anchor for RViz can briefly invalidate
   # the CLI discovery graph although the node runs.  Retry only "node not
-  # found" or a CLI timeout (exit 124), at most 10 times; any other error
-  # fails immediately.
+  # found", a CLI timeout (exit 124) or a broken CLI daemon, at most 10
+  # times; any other error fails immediately.  --no-daemon avoids the
+  # shared ros2 daemon, which failed with "!rclpy.ok()" on 2026-10-10 and
+  # 2026-10-12 and aborted the startup.
   local node="$1" name="$2" attempt output status
   for attempt in {1..10}; do
     status=0
-    output="$(remote_ros "timeout 5s ros2 param get ${node} ${name}" 2>&1)" || status=$?
+    output="$(remote_ros "timeout 10s ros2 param get --no-daemon ${node} ${name}" 2>&1)" \
+      || status=$?
     if (( status == 0 )); then
       printf '%s\n' "${output}"
       return 0
     fi
-    if [[ "${output}" != *"Node not found"* ]] && (( status != 124 )); then
+    if [[ "${output}" != *"Node not found"* && "${output}" != *"rclpy.ok()"* ]] \
+        && (( status != 124 )); then
       printf '%s\n' "${output}"
       return "${status}"
     fi
@@ -651,7 +666,7 @@ verify_motion_guard() {
     echo "Deployed motion policy (${policy}) does not match ${localization_motion}." >&2
     return 1
   fi
-  nodes="$(remote_ros 'timeout 10s ros2 node list' 2>&1)" || return 1
+  nodes="$(remote_ros 'timeout 10s ros2 node list --no-daemon' 2>&1)" || return 1
   if [[ "${localization_motion}" != "guarded" ]]; then
     if grep -qx '/localization_motion_guard' <<<"${nodes}"; then
       echo "A motion guard is running although motion is forbidden." >&2
@@ -662,7 +677,7 @@ verify_motion_guard() {
   for attempt in {1..10}; do
     grep -qx '/localization_motion_guard' <<<"${nodes}" && break
     sleep 1
-    nodes="$(remote_ros 'timeout 10s ros2 node list' 2>&1)" || true
+    nodes="$(remote_ros 'timeout 10s ros2 node list --no-daemon' 2>&1)" || true
   done
   if ! grep -qx '/localization_motion_guard' <<<"${nodes}"; then
     echo "Guarded rotation was requested but no motion guard is running." >&2

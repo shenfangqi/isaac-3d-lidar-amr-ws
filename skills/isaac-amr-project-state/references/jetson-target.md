@@ -8,12 +8,12 @@ Last verified: 2026-09-27 (Asia/Tokyo).
 
 | Field | Value |
 |---|---|
-| Preferred SSH alias | `isaac-jetson` |
+| Preferred SSH alias | `isaac-jetson` (`~/.ssh/config`: `HostName 192.168.1.109`, `HostKeyAlias ubuntu.local`) |
 | Alternate SSH alias | `jetson-amr` |
-| mDNS hostname | `ubuntu.local` |
+| mDNS hostname | `ubuntu.local` (intermittent; not used since 2026-10-12) |
 | Hostname reported by Linux | `ubuntu` |
 | Login user | `shenfq` |
-| Current Wi-Fi IPv4 | `192.168.1.109/24` (DHCP; diagnostic only) |
+| Wi-Fi IPv4 | `192.168.1.109/24`, the fixed connection address since 2026-10-12 (DHCP-assigned: reserve it in the router) |
 | Wi-Fi interface | `wlP1p1s0` |
 | SSH service | Active on TCP 22 when verified |
 | Authentication | Dedicated Ed25519 key; password fallback may be available |
@@ -70,14 +70,13 @@ Run a noninteractive read-only check:
 ssh -o BatchMode=yes isaac-jetson 'hostname; whoami; uname -m; cat /etc/nv_tegra_release'
 ```
 
-Before any mutation, confirm that the alias still resolves to the intended Jetson and inspect relevant live state:
+Before any mutation, confirm that the alias still reaches the intended Jetson and inspect relevant live state:
 
 ```bash
-getent ahostsv4 ubuntu.local
 ssh -o BatchMode=yes isaac-jetson 'hostname; whoami; uptime; ip -brief address'
 ```
 
-Prefer `isaac-jetson` over a literal IP because the Wi-Fi address is assigned by DHCP. If mDNS resolution fails, discover the current address on the same LAN and diagnose mDNS; do not permanently replace the hostname with an unverified address.
+Since 2026-10-12 the alias connects to the fixed address `192.168.1.109` (operator decision: mDNS `ubuntu.local` resolution was intermittent). `HostKeyAlias ubuntu.local` keeps the recorded host key check, so a different machine at that address is refused. Use the alias, not `ubuntu.local`. If the Jetson moves to another address (DHCP), update `HostName` in `~/.ssh/config` and `CARBOT_JETSON_FALLBACK_IP` / `CARBOT_JETSON_IP`, after confirming the host key fingerprint above.
 
 For privileged interactive work:
 

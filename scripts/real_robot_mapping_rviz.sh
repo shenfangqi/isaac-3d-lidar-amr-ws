@@ -19,9 +19,9 @@ if [[ ! -r "${xauthority}" ]]; then
   exit 1
 fi
 
-jetson_ip="${CARBOT_JETSON_IP:-$(
-  getent ahostsv4 ubuntu.local | awk 'NR == 1 {print $1}'
-)}"
+# Fixed address (operator decision 2026-10-12: mDNS ubuntu.local was
+# intermittent); reserve it for the Jetson in the router.
+jetson_ip="${CARBOT_JETSON_IP:-192.168.1.109}"
 if [[ "${jetson_ip}" != "192.168.1.109" ]]; then
   echo "Jetson address is ${jetson_ip:-unresolved}; regenerate configs/fastdds_ros_jetson.xml before launching." >&2
   exit 1

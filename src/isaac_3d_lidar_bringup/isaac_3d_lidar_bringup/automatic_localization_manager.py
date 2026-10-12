@@ -147,6 +147,7 @@ from isaac_3d_lidar_bringup.localization_translation_contracts import (
     TranslationLink,
 )
 from isaac_3d_lidar_bringup.localization_translation_guard import LinearProbeGuard
+from isaac_3d_lidar_bringup.localization_surface_additions import load_surface_additions
 from isaac_3d_lidar_bringup.localization_variable_regions import load_variable_regions
 
 
@@ -481,6 +482,7 @@ class AutomaticLocalizationManager(Node):
             'rotation_data_grace_sec': 3.0,
             'zero_command_duration_sec': 0.5,
             'stopped_confirmation_sec': 1.0,
+            'seed_stop_wait_sec': 5.0,
             'verification_timeout_sec': 15.0,
             'quality_hold_sec': 3.0,
             # A stale TF clears the stability window.  Allow enough time for a
@@ -592,6 +594,7 @@ class AutomaticLocalizationManager(Node):
             # the 3D scoring; '' = none.  YAML bound to the mesh SHA-256
             # (localization_variable_regions).
             'surface_variable_regions': '',
+            'surface_additions': '',
             'surface_max_points_per_cloud': 6000,
             'surface_min_composite_gap': 0.15,
             'surface_min_leader_composite': 0.70,
@@ -775,6 +778,7 @@ class AutomaticLocalizationManager(Node):
             raise ContractError('surface_recheck_policy must be off, record or decide')
         self._surface_vertices = None
         self._surface_regions = None
+        self._surface_additions = None
         self._surface_config = SurfaceCheckConfig(
             min_composite_gap=float(self._parameter('surface_min_composite_gap')),
             min_leader_composite=float(self._parameter('surface_min_leader_composite')))
@@ -825,15 +829,39 @@ class AutomaticLocalizationManager(Node):
                 self.get_logger().warn(
                     f'3D re-check disabled, mesh unusable ({path}): {error}')
                 policy = 'off'
+            if policy != 'off':
+                self._load_surface_additions(
+                    policy, model.mesh_sha256 if spacing > 0 else file_sha256(path))
         self._surface_policy = policy
         search = str(self._parameter('surface_search_policy'))
         if search not in ('off', 'union'):
             raise ContractError('surface_search_policy must be off or union')
         self._surface_search_config = SurfaceSearchConfig()
         self._surface_search_field = (
-            build_surface_field(self._surface_vertices, self._surface_search_config,
-                                self._surface_regions)
+            build_surface_field(
+                self._surface_vertices if self._surface_additions is None
+                else np.vstack([self._surface_vertices, self._surface_additions]),
+                self._surface_search_config, self._surface_regions)
             if search == 'union' and self._surface_vertices is not None else None)
+
+    def _load_surface_additions(self, policy, mesh_sha256):
+        """Load static structure the mesh misses (localization_surface_additions)."""
+        path = self._parameter('surface_additions')
+        if path and not os.path.exists(path):
+            # The launch default names a per-map file; most maps have none.
+            self.get_logger().info(f'no 3D surface additions ({path})')
+            return
+        if not path:
+            return
+        try:
+            self._surface_additions = load_surface_additions(path, mesh_sha256)
+        except (ContractError, OSError, ValueError) as error:
+            if policy == 'decide':
+                raise ContractError(f'3D surface additions unusable: {error}') from error
+            self.get_logger().warn(f'3D surface additions not used: {error}')
+            return
+        self.get_logger().info(
+            f'3D surface additions fitted (not solid): {len(self._surface_additions)} points')
 
     def _on_cloud(self, message):
         """Keep deskewed clouds taken while stopped during localization."""
@@ -974,7 +1002,7 @@ class AutomaticLocalizationManager(Node):
                 self._surface_search_field,
                 free_positions(self._latest_grid, self._surface_search_config),
                 self._surface_search_config),
-            self._surface_regions)
+            self._surface_regions, self._surface_additions)
         self._surface_stage = 'deciding'
         return True
 
@@ -1151,6 +1179,7 @@ class AutomaticLocalizationManager(Node):
 
     def _reset_confined_session(self):
         """Forget every keyframe, job and result of the previous session."""
+        self._seed_pending = None
         self._session = ''
         self._session_started = None
         self._confined_scans = deque(maxlen=10)
@@ -2559,6 +2588,10 @@ class AutomaticLocalizationManager(Node):
                 self._transition(State.VERIFY_HYPOTHESES)
 
         elif self._state == State.VERIFY_HYPOTHESES:
+            pending = getattr(self, '_seed_pending', None)
+            if pending is not None:
+                self._accept_confined(pending[0], now)
+                return
             if not self._validation_submitted:
                 holdout = self._gather(FrameRole.HOLDOUT, now)
                 if self._state != State.VERIFY_HYPOTHESES:
@@ -3004,9 +3037,23 @@ class AutomaticLocalizationManager(Node):
     def _accept_confined(self, winner, now):
         """Seed AMCL with the winner moved to the current odometry pose."""
         if not self._stopped(now) or self._last_odom_pose is None:
-            self._reject(RejectReason.SENSOR_STALE,
-                         'not stopped with fresh odometry at seed time')
+            # 2026-10-12 robot (r12_07a): the 3D decision accepted, then one
+            # late /odom at this instant (the decision had just loaded the
+            # CPU) refused the whole session.  Wait for stopped, fresh
+            # odometry instead; the pose is carried by odometry, and a
+            # robot still not stopped after the wait is refused as before.
+            pending = getattr(self, '_seed_pending', None)
+            if pending is None:
+                self._seed_pending = (winner, now + float(
+                    self._parameter('seed_stop_wait_sec')))
+                self.get_logger().info(
+                    'accepted pose waits for stopped, fresh odometry before seeding')
+            elif now > pending[1]:
+                self._seed_pending = None
+                self._reject(RejectReason.SENSOR_STALE,
+                             'not stopped with fresh odometry at seed time')
             return
+        self._seed_pending = None
         reference = self._frames(FrameRole.TRAIN, now)
         if isinstance(reference, Reject) or not reference:
             self._reject(reference.reason if isinstance(reference, Reject)

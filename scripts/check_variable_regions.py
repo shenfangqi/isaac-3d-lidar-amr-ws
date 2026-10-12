@@ -101,6 +101,9 @@ def main():
                         help='synthetic views within this distance of the box, m')
     parser.add_argument('--max-pairs', type=int, default=20)
     parser.add_argument('--workers', type=int, default=16)
+    parser.add_argument('--surface-additions', type=Path,
+                        help='surface-additions NPZ (default: the per-map file in '
+                             'config/localization if present)')
     parser.add_argument('--no-reuse', action='store_true',
                         help='rerun local checks even when their inputs are unchanged')
     parser.add_argument('--out', type=Path,
@@ -120,6 +123,12 @@ def main():
     cache.mkdir(parents=True, exist_ok=True)
     shutil.copy(regions_path, out / 'regions.yaml')
     common = ['--map', str(args.map), '--mesh', str(args.mesh)]
+    additions = args.surface_additions or (
+        ROOT / 'src/isaac_3d_lidar_bringup/config/localization'
+        / f'{args.map.stem}_surface_additions.npz')
+    if additions.exists():
+        common += ['--surface-additions', str(additions.resolve())]
+        print(f'surface additions: {additions}', flush=True)
     analyze = ['scripts/analyze_localizability_3d.py', *common, '--workers', str(args.workers)]
     code = code_hash()
     results = []
@@ -150,7 +159,9 @@ def main():
             key = hashlib.sha256(json.dumps(dict(
                 state=state, box=box.round(3).tolist(), nearby=nearby, mesh=mesh_sha,
                 map=file_sha256(args.map), margin=args.margin, step=STEP,
-                headings=HEADINGS, code=code)).encode()).hexdigest()[:20]
+                headings=HEADINGS, code=code,
+                additions=file_sha256(additions) if additions.exists() else '')).encode()
+            ).hexdigest()[:20]
             tag = f'region{k + 1}_{state}'
             cached = cache / f'{key}.json'
             if cached.exists() and not args.no_reuse:

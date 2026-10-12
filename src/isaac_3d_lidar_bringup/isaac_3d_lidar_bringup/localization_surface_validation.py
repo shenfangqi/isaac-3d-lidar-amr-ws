@@ -14,7 +14,8 @@ import numpy as np
 from .localization_contracts import ContractError, SE2
 from .localization_hypotheses import score_pose
 from .localization_surface_check import (
-    _map, SurfaceCheckConfig, check_surfaces, outside_variable, planar, surface_tree)
+    _map, SurfaceCheckConfig, check_surfaces, outside_variable, planar, solid_points,
+    surface_tree)
 from .localization_surface_search import (
     build_surface_field, coarse_scores, search_surface, SurfaceSearchConfig)
 
@@ -433,7 +434,7 @@ def validate_surface_evidence(vertices, train_points, holdout_points, poses, *,
         held = _rerank(held, [0], check_config)
     see_through = ()
     if sensor_origin is not None:
-        occupancy = surface_occupancy(tree.data, conflict_config)
+        occupancy = surface_occupancy(solid_points(tree), conflict_config)
         see_through = tuple(
             tuple(_map(lambda pose: round(see_through_ratio(
                 occupancy, part, sensor_origin, pose, conflict_config), 4), poses, workers))
@@ -470,7 +471,8 @@ def validate_surface_evidence(vertices, train_points, holdout_points, poses, *,
         plain = [check_surfaces(full, part, scored, check_config, workers)
                  for part in (train_points, holdout_points)]
         if sensor_origin is not None:
-            occupancy = surface_occupancy(full.data, conflict_config)
+            occupancy = surface_occupancy(getattr(tree, 'full_solid', full.data),
+                                          conflict_config)
             ratios = [_map(lambda pose: see_through_ratio(
                 occupancy, part, sensor_origin, pose, conflict_config), poses, workers)
                 for part in (train_points, holdout_points)]
@@ -502,7 +504,7 @@ def validate_surface_evidence(vertices, train_points, holdout_points, poses, *,
                 rivals.append(pose)
         if expired():
             return result('DEADLINE')
-        occupancy = (surface_occupancy(tree.data, conflict_config)
+        occupancy = (surface_occupancy(solid_points(tree), conflict_config)
                      if rivals and sensor_origin is not None else None)
         for part in (train_points, holdout_points):
             if not rivals:
@@ -582,7 +584,8 @@ def decide_surface(vertices, train_points, holdout_points, poses, grid, holdout_
                    check_config=RANK_CHECK, fit_config=FIT_CHECK,
                    support_config=SurfaceSupportConfig(),
                    refine_config=SurfaceRefineConfig(), seed_poses=(), sensor_origin=None,
-                   conflict_config=SurfaceConflictConfig(), search=None, regions=None):
+                   conflict_config=SurfaceConflictConfig(), search=None, regions=None,
+                   additions=None):
     """
     Accept a pose from independent 3D evidence plus a 2D sanity check.
 
@@ -606,7 +609,7 @@ def decide_surface(vertices, train_points, holdout_points, poses, grid, holdout_
             return SurfaceDecision(False, '3D_SEARCH_' + found.reason, -1, (), None,
                                    {'search_3d': len(found.candidates)})
         seed_poses = tuple(seed_poses) + tuple(c[:3] for c in found.candidates)
-    tree = surface_tree(vertices, regions)
+    tree = surface_tree(vertices, regions, additions)
     # The leader must be the candidate it started from, and the 2D search
     # treats poses within its cluster radius as one candidate.  A fixed
     # 0.15 m / 6 deg refused the true pose of 2026-10-10 record_02, whose 2D
@@ -646,7 +649,7 @@ def run_surface_decision_job(vertices, train_points, holdout_points, poses, grid
                              max_conflict, check_config, fit_config, timeout_s,
                              seed_poses=(), sensor_origin=None,
                              conflict_config=SurfaceConflictConfig(), search=None,
-                             regions=None):
+                             regions=None, additions=None):
     """Worker entry point for :func:`decide_surface`."""
     import os
     try:
@@ -658,4 +661,5 @@ def run_surface_decision_job(vertices, train_points, holdout_points, poses, grid
                           max_conflict, deadline=time.monotonic() + timeout_s,
                           check_config=check_config, fit_config=fit_config,
                           seed_poses=seed_poses, sensor_origin=sensor_origin,
-                          conflict_config=conflict_config, search=search, regions=regions)
+                          conflict_config=conflict_config, search=search, regions=regions,
+                          additions=additions)

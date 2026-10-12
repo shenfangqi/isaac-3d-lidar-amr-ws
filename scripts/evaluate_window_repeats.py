@@ -69,12 +69,16 @@ def clouds_in_reference(bag, train, max_per_cloud=6000):
 
 
 def evaluate_bag(job):
-    entry, mesh, map_path, spacing, exclude, max_pairs, regions_path = job
+    entry, mesh, map_path, spacing, exclude, max_pairs, regions_path, additions_path = job
+    from isaac_3d_lidar_bringup.localization_surface_model import file_sha256
     if regions_path:
-        from isaac_3d_lidar_bringup.localization_surface_model import file_sha256
         from isaac_3d_lidar_bringup.localization_variable_regions import (
             load_variable_regions)
         single.REGIONS = load_variable_regions(regions_path, file_sha256(mesh))
+    if additions_path:
+        from isaac_3d_lidar_bringup.localization_surface_additions import (
+            load_surface_additions)
+        single.ADDITIONS = load_surface_additions(additions_path, file_sha256(mesh))
     report = json.loads(Path(ROOT / entry['diagnosis']).read_text())
     view = report['views'][-1]
     bag = Path(report['bag'])
@@ -148,11 +152,12 @@ def main():
     parser.add_argument('--max-pairs', type=int, default=0)
     parser.add_argument('--workers', type=int, default=4)
     parser.add_argument('--variable-regions', type=Path)
+    parser.add_argument('--surface-additions', type=Path)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     load_surface_model(args.mesh, args.spacing)          # build the cache once
     jobs = [(entry, args.mesh, args.map, args.spacing, args.exclude_m, args.max_pairs,
-             args.variable_regions)
+             args.variable_regions, args.surface_additions)
             for entry in json.loads(args.samples.read_text())]
     results = {}
     with ProcessPoolExecutor(args.workers) as pool:
