@@ -1,5 +1,14 @@
 # Current authoritative project state
 
+## Issue #13 3D localization on the real robot, handoff: 2026-10-12
+
+- **Resume from `docs/issue13_handoff_2026-10-12.md`** (Chinese): user rules, versions, configuration, next tasks, procedures, lessons.
+- main `819b553` (PRs #44–#60 merged); the Jetson runs `8228856` (PR #57; #58–#60 are docs only). Connect by IP 192.168.1.109 through the `isaac-jetson` alias; never `ubuntu.local`.
+- Decide mode (`SURFACE_RECHECK=decide scripts/record_localization_sample.sh`) reached CANDIDATE_READY at all 5 operator-labelled placements on 2026-10-12 evening (56–121 s, AMCL ~2 cm), including the bedside, the bed end, and the x 2.2 and bedroom doors closed.
+- Active map configuration: 5 variable regions (curtains, 3 doors, the bed south edge with `mask_2d`) and the bed surface additions, both bound to mesh `9eb7d035…`.
+- Next (offline first): the shared local-submap module, then #54 (constrained map updates), then #53 (motion relocalization; needs linear profile calibration on the robot).
+- Stack stopped at the end of the session; web teleop restored disarmed.
+
 ## Issue #13 natural probe rotation on the real robot: 2026-10-08/09
 
 - Jetson runs main `f600613` (#34 position-based stationarity, #35 candidate re-check). At placement C, `--automatic-activate --localization-strategy segmented_rotation --localization-motion guarded --motion-profile docs/evidence/issue13_motion_profile_accepted_2026-10-06.json --operator-rotation-clear --operator-present` ran four natural probes (-90/-90/-90/-60 deg, 309 deg in total, each settled in 0.7-0.8 s). It then reached `READY` at `(-0.768, 0.095, -93.4 deg)`; the operator confirmed the pose. Bag: `calibration_data/2026-10-09_issue13_activate_probe_06` (includes `/scan_localization`).
