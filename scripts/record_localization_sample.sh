@@ -12,9 +12,14 @@
 # usage: record_localization_sample.sh NAME [OUTDIR]
 #   NAME    bag suffix: calibration_data/<date>_issue13_sample_NAME on the Jetson
 #   OUTDIR  local directory for the launcher log and status (default /tmp)
+# environment:
+#   SURFACE_RECHECK  record (default) or decide: decide lets an accepted 3D
+#                    decision seed AMCL (still validation only, Nav2 inactive)
 set -o pipefail
 NAME=${1:?usage: $0 NAME [OUTDIR]}
 OUT=${2:-/tmp}
+RECHECK=${SURFACE_RECHECK:-record}
+[[ "${RECHECK}" == record || "${RECHECK}" == decide ]] || { echo "SURFACE_RECHECK must be record or decide" >&2; exit 2; }
 HERE=$(cd "$(dirname "$0")" && pwd)
 JETSON=${CARBOT_JETSON_SSH:-isaac-jetson}
 J="ssh -o BatchMode=yes ${JETSON}"
@@ -27,7 +32,7 @@ ${J} "systemctl --user stop issue13-pose-markers issue13-sample-bag 2>/dev/null;
 scp -q "${HERE}/publish_pose_markers.py" "${JETSON}:/tmp/publish_pose_markers.py" || exit 1
 
 CARBOT_INITIAL_POSE_TIMEOUT=900 "${HERE}/start_real_robot_navigation_rviz.sh" --automatic \
-  --localization-strategy stationary_only --surface-recheck record \
+  --localization-strategy stationary_only --surface-recheck "${RECHECK}" \
   > "${LOG}" 2>&1 </dev/null &
 for _ in $(seq 1 90); do
   grep -qE "STOPPED: click|Startup failed|VALIDATION_ONLY" "${LOG}" && break
