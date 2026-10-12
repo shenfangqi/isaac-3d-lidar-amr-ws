@@ -12,6 +12,12 @@ from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
 
+# Height band (m, base_footprint) of /scan_localization.  The manager gets
+# the same values so that 2D localization scoring can mask variable regions
+# that overlap it.
+LOCALIZATION_SCAN_BAND = (0.22, 0.35)
+
+
 def generate_launch_description():
     bringup_dir = get_package_share_directory('isaac_3d_lidar_bringup')
     amcl_config = os.path.join(
@@ -121,8 +127,8 @@ def generate_launch_description():
             'target_frame': 'base_footprint',
             'transform_tolerance': 0.05,
             'queue_size': 3,
-            'min_height': 0.22,
-            'max_height': 0.35,
+            'min_height': LOCALIZATION_SCAN_BAND[0],
+            'max_height': LOCALIZATION_SCAN_BAND[1],
             'angle_min': -3.141592654,
             'angle_max': 3.141592654,
             'angle_increment': 0.017453293,
@@ -284,6 +290,9 @@ def generate_launch_description():
                     "'.rsplit('.', 1)[0] + '.ply'"]),
                 # Default: config/localization/<map stem>_variable_regions.yaml;
                 # a map without such a file has no variable regions.
+                # 2D localization scoring masks variable regions in this band.
+                'localization_scan_min_height': LOCALIZATION_SCAN_BAND[0],
+                'localization_scan_max_height': LOCALIZATION_SCAN_BAND[1],
                 'surface_variable_regions': PythonExpression([
                     "'", surface_variable_regions, "' or '",
                     os.path.join(bringup_dir, 'config', 'localization', ''), "' + '",

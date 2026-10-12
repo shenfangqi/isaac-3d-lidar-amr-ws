@@ -99,6 +99,9 @@ def scan_map_metrics(grid, scan, transform, occupied_threshold,
     if width <= 0 or height <= 0 or resolution <= 0.0:
         return metrics
 
+    # Occupied cells a scan may pass under (localization_variable_regions.
+    # mask_grid): endpoints there still hit, crossings are no wall conflict.
+    pass_through = getattr(grid, 'pass_through', None)
     origin = grid.info.origin
     origin_yaw = quaternion_yaw(origin.orientation)
     cos_origin = math.cos(-origin_yaw)
@@ -172,7 +175,9 @@ def scan_map_metrics(grid, scan, transform, occupied_threshold,
         for cell_x, cell_y in cells[:-protected]:
             if not (0 <= cell_x < width and 0 <= cell_y < height):
                 continue
-            if grid.data[cell_y * width + cell_x] >= occupied_threshold:
+            index = cell_y * width + cell_x
+            if grid.data[index] >= occupied_threshold and not (
+                    pass_through is not None and pass_through[index]):
                 return True
         return False
 

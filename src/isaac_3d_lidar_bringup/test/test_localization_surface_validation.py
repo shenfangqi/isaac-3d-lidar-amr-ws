@@ -8,7 +8,8 @@ from scipy.spatial import cKDTree
 
 from isaac_3d_lidar_bringup import localization_surface_validation as validation
 from isaac_3d_lidar_bringup.localization_surface_check import SurfaceCheckConfig, SurfaceResult
-from isaac_3d_lidar_bringup.localization_surface_search import SurfaceSearchResult
+from isaac_3d_lidar_bringup.localization_surface_search import (
+    SurfaceSearchConfig, SurfaceSearchResult)
 from isaac_3d_lidar_bringup.localization_surface_validation import (
     decide_surface,
     refine_surface_pose,
@@ -191,7 +192,7 @@ def test_decision_refuses_a_leader_with_a_poor_absolute_fit(monkeypatch):
     assert decision.reason == 'LEADER_FIT_TOO_LOW'
 
 
-def _decide_with_search(monkeypatch, poses, found):
+def _decide_with_search(monkeypatch, poses, found, budget=80):
     rng = np.random.default_rng(5)
     monkeypatch.setattr(validation, 'score_pose', lambda *args: dict(GOOD))
     monkeypatch.setattr(validation, 'search_surface', lambda *args: found)
@@ -199,7 +200,8 @@ def _decide_with_search(monkeypatch, poses, found):
                           type('C', (), {'refine_beams': 60})(), _Thresholds(), .35,
                           deadline=time.monotonic() + 10, check_config=RANK,
                           fit_config=SurfaceCheckConfig(min_band_points=20, min_points=100),
-                          search=('field', 'positions', 'config'))
+                          search=('field', 'positions',
+                                  SurfaceSearchConfig(max_decision_candidates=budget)))
 
 
 def test_the_3d_search_adds_a_place_the_2d_candidates_missed(monkeypatch):
@@ -209,6 +211,13 @@ def test_the_3d_search_adds_a_place_the_2d_candidates_missed(monkeypatch):
     assert decision.accepted, decision
     assert math.hypot(*decision.pose[:2]) <= .015
     assert decision.validation.origins[decision.leader] == 2      # the search's seed
+
+
+def test_the_candidate_budget_applies_after_pruning(monkeypatch):
+    found = SurfaceSearchResult(True, '', ((.02, .01, 0., .6), (3., 1., 0., .55)), .6, 100)
+    decision = _decide_with_search(monkeypatch, POSES, found, budget=len(POSES) + 1)
+    assert not decision.accepted
+    assert decision.reason == 'CANDIDATE_SET_INCOMPLETE'
 
 
 def test_an_incomplete_3d_search_refuses(monkeypatch):

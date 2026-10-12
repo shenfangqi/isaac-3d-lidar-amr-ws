@@ -56,6 +56,8 @@ class SurfaceSearchConfig:
     # Unrefined 2D seeds scoring below best - margin - seed_slack at their
     # own pose are not refined (``prune_seeds``).
     seed_slack: float = .05
+    # Most candidates the decision refines after pruning (else refuse).
+    max_decision_candidates: int = 80
 
     def __post_init__(self):
         values = (self.voxel_m, self.sigma_m, self.cap_m, self.position_step_m,
@@ -64,7 +66,9 @@ class SurfaceSearchConfig:
         if any(not math.isfinite(v) or v <= 0 for v in values) or self.clearance_m < 0:
             raise ContractError('invalid 3D search limits')
         if (type(self.points) is not int or self.points < 1
-                or type(self.max_candidates) is not int or self.max_candidates < 1):
+                or type(self.max_candidates) is not int or self.max_candidates < 1
+                or type(self.max_decision_candidates) is not int
+                or self.max_decision_candidates < 1):
             raise ContractError('invalid 3D search budget')
 
 

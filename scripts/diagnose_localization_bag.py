@@ -276,6 +276,16 @@ def diagnose(args):
     hashes = {d['map_hash'] for _, d in statuses if d.get('map_hash')}
     if hashes != {digest}:
         raise ValueError(f'input map hash {digest} does not match bag {hashes}')
+    if args.variable_regions:
+        # 2D localization scoring masks the regions in the scan band, as the
+        # manager does (localization_variable_regions.mask_grid).
+        from isaac_3d_lidar_bringup.localization_surface_model import file_sha256
+        from isaac_3d_lidar_bringup.localization_variable_regions import (
+            load_variable_regions, mask_grid)
+        if not args.mesh:
+            raise ValueError('--variable-regions needs --mesh')
+        regions = load_variable_regions(args.variable_regions, file_sha256(args.mesh))
+        grid = mask_grid(grid, regions, .22, .35)
     parameters = yaml.safe_load(args.config.read_text())[
         'automatic_localization_manager']['ros__parameters']
     config, thresholds = configs(parameters, grid)
@@ -424,6 +434,9 @@ def main():
     parser.add_argument('bag', type=Path)
     parser.add_argument('--map', type=Path, required=True)
     parser.add_argument('--config', type=Path, default=ROOT / 'src/isaac_3d_lidar_bringup/config/nav2/carbot_auto_localization_real.yaml')
+    parser.add_argument('--variable-regions', type=Path,
+                        help='mask these regions in 2D scoring (needs --mesh)')
+    parser.add_argument('--mesh', type=Path, help='mesh the variable regions belong to')
     parser.add_argument('--scan-topic', default='/scan_localization')
     parser.add_argument('--search-timeout', type=float, default=120.0)
     parser.add_argument('--output', type=Path, required=True)

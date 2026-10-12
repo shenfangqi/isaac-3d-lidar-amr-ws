@@ -44,3 +44,16 @@ regions:
     # near it: closed 778/780 accepted without the region, 780/780 with
     # it; open 780/780; map-wide degraded 957/1098 (956 without it); 0 wrong.
     reason: door opened and closed in use; operator, 2026-10-11
+  - name: bed south edge under the rail (scan sees through)
+    min: [-1.50, 0.35, 0.10]
+    max: [0.55, 0.60, 0.40]
+    mask_2d: true
+    # Not a changing object: the mesh has a 0.15..0.35 m face here under the
+    # bed rail (about 0.5 m), and the height-aware navigation map rightly
+    # blocks the strip, but /scan_localization (0.22..0.35 m) passes under
+    # the rail into the bed (operator 2026-10-12: nothing hangs down, then
+    # or now).  Every bottom-left true pose looked like it saw through a
+    # wall: 2D conflict 0.22..0.36, refusing the bedside (r12_10bed 0.358 >
+    # 0.35).  With the strip unknown in 2D scoring: 0.13..0.19.  The rail
+    # itself (above 0.40 m) stays in the map; navigation keeps the strip.
+    reason: mapping artifact under the bed rail; 2026-10-12

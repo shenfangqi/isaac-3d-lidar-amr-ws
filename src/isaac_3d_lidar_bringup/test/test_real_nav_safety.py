@@ -267,7 +267,9 @@ def test_automatic_localization_defaults_preserve_safety_gates():
     ).read_text(encoding='utf-8')
     assert "name='mid360_localization_pointcloud_to_laserscan'" in launch_source
     assert "('scan', '/scan_localization')" in launch_source
-    assert "'min_height': 0.22" in launch_source
+    # The band is shared with the manager (2D scoring masks regions in it).
+    assert 'LOCALIZATION_SCAN_BAND = (0.22, 0.35)' in launch_source
+    assert "'min_height': LOCALIZATION_SCAN_BAND[0]" in launch_source
 
 
 def test_real_mapping_uses_fast_lio_pose_and_nvblox_map_only():
