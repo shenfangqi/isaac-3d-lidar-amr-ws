@@ -1829,6 +1829,32 @@ def test_surface_candidate_budget_does_not_silently_drop_competitors(segmented, 
     assert all(name != 'run_surface_decision_job' for name, _ in manager._worker.jobs)
 
 
+def test_with_the_3d_search_the_seed_budget_is_left_to_the_decision(segmented, tmp_path):
+    # 2026-10-12 bedside: 23 candidates plus their unrefined seeds were
+    # refused here, before the decision could prune the seeds.
+    manager = segmented
+    manager.params['surface_max_candidates'] = 3
+    grid = NS(data=[0] * 400, info=NS(
+        width=20, height=20, resolution=.1,
+        origin=NS(position=NS(x=0., y=0., z=0.), orientation=NS(w=1.))))
+    original = manager._start_surface_check
+
+    def start(decision, train, holdout, now):
+        manager._latest_grid = grid            # the fixture's grid has no cells
+        return original(decision, train, holdout, now)
+    manager._start_surface_check = start
+    _incomplete_session(manager, tmp_path, 'decide', [],
+                        unrefined=tuple((0.5 + i, 0.2, 1.0) for i in range(10)),
+                        search='union')
+    _feed(manager, 3)
+    manager._tick()                     # 2D validation: SEARCH_INCOMPLETE
+    manager._latest_safety_scan = _room_scan(manager)
+    _guard(manager, 'STOPPED')
+    manager._tick()                     # 2 candidates + 10 seeds > 3: still submitted
+    assert manager._worker.jobs[-1][0] == 'run_surface_decision_job'
+    assert manager._surface_search_config.max_decision_candidates == 3
+
+
 @pytest.mark.parametrize('missing_rank', [False, True])
 def test_route_candidate_budget_or_missing_rank_refuses_planning(segmented, missing_rank):
     manager = segmented
@@ -1842,10 +1868,11 @@ def test_route_candidate_budget_or_missing_rank_refuses_planning(segmented, miss
     assert manager._route_status['status'] == 'CANDIDATE_SET_INCOMPLETE'
 
 
-def _incomplete_session(manager, tmp_path, policy, results, unrefined=((0.5, 0.2, 1.0),)):
+def _incomplete_session(manager, tmp_path, policy, results, unrefined=((0.5, 0.2, 1.0),),
+                        search='off'):
     manager.params.update({'surface_recheck_policy': policy,
                            'surface_mesh_path': str(_mesh(tmp_path)),
-                           'surface_search_policy': 'off'})
+                           'surface_search_policy': search})
     manager._configure_surface_check()
     incomplete = localization_hypotheses.QualityDecision(False, 'SEARCH_INCOMPLETE')
     manager._worker = FakeWorker([_incomplete_candidates(unrefined), incomplete, *results])

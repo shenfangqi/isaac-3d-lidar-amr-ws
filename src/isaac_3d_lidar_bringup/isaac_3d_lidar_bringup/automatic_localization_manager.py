@@ -836,7 +836,8 @@ class AutomaticLocalizationManager(Node):
         search = str(self._parameter('surface_search_policy'))
         if search not in ('off', 'union'):
             raise ContractError('surface_search_policy must be off or union')
-        self._surface_search_config = SurfaceSearchConfig()
+        self._surface_search_config = SurfaceSearchConfig(
+            max_decision_candidates=int(self._parameter('surface_max_candidates')))
         self._surface_search_field = (
             build_surface_field(
                 self._surface_vertices if self._surface_additions is None
@@ -965,7 +966,11 @@ class AutomaticLocalizationManager(Node):
             seeds = result.unrefined
         else:
             return False
-        if (len(ranked) + len(seeds) > int(self._parameter('surface_max_candidates'))
+        # With the map-wide 3D search the decision prunes the seeds it rules
+        # out and applies this budget afterwards (2026-10-12: 23 candidates
+        # plus their seeds were refused here before any pruning).
+        counted = len(ranked) + (0 if self._surface_search_field is not None else len(seeds))
+        if (counted > int(self._parameter('surface_max_candidates'))
                 or {h.cluster_id for h in ranked} != set(by_id)):
             self._surface_status = {
                 'policy': self._surface_policy, 'resolved': False, 'used': False,

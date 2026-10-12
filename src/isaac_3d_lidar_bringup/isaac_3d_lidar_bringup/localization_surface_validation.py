@@ -610,6 +610,10 @@ def decide_surface(vertices, train_points, holdout_points, poses, grid, holdout_
                                    {'search_3d': len(found.candidates)})
         seed_poses = (prune_seeds(field, train_points, seed_poses, found, coarse_config)
                       + tuple(c[:3] for c in found.candidates))
+        # The candidate budget applies after pruning: refuse, never truncate.
+        if len(poses) + len(seed_poses) > coarse_config.max_decision_candidates:
+            return SurfaceDecision(False, 'CANDIDATE_SET_INCOMPLETE', -1, (), None,
+                                   {'candidates': len(poses) + len(seed_poses)})
     tree = surface_tree(vertices, regions, additions)
     # The leader must be the candidate it started from, and the 2D search
     # treats poses within its cluster radius as one candidate.  A fixed
