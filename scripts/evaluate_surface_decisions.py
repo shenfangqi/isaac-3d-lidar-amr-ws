@@ -32,7 +32,7 @@ from isaac_3d_lidar_bringup import localization_surface_check as surface  # noqa
 from isaac_3d_lidar_bringup.localization_surface_model import (  # noqa: E402
     load_surface_model)
 from isaac_3d_lidar_bringup.localization_surface_search import (  # noqa: E402
-    build_surface_field, free_positions, search_surface, SurfaceSearchConfig)
+    build_surface_field, free_positions, prune_seeds, search_surface, SurfaceSearchConfig)
 from isaac_3d_lidar_bringup.localization_surface_validation import (  # noqa: E402
     decide_surface)
 from isaac_3d_lidar_bringup.localization_variable_regions import (  # noqa: E402
@@ -122,6 +122,8 @@ def main():
                         help='variable-region YAML for the mesh (map regions to ignore)')
     parser.add_argument('--surface-additions', type=Path,
                         help='surface-additions NPZ for the mesh (fitted, not solid)')
+    parser.add_argument('--no-prune', action='store_true',
+                        help='refine every unrefined 2D seed (before 2026-10-12)')
     parser.add_argument('--search3d', choices=('off', 'union'), default='off',
                         help='union: add the map-wide 3D search candidates (stage D)')
     parser.add_argument('--output', type=Path, required=True)
@@ -159,9 +161,16 @@ def main():
             config = SurfaceSearchConfig()
             field = build_surface_field(fitted(next(iter(models.values()))), config, REGIONS)
             found = search_surface(field, sample['first'], free_positions(grid, config), config)
+            # As decide_surface does with its search: a complete search
+            # prunes the unrefined 2D seeds it rules out, then adds its own.
+            seeds = (list(sample['seeds']) if args.no_prune else
+                     list(prune_seeds(field, sample['first'], sample['seeds'], found, config)))
             row['search3d'] = dict(complete=found.complete, reason=found.reason,
-                                   candidates=len(found.candidates))
-            sample['seeds'] = sample['seeds'] + [c[:3] for c in found.candidates]
+                                   candidates=len(found.candidates),
+                                   seeds_2d=len(sample['seeds']), seeds_kept=len(seeds))
+            far_seeds = [p for p in seeds
+                         if math.hypot(p[0] - truth[0], p[1] - truth[1]) > args.exclude_m]
+            sample['seeds'] = seeds + [c[:3] for c in found.candidates]
             far_seeds += [c[:3] for c in found.candidates
                           if math.hypot(c[0] - truth[0], c[1] - truth[1]) > args.exclude_m]
         for name, points in models.items():
