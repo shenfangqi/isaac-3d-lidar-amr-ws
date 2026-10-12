@@ -10,8 +10,13 @@ import tempfile
 import traceback
 from pathlib import Path
 
+import yaml
+
 
 WORKSPACE = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(WORKSPACE))
+from isaac_sim.carbot_d455_mount import create_d455_mount  # noqa: E402
+from isaac_sim.carbot_vl53l5cx_mount import create_vl53l5cx_mounts  # noqa: E402
 DEFAULT_URDF = WORKSPACE / ".codex_tmp/carbot_build/carbot.urdf"
 DEFAULT_XACRO = WORKSPACE / "src/carbot_description/urdf/carbot.urdf.xacro"
 DEFAULT_PARAMETERS = (
@@ -130,6 +135,22 @@ def import_robot():
         robot = stage.GetDefaultPrim()
         if not robot.IsValid():
             raise RuntimeError("Generated Carbot USD has no default robot prim")
+        parameters = yaml.safe_load(args.parameters.read_text(encoding="utf-8"))
+        _, _, camera_path = create_d455_mount(
+            stage, str(robot.GetPath()),
+            parameters["sensors"]["d455_sim_mount"],
+        )
+        if not stage.GetPrimAtPath(camera_path).IsValid():
+            raise RuntimeError("Generated Carbot USD has no D455 camera")
+        tof_paths = create_vl53l5cx_mounts(
+            stage, str(robot.GetPath()),
+            parameters["geometry"]["body_visual_base_plate"],
+            parameters["sensors"]["vl53l5cx_sim_mount"],
+        )
+        if len(tof_paths) != 8 or not all(
+            stage.GetPrimAtPath(path).IsValid() for path in tof_paths
+        ):
+            raise RuntimeError("Generated Carbot USD needs eight VL53L5CX mounts")
         articulation_roots = [
             prim
             for prim in stage.Traverse()
