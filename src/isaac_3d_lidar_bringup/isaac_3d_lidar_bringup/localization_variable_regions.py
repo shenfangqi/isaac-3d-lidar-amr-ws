@@ -33,6 +33,8 @@ class VariableRegions:
 
     boxes: np.ndarray
     names: tuple = ()
+    # Per region: also unknown in 2D localization scoring (``mask_2d: true``).
+    mask_2d: tuple = ()
 
     def contains(self, points):
         """Whether each map-frame point lies in any region."""
@@ -51,7 +53,7 @@ def load_variable_regions(path, mesh_sha256):
         raise ContractError(
             f'variable regions are for mesh {str(document.get("mesh_sha256"))[:12]}, '
             f'not {mesh_sha256[:12]}')
-    boxes, names = [], []
+    boxes, names, mask_2d = [], [], []
     for region in document.get('regions') or ():
         low = [float(v) for v in region['min']]
         high = [float(v) for v in region['max']]
@@ -61,45 +63,52 @@ def load_variable_regions(path, mesh_sha256):
             raise ContractError(f'invalid variable region {region.get("name")!r}')
         boxes.append(low + high)
         names.append(str(region.get('name', '')))
+        flag = region.get('mask_2d', False)
+        if not isinstance(flag, bool):
+            raise ContractError(f'mask_2d of {region.get("name")!r} must be true or false')
+        mask_2d.append(flag)
     if not boxes:
         raise ContractError('variable-region file lists no region')
-    return VariableRegions(np.asarray(boxes, float), tuple(names))
+    return VariableRegions(np.asarray(boxes, float), tuple(names), tuple(mask_2d))
 
 
 def mask_grid(grid, regions, z_low, z_high):
     """
-    Return a copy of ``grid`` with the cells of overlapping regions unknown.
+    Return ``grid`` with the cells of ``mask_2d`` regions marked pass-through.
 
-    For 2D localization scoring only: a region whose height range overlaps
-    the localization scan band [z_low, z_high] marks cells where that scan
-    may see something other than the map, e.g. under a bed rail that the
-    height-aware navigation map rightly blocks (2026-10-12: the bed's south
+    For 2D localization scoring only: a region flagged ``mask_2d`` whose
+    height range overlaps the localization scan band [z_low, z_high] marks
+    cells the scan may pass through although the height-aware navigation
+    map blocks them, e.g. under a bed rail (2026-10-12: the bed's south
     edge made every bottom-left true pose look like it saw through a wall).
-    Unknown cells are neither hits nor wall crossings.  The navigation map,
-    motion safety and route planning keep the original grid.  The grid
-    needs ``info`` (width, height, resolution, origin with an axis-aligned
-    orientation) and a flat row-major ``data`` sequence.
+    ``scan_map_metrics`` still counts an endpoint there as a hit but a ray
+    crossing it as no wall conflict.  Marking the cells unknown instead lost
+    the real hits on the bed legs and dropped the true pose out of the 2D
+    candidates (sample_11).  The cells, the navigation map, motion safety,
+    route planning and the map hash are unchanged.  The grid needs ``info``
+    (width, height, resolution, axis-aligned origin) and a flat row-major
+    ``data`` sequence.
     """
     if regions is None:
         return grid
-    from array import array
     from types import SimpleNamespace
     info = grid.info
     width, height, resolution = int(info.width), int(info.height), float(info.resolution)
     ox, oy = float(info.origin.position.x), float(info.origin.position.y)
-    data = np.frombuffer(array('b', grid.data).tobytes(), np.int8).reshape(height, width).copy()
-    changed = 0
-    for low_x, low_y, low_z, high_x, high_y, high_z in regions.boxes:
-        if high_z < z_low or low_z > z_high:
+    passable = np.zeros((height, width), bool)
+    flags = regions.mask_2d or (False,) * len(regions.boxes)
+    for box, flag in zip(regions.boxes, flags):
+        low_x, low_y, low_z, high_x, high_y, high_z = box
+        # Only flagged regions: a curtain or door region would hide the wall
+        # behind it from 2D scoring (2026-10-12 validation).
+        if not flag or high_z < z_low or low_z > z_high:
             continue
         i0 = max(0, int(math.floor((low_x - ox) / resolution)))
         i1 = min(width, int(math.ceil((high_x - ox) / resolution)))
         j0 = max(0, int(math.floor((low_y - oy) / resolution)))
         j1 = min(height, int(math.ceil((high_y - oy) / resolution)))
-        if i0 < i1 and j0 < j1:
-            data[j0:j1, i0:i1] = -1
-            changed += (i1 - i0) * (j1 - j0)
-    if not changed:
+        passable[j0:j1, i0:i1] = True
+    if not passable.any():
         return grid
     return SimpleNamespace(frame_id=getattr(grid, 'frame_id', 'map'), info=info,
-                           data=array('b', data.ravel().tobytes()))
+                           data=grid.data, pass_through=passable.ravel())

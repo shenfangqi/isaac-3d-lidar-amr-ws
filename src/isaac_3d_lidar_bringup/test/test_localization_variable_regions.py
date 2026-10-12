@@ -94,19 +94,29 @@ def test_a_region_may_not_choose_the_leader():
     assert masked.reason == 'VARIABLE_REGIONS_CHANGE_LEADER'
 
 
-def test_mask_grid_hides_regions_that_overlap_the_scan_band():
+def test_mask_grid_lets_the_scan_pass_flagged_regions_in_its_band():
     from array import array
     from types import SimpleNamespace as NS
+    from isaac_3d_lidar_bringup.automatic_localization_quality import scan_map_metrics
     from isaac_3d_lidar_bringup.localization_variable_regions import mask_grid
+    # A 2 m x 1 m room; an occupied strip at x 0.5 (a bed edge) and the far
+    # wall at x 1.9.  A beam along y = 0.5 crosses the strip and ends at the wall.
+    cells = np.zeros((10, 20), np.int8)
+    cells[:, 5] = 100
+    cells[:, 19] = 100
     grid = NS(frame_id='map', info=NS(
-        width=10, height=10, resolution=.1,
+        width=20, height=10, resolution=.1,
         origin=NS(position=NS(x=0., y=0.), orientation=NS(x=0., y=0., z=0., w=1.))),
-        data=array('b', [100] * 100))
-    low = VariableRegions(np.array([[.2, .2, .1, .4, .3, .4]]), ('bed edge',))
-    high = VariableRegions(np.array([[.2, .2, 1.0, .4, .3, 2.0]]), ('curtain top',))
-    masked = mask_grid(grid, low, .22, .35)
-    cells = np.frombuffer(masked.data.tobytes(), np.int8).reshape(10, 10)
-    assert (cells[2:3, 2:4] == -1).all() and (cells == -1).sum() == 2
-    assert list(grid.data) == [100] * 100                 # the original is untouched
-    assert mask_grid(grid, high, .22, .35) is grid        # above the band: unchanged
+        data=array('b', cells.ravel().tobytes()))
+    scan = NS(ranges=[1.85], range_min=.1, range_max=5., angle_min=0., angle_increment=.1)
+    transform = NS(translation=NS(x=.05, y=.55), rotation=NS(x=0., y=0., z=0., w=1.))
+    edge = VariableRegions(np.array([[.45, 0., .1, .6, 1., .4]]), ('bed edge',), (True,))
+    curtain = VariableRegions(np.array([[.45, 0., .1, .6, 1., .4]]), ('curtain',), (False,))
+    plain = scan_map_metrics(grid, scan, transform, 65, 1, 10)
+    assert plain['wall_conflicts'] == 1
+    passed = scan_map_metrics(mask_grid(grid, edge, .22, .35), scan, transform, 65, 1, 10)
+    assert passed['wall_conflicts'] == 0 and passed['score'] == 1.0
+    assert mask_grid(grid, curtain, .22, .35) is grid     # 3D-only region
     assert mask_grid(grid, None, .22, .35) is grid
+    high = VariableRegions(np.array([[.45, 0., 1., .6, 1., 2.]]), ('rail',), (True,))
+    assert mask_grid(grid, high, .22, .35) is grid        # above the band

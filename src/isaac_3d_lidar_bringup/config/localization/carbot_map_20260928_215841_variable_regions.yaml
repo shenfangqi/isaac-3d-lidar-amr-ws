@@ -47,6 +47,7 @@ regions:
   - name: bed south edge under the rail (scan sees through)
     min: [-1.50, 0.35, 0.10]
     max: [0.55, 0.60, 0.40]
+    mask_2d: true
     # Not a changing object: the mesh has a 0.15..0.35 m face here under the
     # bed rail (about 0.5 m), and the height-aware navigation map rightly
     # blocks the strip, but /scan_localization (0.22..0.35 m) passes under
