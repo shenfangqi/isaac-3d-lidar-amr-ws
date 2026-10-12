@@ -15,7 +15,8 @@ from .localization_contracts import ContractError, SE2
 from .localization_hypotheses import score_pose
 from .localization_surface_check import (
     _map, SurfaceCheckConfig, check_surfaces, planar, surface_tree)
-from .localization_surface_search import search_surface
+from .localization_surface_search import (
+    build_surface_field, coarse_scores, search_surface, SurfaceSearchConfig)
 
 
 @dataclass(frozen=True)
@@ -183,6 +184,82 @@ def _rerank(result, survivors, config):
                    composite_gap=round(float(gap), 4))
 
 
+@dataclass(frozen=True)
+class SurfaceNearbyConfig:
+    """
+    Disconnected local optima near the leader are competitors too.
+
+    Two optima less than the coarse suppression radius apart share one
+    coarse candidate and refinement climbs only one of them; the gap test
+    then never sees the other, and the support check only measures the
+    leader's connected region (2026-10-10 synthetic analysis).  A local
+    grid around the leader on a sharp fit field finds such peaks; each is
+    refined exactly and must trail the leader by the minimum gap.
+    """
+
+    radius_m: float = .30
+    turn_rad: float = math.radians(15)
+    step_m: float = .05
+    step_rad: float = math.radians(2.5)
+    own_xy_m: float = .10
+    own_turn_rad: float = math.radians(5)
+    field_margin: float = .10
+    max_peaks: int = 3
+    points: int = 3000
+
+    def __post_init__(self):
+        values = (self.radius_m, self.turn_rad, self.step_m, self.step_rad, self.own_xy_m,
+                  self.own_turn_rad, self.field_margin)
+        if (any(not math.isfinite(v) or v <= 0 for v in values)
+                or type(self.max_peaks) is not int or self.max_peaks < 1
+                or type(self.points) is not int or self.points < 1):
+            raise ContractError('invalid nearby-competitor limits')
+
+
+_SHARP_FIELDS = {}
+
+
+def _sharp_field(tree):
+    """Build (once per tree) a sigma 0.05 m fit field of the surface."""
+    key = (id(tree), len(tree.data))
+    if key not in _SHARP_FIELDS:
+        _SHARP_FIELDS.clear()
+        _SHARP_FIELDS[key] = build_surface_field(
+            tree.data, SurfaceSearchConfig(sigma_m=.05, cap_m=.25))
+    return _SHARP_FIELDS[key]
+
+
+def nearby_peaks(tree, points, leader, config):
+    """Local fit maxima near ``leader`` outside its own neighbourhood."""
+    from scipy import ndimage
+    points = _subsample(np.asarray(points, float), config.points)
+    field = _sharp_field(tree)
+    steps = np.arange(-config.radius_m, config.radius_m + 1e-9, config.step_m)
+    turns = np.arange(-config.turn_rad, config.turn_rad + 1e-9, config.step_rad)
+    dx, dy = np.meshgrid(steps, steps, indexing='ij')
+    positions = np.c_[leader[0] + dx.ravel(), leader[1] + dy.ravel()]
+    scores = coarse_scores(field, points, positions, leader[2] + turns).reshape(
+        len(steps), len(steps), len(turns))
+    centre = scores[len(steps) // 2, len(steps) // 2, len(turns) // 2]
+    peak = scores == ndimage.maximum_filter(scores, size=3, mode='nearest')
+    own = ((np.hypot(dx, dy) <= config.own_xy_m)[:, :, None]
+           & (np.abs(turns) <= config.own_turn_rad)[None, None, :])
+    chosen = []
+    for flat in np.argsort(-scores, axis=None):
+        i, j, k = np.unravel_index(flat, scores.shape)
+        if scores[i, j, k] < centre - config.field_margin or len(chosen) == config.max_peaks:
+            break
+        if not peak[i, j, k] or own[i, j, k]:
+            continue
+        pose = (float(leader[0] + steps[i]), float(leader[1] + steps[j]),
+                float(leader[2] + turns[k]))
+        if any(math.hypot(pose[0] - q[0], pose[1] - q[1]) <= config.own_xy_m
+               and _turn(pose[2], q[2]) <= config.own_turn_rad for q in chosen):
+            continue
+        chosen.append(pose)
+    return chosen
+
+
 def _subsample(points, count):
     if len(points) > count:
         points = points[np.linspace(0, len(points) - 1, count).astype(int)]
@@ -258,7 +335,8 @@ def validate_surface_evidence(vertices, train_points, holdout_points, poses, *,
                               deadline, check_config=SurfaceCheckConfig(),
                               support_config=SurfaceSupportConfig(),
                               refine_config=None, seed_poses=(), sensor_origin=None,
-                              conflict_config=SurfaceConflictConfig()):
+                              conflict_config=SurfaceConflictConfig(),
+                              nearby_config=SurfaceNearbyConfig()):
     """
     Require independent ranking agreement and bounded x/y/yaw support.
 
@@ -362,6 +440,31 @@ def validate_surface_evidence(vertices, train_points, holdout_points, poses, *,
             or _turn(poses[train.leader][2], starts[train.leader][2])
             > refine_config.leader_turn_rad):
         return result('LEADER_FAR_FROM_ITS_CANDIDATE')
+    if refine_config is not None and nearby_config is not None:
+        leader = poses[train.leader]
+        rivals = []
+        for peak in nearby_peaks(tree, train_xyz, leader, nearby_config):
+            pose, _converged = refine_surface_pose(tree, train_xyz, peak, refine_config,
+                                                   expired)
+            if not (math.hypot(pose[0] - leader[0], pose[1] - leader[1])
+                    <= refine_config.same_xy_m
+                    and _turn(pose[2], leader[2]) <= refine_config.same_yaw_rad):
+                rivals.append(pose)
+        if expired():
+            return result('DEADLINE')
+        occupancy = (surface_occupancy(tree.data, conflict_config)
+                     if rivals and sensor_origin is not None else None)
+        for part in (train_points, holdout_points):
+            if not rivals:
+                break
+            local = check_surfaces(tree, part, (leader, *rivals), check_config)
+            for index, pose in enumerate(rivals, start=1):
+                if (occupancy is not None and see_through_ratio(
+                        occupancy, part, sensor_origin, pose, conflict_config)
+                        > conflict_config.max_ratio):
+                    continue
+                if local.composite[index] > local.composite[0] - check_config.min_composite_gap:
+                    return result('NEARBY_COMPETITOR')
     points = np.asarray(holdout_points, float)
     mask = np.zeros(len(points), bool)
     for used, (lo, hi) in zip(held.bands_used, check_config.bands):

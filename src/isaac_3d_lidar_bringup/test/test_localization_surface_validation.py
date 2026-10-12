@@ -310,3 +310,43 @@ def test_candidates_converging_to_one_place_are_unique_not_refused():
     assert len(result.poses) == 1
     assert result.supported, result.reason
     assert result.train.composite_gap == pytest.approx(result.train.composite[0])
+
+
+def _fence(period=.25, length=6.):
+    """Two rows of posts, one period apart: shifting by a period changes nothing."""
+    posts = []
+    for x in np.arange(-length / 2, length / 2 + 1e-9, period):
+        for y in (-1., 1.):
+            a, z = np.meshgrid(np.linspace(-.04, .04, 5), np.arange(.3, 1.8, .04))
+            posts += [np.c_[x + a.ravel(), np.full(a.size, y), z.ravel()],
+                      np.c_[np.full(a.size, x), y + a.ravel(), z.ravel()]]
+    return np.vstack(posts)
+
+
+def test_a_disconnected_nearby_optimum_is_a_competitor():
+    # One candidate converges to one of two optima a period apart.  The gap
+    # test has nobody to compare it with and the support check measures only
+    # the connected dip around it, so without the nearby search it is taken.
+    rng = np.random.default_rng(4)
+    fence = _fence()
+    scan = fence[np.abs(fence[:, 0]) < 1.5]
+    scan = scan + rng.normal(0, .005, scan.shape)
+    train, held = scan[::2], scan[1::2]
+    check = SurfaceCheckConfig(tolerance_m=.05, min_points=500, min_band_points=50,
+                               min_leader_composite=.01)
+    kwargs = dict(deadline=time.monotonic() + 60, check_config=check,
+                  refine_config=SurfaceRefineConfig())
+    blind = validation.validate_surface_evidence(fence, train, held, ((.01, 0., 0.),),
+                                                 nearby_config=None, **kwargs)
+    assert blind.supported, blind.reason       # the hazard: accepted
+    seeing = validation.validate_surface_evidence(fence, train, held, ((.01, 0., 0.),), **kwargs)
+    assert seeing.reason == 'NEARBY_COMPETITOR'
+
+
+def test_a_unique_room_has_no_nearby_competitor():
+    rng = np.random.default_rng(9)
+    result = validation.validate_surface_evidence(
+        room(), _room_scan(rng), _room_scan(rng), ((0.02, 0.01, 0.),),
+        deadline=time.monotonic() + 30, check_config=RANK,
+        refine_config=SurfaceRefineConfig())
+    assert result.supported, result.reason
