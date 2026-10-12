@@ -148,7 +148,8 @@ from isaac_3d_lidar_bringup.localization_translation_contracts import (
 )
 from isaac_3d_lidar_bringup.localization_translation_guard import LinearProbeGuard
 from isaac_3d_lidar_bringup.localization_surface_additions import load_surface_additions
-from isaac_3d_lidar_bringup.localization_variable_regions import load_variable_regions
+from isaac_3d_lidar_bringup.localization_variable_regions import (
+    load_variable_regions, mask_grid)
 
 
 LOCALIZATION_MANAGER = '/lifecycle_manager_localization/manage_nodes'
@@ -595,6 +596,11 @@ class AutomaticLocalizationManager(Node):
             # (localization_variable_regions).
             'surface_variable_regions': '',
             'surface_additions': '',
+            # Height band of /scan_localization (launch passes the same values
+            # to its pointcloud_to_laserscan); variable regions overlapping it
+            # are unknown in 2D localization scoring (mask_grid).
+            'localization_scan_min_height': 0.22,
+            'localization_scan_max_height': 0.35,
             'surface_max_points_per_cloud': 6000,
             'surface_min_composite_gap': 0.15,
             'surface_min_leader_composite': 0.70,
@@ -997,7 +1003,7 @@ class AutomaticLocalizationManager(Node):
             (self._session, self._map_hash), run_surface_decision_job,
             self._surface_vertices, first, second,
             tuple((h.x, h.y, h.yaw) for h in ranked),
-            self._latest_grid, tuple(holdout), train[0].T_odom_base,
+            self._scoring(self._latest_grid), tuple(holdout), train[0].T_odom_base,
             self._search_config(), self._validation_thresholds(),
             float(self._parameter('surface_max_2d_conflict')),
             self._surface_rank_config, self._surface_config,
@@ -1499,7 +1505,7 @@ class AutomaticLocalizationManager(Node):
             / self._latest_map.info.resolution
         )
         self._scan_metrics = scan_map_metrics(
-            self._latest_map, message, transform,
+            self._scoring(self._latest_map), message, transform,
             self._parameter('occupied_threshold'), tolerance_cells,
             self._parameter('scan_score_max_beams'),
         )
@@ -1523,6 +1529,24 @@ class AutomaticLocalizationManager(Node):
             self._reject(RejectReason.MAP_CHANGED)
         self._latest_grid = grid
         self._map_hash = digest
+
+    def _scoring(self, grid):
+        """
+        Return the grid 2D localization scoring uses (variable regions unknown).
+
+        Motion safety and route planning keep the original grid.
+        """
+        regions = getattr(self, '_surface_regions', None)
+        if grid is None or regions is None:
+            return grid
+        key = (id(grid), id(regions))
+        cached = getattr(self, '_scoring_cache', None)
+        if cached is None or cached[0] != key:
+            source = grid if hasattr(grid, 'frame_id') else grid_snapshot(grid)
+            self._scoring_cache = (key, mask_grid(
+                source, regions, float(self._parameter('localization_scan_min_height')),
+                float(self._parameter('localization_scan_max_height'))))
+        return self._scoring_cache[1]
 
     def _on_amcl_pose(self, message):
         if not self._accept_source('amcl', message, self._parameter(
@@ -2040,7 +2064,7 @@ class AutomaticLocalizationManager(Node):
         )
         self._search_future = self._search_executor.submit(
             deterministic_global_search,
-            self._latest_map,
+            self._scoring(self._latest_map),
             scans,
             self._parameter('occupied_threshold'),
             tolerance_cells,
@@ -2619,7 +2643,7 @@ class AutomaticLocalizationManager(Node):
                 self._surface_stage = None
                 self._worker.submit(
                     (self._session, self._map_hash), run_validation_job,
-                    self._latest_grid, self._search_result, train, holdout,
+                    self._scoring(self._latest_grid), self._search_result, train, holdout,
                     self._search_config(), self._validation_thresholds(),
                     self._parameter('verification_timeout_sec'),
                     None if isinstance(train, Reject)
@@ -2994,7 +3018,7 @@ class AutomaticLocalizationManager(Node):
         if basis is None:
             self._worker.submit(
                 (self._session, self._map_hash), run_search_job,
-                self._latest_grid, train, self._search_config(),
+                self._scoring(self._latest_grid), train, self._search_config(),
                 self._parameter('search_timeout_sec'), self._coarse_cache)
         else:
             previous, previous_reference = basis
@@ -3003,7 +3027,7 @@ class AutomaticLocalizationManager(Node):
                 f'view {self._view_id}')
             self._worker.submit(
                 (self._session, self._map_hash), run_recheck_job,
-                self._latest_grid, previous, previous_reference, train,
+                self._scoring(self._latest_grid), previous, previous_reference, train,
                 self._search_config(), self._parameter('search_timeout_sec'))
         self._search_reference = train[0].T_odom_base
 

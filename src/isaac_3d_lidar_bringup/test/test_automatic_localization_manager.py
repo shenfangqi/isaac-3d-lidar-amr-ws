@@ -1678,6 +1678,28 @@ def test_variable_regions_must_match_the_mesh(segmented, tmp_path, policy):
         assert manager._surface_policy == 'record'
 
 
+def test_2d_localization_scoring_masks_regions_but_motion_keeps_the_map(segmented, tmp_path):
+    manager = segmented
+    manager.get_logger = lambda: NS(info=lambda m: None, warn=lambda m: None)
+    mesh = _mesh(tmp_path)
+    regions = tmp_path / 'regions.yaml'
+    regions.write_text(f'mesh_sha256: {localization_surface_model.file_sha256(mesh)}\n'
+                       'regions:\n  - {name: bed edge, min: [0.2, 0.2, 0.1], '
+                       'max: [0.4, 0.3, 0.4]}\n')
+    manager.params.update({'surface_recheck_policy': 'record', 'surface_mesh_path': str(mesh),
+                           'surface_spacing_m': 0.0, 'surface_search_policy': 'off',
+                           'surface_variable_regions': str(regions)})
+    manager._configure_surface_check()
+    grid = NS(frame_id='map', info=NS(
+        width=10, height=10, resolution=.1,
+        origin=NS(position=NS(x=0., y=0.), orientation=NS(x=0., y=0., z=0., w=1.))),
+        data=__import__('array').array('b', [100] * 100))
+    manager._latest_grid = grid
+    scoring = manager._scoring(manager._latest_grid)
+    assert list(scoring.data).count(-1) == 2
+    assert manager._latest_grid is grid and -1 not in list(grid.data)
+
+
 @pytest.mark.parametrize('policy', ['record', 'decide'])
 def test_surface_additions_must_match_the_mesh(segmented, tmp_path, policy):
     manager = segmented

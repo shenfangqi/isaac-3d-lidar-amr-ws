@@ -92,3 +92,21 @@ def test_a_region_may_not_choose_the_leader():
     masked = validation.validate_surface_evidence(
         surface_tree(surface, pillar_region), train, held, poses, **kwargs)
     assert masked.reason == 'VARIABLE_REGIONS_CHANGE_LEADER'
+
+
+def test_mask_grid_hides_regions_that_overlap_the_scan_band():
+    from array import array
+    from types import SimpleNamespace as NS
+    from isaac_3d_lidar_bringup.localization_variable_regions import mask_grid
+    grid = NS(frame_id='map', info=NS(
+        width=10, height=10, resolution=.1,
+        origin=NS(position=NS(x=0., y=0.), orientation=NS(x=0., y=0., z=0., w=1.))),
+        data=array('b', [100] * 100))
+    low = VariableRegions(np.array([[.2, .2, .1, .4, .3, .4]]), ('bed edge',))
+    high = VariableRegions(np.array([[.2, .2, 1.0, .4, .3, 2.0]]), ('curtain top',))
+    masked = mask_grid(grid, low, .22, .35)
+    cells = np.frombuffer(masked.data.tobytes(), np.int8).reshape(10, 10)
+    assert (cells[2:3, 2:4] == -1).all() and (cells == -1).sum() == 2
+    assert list(grid.data) == [100] * 100                 # the original is untouched
+    assert mask_grid(grid, high, .22, .35) is grid        # above the band: unchanged
+    assert mask_grid(grid, None, .22, .35) is grid

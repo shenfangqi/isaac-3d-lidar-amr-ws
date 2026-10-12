@@ -87,7 +87,7 @@ def evaluate_bag(job):
     report['views'] = [v for v in report['views'] if v['view_id'] <= view['view_id']]
     train, holdout = reconstruct_frames(report, scans, odom, static, view)
     clouds, origin = clouds_in_reference(bag, train)
-    grid = load_map(map_path)
+    grid = single.mask_grid(load_map(map_path), single.REGIONS, *single.SCAN_BAND)
     surface_points = load_surface_model(mesh, spacing).points
     poses = [tuple(c['pose_at_reference'][k] for k in ('x', 'y', 'yaw'))
              for c in view['candidates']]

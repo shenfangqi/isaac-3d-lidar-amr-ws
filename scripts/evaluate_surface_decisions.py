@@ -36,7 +36,10 @@ from isaac_3d_lidar_bringup.localization_surface_search import (  # noqa: E402
 from isaac_3d_lidar_bringup.localization_surface_validation import (  # noqa: E402
     decide_surface)
 from isaac_3d_lidar_bringup.localization_variable_regions import (  # noqa: E402
-    load_variable_regions)
+    load_variable_regions, mask_grid)
+
+# Height band of /scan_localization (launch LOCALIZATION_SCAN_BAND).
+SCAN_BAND = (.22, .35)
 
 # Variable regions applied to every decision (--variable-regions).
 REGIONS = None
@@ -133,6 +136,9 @@ def main():
     from isaac_3d_lidar_bringup.localization_surface_model import file_sha256
     if args.variable_regions:
         REGIONS = load_variable_regions(args.variable_regions, file_sha256(args.mesh))
+    # 2D localization scoring masks the regions in the scan band, as the
+    # manager does; positions and the map hash use the original grid.
+    scoring = mask_grid(grid, REGIONS, *SCAN_BAND)
     if args.surface_additions:
         from isaac_3d_lidar_bringup.localization_surface_additions import (
             load_surface_additions)
@@ -175,11 +181,11 @@ def main():
                           if math.hypot(c[0] - truth[0], c[1] - truth[1]) > args.exclude_m]
         for name, points in models.items():
             on = args.see_through == 'on'
-            positive = decide(points, sample, grid, sample['poses'], sample['seeds'],
+            positive = decide(points, sample, scoring, sample['poses'], sample['seeds'],
                               args.max_conflict, on)
             positive['leader_is_truth'] = (positive['leader'] is not None
                                            and same_pose(positive['leader'], truth))
-            negative = decide(points, sample, grid, far, far_seeds, args.max_conflict, on) \
+            negative = decide(points, sample, scoring, far, far_seeds, args.max_conflict, on) \
                 if len(far) + len(far_seeds) >= 2 else dict(accepted=False, reason='TOO_FEW')
             negative['wrong_accept'] = bool(negative['accepted'])
             row['models'][name] = dict(positive=positive, negative=negative)
