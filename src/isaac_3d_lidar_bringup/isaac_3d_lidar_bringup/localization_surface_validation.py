@@ -15,6 +15,7 @@ from .localization_contracts import ContractError, SE2
 from .localization_hypotheses import score_pose
 from .localization_surface_check import (
     SurfaceCheckConfig, check_surfaces, planar, surface_tree)
+from .localization_surface_search import search_surface
 
 
 @dataclass(frozen=True)
@@ -418,7 +419,7 @@ def decide_surface(vertices, train_points, holdout_points, poses, grid, holdout_
                    check_config=RANK_CHECK, fit_config=FIT_CHECK,
                    support_config=SurfaceSupportConfig(),
                    refine_config=SurfaceRefineConfig(), seed_poses=(), sensor_origin=None,
-                   conflict_config=SurfaceConflictConfig()):
+                   conflict_config=SurfaceConflictConfig(), search=None):
     """
     Accept a pose from independent 3D evidence plus a 2D sanity check.
 
@@ -432,6 +433,16 @@ def decide_surface(vertices, train_points, holdout_points, poses, grid, holdout_
     ``max_conflict`` (a gross-contradiction cap; the labelled true poses
     reached 0.275 against the 0.25 2D gate).
     """
+    if search is not None:
+        # Stage D: the map-wide 3D search adds every place within its margin
+        # of the best coarse score, so a place the 2D search missed still
+        # competes.  Too many such places cannot be covered: refuse.
+        field, positions, coarse_config = search
+        found = search_surface(field, train_points, positions, coarse_config)
+        if not found.complete:
+            return SurfaceDecision(False, '3D_SEARCH_' + found.reason, -1, (), None,
+                                   {'search_3d': len(found.candidates)})
+        seed_poses = tuple(seed_poses) + tuple(c[:3] for c in found.candidates)
     tree = surface_tree(vertices)
     # The leader must be the candidate it started from, and the 2D search
     # treats poses within its cluster radius as one candidate.  A fixed
@@ -471,11 +482,11 @@ def run_surface_decision_job(vertices, train_points, holdout_points, poses, grid
                              holdout_frames, reference, search_config, thresholds,
                              max_conflict, check_config, fit_config, timeout_s,
                              seed_poses=(), sensor_origin=None,
-                             conflict_config=SurfaceConflictConfig()):
+                             conflict_config=SurfaceConflictConfig(), search=None):
     """Worker entry point for :func:`decide_surface`."""
     return decide_surface(vertices, train_points, holdout_points, poses, grid,
                           holdout_frames, reference, search_config, thresholds,
                           max_conflict, deadline=time.monotonic() + timeout_s,
                           check_config=check_config, fit_config=fit_config,
                           seed_poses=seed_poses, sensor_origin=sensor_origin,
-                          conflict_config=conflict_config)
+                          conflict_config=conflict_config, search=search)
