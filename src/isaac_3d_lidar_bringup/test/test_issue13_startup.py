@@ -257,6 +257,15 @@ def test_variable_regions_default_to_a_per_map_file():
             'carbot_map_20260928_215841_variable_regions.yaml').exists()
 
 
+def test_surface_additions_default_to_a_per_map_file():
+    launch = (PROJECT_DIR / 'src/isaac_3d_lidar_bringup/launch/'
+              'carbot_navigation_real.launch.py').read_text()
+    assert "'surface_additions': PythonExpression([" in launch
+    assert "'_surface_additions.npz'" in launch
+    setup = (PROJECT_DIR / 'src/isaac_3d_lidar_bringup/setup.py').read_text()
+    assert "glob('config/localization/*.npz')" in setup
+
+
 def test_translation_is_plumbed_and_needs_an_accepted_linear_profile():
     start = (SCRIPTS / 'start_real_robot_navigation_rviz.sh').read_text()
     container = (SCRIPTS / 'jetson_nvblox_container.sh').read_text()

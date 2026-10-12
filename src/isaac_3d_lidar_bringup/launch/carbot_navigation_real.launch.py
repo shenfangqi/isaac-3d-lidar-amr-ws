@@ -51,6 +51,7 @@ def generate_launch_description():
     linear_profile_path = LaunchConfiguration('linear_profile_path')
     surface_mesh_path = LaunchConfiguration('surface_mesh_path')
     surface_variable_regions = LaunchConfiguration('surface_variable_regions')
+    surface_additions = LaunchConfiguration('surface_additions')
     probe_parameters = {
         'motion_policy': motion_policy,
         'motion_profile_path': motion_profile_path,
@@ -288,6 +289,13 @@ def generate_launch_description():
                     os.path.join(bringup_dir, 'config', 'localization', ''), "' + '",
                     map_yaml, "'.rsplit('/', 1)[-1].rsplit('.', 1)[0]",
                     " + '_variable_regions.yaml'"]),
+                # Default: config/localization/<map stem>_surface_additions.npz;
+                # static structure the mesh misses, fitted but not solid.
+                'surface_additions': PythonExpression([
+                    "'", surface_additions, "' or '",
+                    os.path.join(bringup_dir, 'config', 'localization', ''), "' + '",
+                    map_yaml, "'.rsplit('/', 1)[-1].rsplit('.', 1)[0]",
+                    " + '_surface_additions.npz'"]),
             },
         ],
         condition=IfCondition(automatic_localization),
@@ -512,6 +520,11 @@ def generate_launch_description():
             'surface_variable_regions', default_value='',
             description=('Variable-region YAML ignored by the 3D scoring; empty = '
                          'config/localization/<map stem>_variable_regions.yaml if present.'),
+        ),
+        DeclareLaunchArgument(
+            'surface_additions', default_value='',
+            description=('Surface-additions NPZ fitted (not solid) by the 3D scoring; empty = '
+                         'config/localization/<map stem>_surface_additions.npz if present.'),
         ),
         DeclareLaunchArgument(
             'saved_pose_path',

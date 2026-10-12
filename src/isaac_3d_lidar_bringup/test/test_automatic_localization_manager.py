@@ -23,6 +23,7 @@ from isaac_3d_lidar_bringup import localization_saved_pose
 from isaac_3d_lidar_bringup import localization_route_planner
 from isaac_3d_lidar_bringup import localization_surface_check
 from isaac_3d_lidar_bringup import localization_surface_model
+from isaac_3d_lidar_bringup import localization_surface_additions
 from isaac_3d_lidar_bringup import localization_surface_search
 from isaac_3d_lidar_bringup import localization_variable_regions
 from isaac_3d_lidar_bringup import localization_surface_validation
@@ -71,6 +72,7 @@ def manager():
     scope.update(vars(localization_surface_model))
     scope.update(vars(localization_surface_search))
     scope.update(vars(localization_variable_regions))
+    scope.update(vars(localization_surface_additions))
     scope.update(vars(localization_surface_validation))
     scope.update(vars(localization_route_planner))
     scope.update(vars(localization_translation_contracts))
@@ -1639,7 +1641,7 @@ def test_union_search_gives_the_3d_job_a_field_and_the_free_positions(segmented,
     assert manager._surface_search_field is not None
     name, arguments = manager._worker.jobs[-1]
     assert name == 'run_surface_decision_job'
-    field, positions, config = arguments[-2]
+    field, positions, config = arguments[-3]
     assert field is manager._surface_search_field
     assert len(positions) > 0 and config.margin > 0
     manager.params['surface_search_policy'] = 'sometimes'
@@ -1676,6 +1678,35 @@ def test_variable_regions_must_match_the_mesh(segmented, tmp_path, policy):
         assert manager._surface_policy == 'record'
 
 
+@pytest.mark.parametrize('policy', ['record', 'decide'])
+def test_surface_additions_must_match_the_mesh(segmented, tmp_path, policy):
+    manager = segmented
+    manager.get_logger = lambda: NS(info=lambda m: None, warn=lambda m: None)
+    mesh = _mesh(tmp_path)
+    digest = localization_surface_model.file_sha256(mesh)
+    additions = tmp_path / 'additions.npz'
+    localization_surface_additions.save_surface_additions(
+        additions, np.full((4, 3), 0.3), digest)
+    manager.params.update({'surface_recheck_policy': policy, 'surface_mesh_path': str(mesh),
+                           'surface_spacing_m': 0.0, 'surface_search_policy': 'union',
+                           'surface_additions': str(additions)})
+    manager._configure_surface_check()
+    assert len(manager._surface_additions) == 4
+    manager.params['surface_additions'] = str(tmp_path / 'none.npz')
+    manager._configure_surface_check()                  # a map without additions
+    assert manager._surface_additions is None and manager._surface_policy == policy
+    manager.params['surface_additions'] = str(additions)
+    localization_surface_additions.save_surface_additions(
+        additions, np.full((4, 3), 0.3), 'cd' * 32)
+    if policy == 'decide':
+        with pytest.raises(localization_contracts.ContractError):
+            manager._configure_surface_check()
+    else:
+        manager._configure_surface_check()              # warned, not used
+        assert manager._surface_additions is None
+        assert manager._surface_policy == 'record'
+
+
 @pytest.mark.parametrize('reason', ['AMBIGUOUS_LOCATION', 'NO_VALID_CANDIDATE'])
 def test_decide_mode_accepts_an_independent_3d_decision(segmented, tmp_path, reason):
     manager = segmented
@@ -1693,6 +1724,39 @@ def test_decide_mode_accepts_an_independent_3d_decision(segmented, tmp_path, rea
         [0.05, max(0.025 * 0.7071067811865476, 0.05, 0.025 * 0.7071067811865476), 0.035])
     assert not manager._saved_prior_used
     assert all(r.operation.value != 'ROTATE' for r in manager.requests)
+
+
+def test_an_accepted_pose_waits_for_stopped_fresh_odometry(segmented, tmp_path):
+    # 2026-10-12 r12_07a: one late /odom at seed time refused an accepted pose.
+    manager = segmented
+    manager.get_logger = lambda: NS(info=lambda m: None, warn=lambda m: None,
+                                    error=lambda m: None)
+    _surface_session(manager, tmp_path, 'decide', [_decision(True)])
+    _guard(manager, 'STOPPED')
+    stopped = manager._stopped
+    manager._stopped = lambda now: False          # /odom late at this instant
+    manager._tick()
+    assert manager._state == manager.State.VERIFY_HYPOTHESES
+    manager._tick()                                # still within the wait
+    assert manager._state == manager.State.VERIFY_HYPOTHESES
+    manager._stopped = stopped
+    manager._tick()
+    assert manager._state == manager.State.STOP_AND_VERIFY
+
+
+def test_a_robot_never_stopped_at_seed_time_is_refused(segmented, tmp_path):
+    manager = segmented
+    manager.get_logger = lambda: NS(info=lambda m: None, warn=lambda m: None,
+                                    error=lambda m: None)
+    manager.params['seed_stop_wait_sec'] = 0.0
+    _surface_session(manager, tmp_path, 'decide', [_decision(True)])
+    _guard(manager, 'STOPPED')
+    manager._stopped = lambda now: False
+    manager._tick()                                # starts the wait
+    manager._tick()                                # wait over
+    assert manager._state not in (manager.State.VERIFY_HYPOTHESES,
+                                  manager.State.STOP_AND_VERIFY)
+    assert manager._seed_pending is None
 
 
 def test_a_refused_3d_decision_keeps_the_2d_verdict(segmented, tmp_path):
@@ -1819,7 +1883,8 @@ def test_a_budget_limited_search_gives_its_seeds_to_the_3d_decision(
     name, arguments = manager._worker.jobs[-1]
     assert name == 'run_surface_decision_job'
     assert arguments[3] == ((1.0, 2.0, 0.5), (4.0, 6.0, -2.6))
-    assert arguments[-5] == ((0.5, 0.2, 1.0),)    # seeds, origin, see-through, search, regions
+    # seeds, then origin, see-through, search, regions, additions
+    assert arguments[-6] == ((0.5, 0.2, 1.0),)
     _guard(manager, 'STOPPED')
     manager._tick()
     status = manager._confined_status()['surface_recheck']

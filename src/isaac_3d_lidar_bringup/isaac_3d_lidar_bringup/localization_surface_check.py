@@ -209,23 +209,41 @@ def compare(per_candidate, min_points):
 
 
 class MaskedSurface:
-    """A surface KD-tree without its variable regions, which it remembers."""
+    """
+    A surface KD-tree without its variable regions, which it remembers.
 
-    def __init__(self, points, regions):
+    ``additions`` (``localization_surface_additions``) join the fit surface
+    but not ``solid``, the points the see-through check treats as solid.
+    """
+
+    def __init__(self, points, regions, additions=None):
         from scipy.spatial import cKDTree
         points = np.asarray(points, float).reshape(-1, 3)
+        extra = (np.zeros((0, 3)) if additions is None
+                 else np.asarray(additions, float).reshape(-1, 3))
         self.regions = regions
-        self.tree = cKDTree(points[~regions.contains(points)])
+        if regions is None:
+            self.solid = points
+            self.tree = cKDTree(np.vstack([points, extra]))
+        else:
+            self.solid = points[~regions.contains(points)]
+            self.tree = cKDTree(np.vstack([self.solid, extra[~regions.contains(extra)]]))
+            # The whole surface, to check that the regions do not change the
+            # leader (localization_surface_validation).
+            self.full = cKDTree(np.vstack([points, extra]))
+            self.full_solid = points
         self.data = self.tree.data
-        # The whole surface, to check that the regions do not change the
-        # leader (localization_surface_validation).
-        self.full = cKDTree(points)
 
     def query(self, points, **kwargs):
         return self.tree.query(points, **kwargs)
 
 
-def surface_tree(surface, regions=None):
+def solid_points(tree):
+    """Return the surface points the see-through check may treat as solid."""
+    return getattr(tree, 'solid', tree.data)
+
+
+def surface_tree(surface, regions=None, additions=None):
     """
     KD-tree of the map surface points; a prebuilt tree is returned as is.
 
@@ -233,12 +251,13 @@ def surface_tree(surface, regions=None):
     dense samples of ``localization_surface_model``) or a ``cKDTree`` of
     them, so one decision builds the tree once.  With ``regions``
     (``localization_variable_regions``) the surface inside them is dropped
-    and scoring ignores observed points that land there.
+    and scoring ignores observed points that land there.  ``additions`` are
+    fitted but never solid (``localization_surface_additions``).
     """
     if hasattr(surface, 'query'):
         return surface
-    if regions is not None:
-        return MaskedSurface(surface, regions)
+    if regions is not None or additions is not None:
+        return MaskedSurface(surface, regions, additions)
     from scipy.spatial import cKDTree
     return cKDTree(np.asarray(surface, float))
 

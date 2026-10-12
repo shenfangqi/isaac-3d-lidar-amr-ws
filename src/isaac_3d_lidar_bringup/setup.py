@@ -40,7 +40,7 @@ setup(
         ),
         (
             os.path.join('share', package_name, 'config/localization'),
-            glob('config/localization/*.yaml')
+            glob('config/localization/*.yaml') + glob('config/localization/*.npz')
         ),
     ],
     install_requires=['setuptools'],
