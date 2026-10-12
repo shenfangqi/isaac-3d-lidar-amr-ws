@@ -95,6 +95,26 @@ def state_intervals(statuses):
     return intervals
 
 
+def stationary_capture_intervals(scans):
+    """
+    Synthetic state windows for a capture recorded after localization ended.
+
+    Since 2026-10-10 no bag is recorded during localization (it delayed
+    /odom on the Jetson); the scene is captured afterwards with the robot
+    still.  Such a bag has no COLLECT/SEARCH/VERIFY states, so its first
+    part stands in for collection and search and its second part for an
+    independent VERIFY window.
+    """
+    first, last = scans[0][0], scans[-1][0]
+    if last - first < 20_000_000_000:
+        raise ValueError('a stationary capture needs at least 20 s of scans')
+    start, middle, end = first + 2_000_000_000, (first + last) // 2, last - 1_000_000_000
+    return [{'state': 'COLLECT_STATIC', 'start_ns': start, 'end_ns': start + 1_000_000_000},
+            {'state': 'SEARCH_MULTI_VIEW', 'start_ns': start + 1_000_000_000,
+             'end_ns': middle},
+            {'state': 'VERIFY_HYPOTHESES', 'start_ns': middle, 'end_ns': end}]
+
+
 def read_bag(path, scan_topic):
     import rosbag2_py
     from rclpy.serialization import deserialize_message
@@ -260,6 +280,8 @@ def diagnose(args):
         'automatic_localization_manager']['ros__parameters']
     config, thresholds = configs(parameters, grid)
     intervals = state_intervals(statuses)
+    if args.stationary_capture:
+        intervals = stationary_capture_intervals(scans)
     t0 = statuses[0][0]
     report = {
         'schema': 1, 'navigation_accepted': False, 'complete': False,
@@ -271,7 +293,9 @@ def diagnose(args):
             'Uses current supplied configuration, not an assertion of historical parity.',
             'No independently measured ground truth is supplied; a leading candidate is not truth.',
             '2D bags cannot reconstruct discarded point heights.',
-        ],
+        ] + (['Stationary capture: synthetic state windows (first half '
+              'collection/search, second half VERIFY), not a recorded session.']
+             if args.stationary_capture else []),
         'bag': str(args.bag), 'session': session, 'map_hash': digest,
         'config_sha256': sha256(args.config), 'search_config': asdict(config),
         'code_sha256': {'diagnose_localization_bag.py': sha256(Path(__file__)),
@@ -372,6 +396,9 @@ def diagnose(args):
                   if len(candidates) > 1 else None)
         row = dict(view_id=view, kind=kind, search_complete=result.complete,
                    search_reason=result.reason, elapsed_sec=time.monotonic() - started,
+                   # Coarse seeds of competitors a budget-limited search
+                   # left unrefined; the 3D decision must cover them too.
+                   unrefined=[list(seed) for seed in result.unrefined],
                    decision=asdict(decision), score_margin=margin, candidates=candidates,
                    holdout_origin='VERIFY_HYPOTHESES' if verify else 'SEARCH_MULTI_VIEW_diagnostic_only',
                    frame_source={
@@ -400,6 +427,11 @@ def main():
     parser.add_argument('--scan-topic', default='/scan_localization')
     parser.add_argument('--search-timeout', type=float, default=120.0)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument(
+        '--stationary-capture', action='store_true',
+        help='the bag was recorded with the robot still after localization; '
+             'use its first half as collection/search and its second half '
+             'as the VERIFY window')
     args = parser.parse_args()
     if args.output.exists():
         parser.error('output already exists; choose a new path')

@@ -124,8 +124,10 @@ from isaac_3d_lidar_bringup.localization_surface_check import (
     SurfaceCheckConfig,
     transform,
 )
+from isaac_3d_lidar_bringup.localization_surface_model import load_surface_model
 from isaac_3d_lidar_bringup.localization_surface_validation import (
     run_surface_decision_job,
+    SurfaceConflictConfig,
 )
 from isaac_3d_lidar_bringup.localization_translation_contracts import (
     decode_linear_profile,
@@ -562,6 +564,11 @@ class AutomaticLocalizationManager(Node):
             # search (2026-10-10 capture_02 replay: 26-66); more is refused.
             'surface_max_candidates': 80,
             'surface_cloud_window_sec': 5.0,
+            # Score against points on the mesh triangles, not its vertices
+            # (stage A); 0 = vertices only, the pre-2026-10-11 behaviour.
+            'surface_spacing_m': 0.02,
+            # Map-derived cache; '' = next to the mesh.
+            'surface_cache_dir': '',
             'surface_max_points_per_cloud': 6000,
             'surface_min_composite_gap': 0.15,
             'surface_min_leader_composite': 0.70,
@@ -758,8 +765,18 @@ class AutomaticLocalizationManager(Node):
             policy = 'off'             # record is evidence only; nothing to record
         if policy != 'off':
             path = self._parameter('surface_mesh_path')
+            spacing = float(self._parameter('surface_spacing_m'))
             try:
-                self._surface_vertices = load_ply_vertices(path)
+                if spacing > 0:
+                    model = load_surface_model(
+                        path, spacing, self._parameter('surface_cache_dir') or None)
+                    self._surface_vertices = model.points
+                    self.get_logger().info(
+                        f'3D surface: {model.report["samples"]} samples at '
+                        f'{spacing:.3f} m from {model.report["faces"]} faces '
+                        f'(mesh {model.mesh_sha256[:12]}, cache {model.report["cache"]})')
+                else:
+                    self._surface_vertices = load_ply_vertices(path)
             except (OSError, ValueError) as error:
                 if policy == 'decide':
                     raise ContractError(f'3D re-check mesh unusable: {error}') from error
@@ -797,7 +814,7 @@ class AutomaticLocalizationManager(Node):
 
     def _surface_points(self, train, now):
         """All stationary cloud points in the reference keyframe's base frame."""
-        parts = [points for _stamp, points in self._surface_cloud_parts(train, now)]
+        parts = [part[1] for part in self._surface_cloud_parts(train, now)]
         return np.vstack(parts) if parts else np.zeros((0, 3))
 
     def _surface_point_sets(self, train, now):
@@ -808,16 +825,17 @@ class AutomaticLocalizationManager(Node):
         """
         parts = sorted(self._surface_cloud_parts(train, now), key=lambda item: item[0])
         half = len(parts) // 2
-        sets = [[points for _stamp, points in chunk]
+        sets = [[part[1] for part in chunk]
                 for chunk in (parts[:half], parts[half:])]
         return tuple(np.vstack(chunk) if chunk else np.zeros((0, 3)) for chunk in sets)
 
     def _surface_cloud_parts(self, train, now):
         """
-        ``[(stamp_ns, points)]`` of stationary clouds in the reference base frame.
+        ``[(stamp_ns, points, sensor_origin)]`` of stationary clouds.
 
-        Each cloud uses the full 3D base<-sensor transform and the planar
-        odometry at its own source stamp; clouds without both are skipped.
+        Points and origin are in the reference base frame.  Each cloud uses
+        the full 3D base<-sensor transform and the planar odometry at its own
+        source stamp; clouds without both are skipped.
         """
         reference = train[0].T_odom_base.inverse()
         window = float(self._parameter('surface_cloud_window_sec'))
@@ -837,8 +855,14 @@ class AutomaticLocalizationManager(Node):
                       @ transform((t.x, t.y, getattr(t, 'z', 0.0)),
                                   (q.x, q.y, q.z, q.w)))
             homogeneous = np.c_[xyz, np.ones(len(xyz))]
-            parts.append((stamp_ns, (matrix @ homogeneous.T).T[:, :3]))
+            parts.append((stamp_ns, (matrix @ homogeneous.T).T[:, :3], matrix[:3, 3]))
         return parts
+
+    def _surface_sensor_origin(self, train, now):
+        """Median sensor position of the stationary clouds, or None."""
+        origins = [part[2] for part in self._surface_cloud_parts(train, now)
+                   if len(part) > 2]
+        return tuple(float(v) for v in np.median(origins, axis=0)) if origins else None
 
     def _start_surface_check(self, decision, train, holdout, now):
         """Submit the 3D decision for a refused 2D verdict; False if skipped."""
@@ -894,7 +918,8 @@ class AutomaticLocalizationManager(Node):
             self._search_config(), self._validation_thresholds(),
             float(self._parameter('surface_max_2d_conflict')),
             self._surface_rank_config, self._surface_config,
-            float(self._parameter('surface_decision_timeout_sec')), tuple(seeds))
+            float(self._parameter('surface_decision_timeout_sec')), tuple(seeds),
+            self._surface_sensor_origin(train, now))
         self._surface_stage = 'deciding'
         return True
 
@@ -926,6 +951,15 @@ class AutomaticLocalizationManager(Node):
                 {'x': round(leader[0], 3), 'y': round(leader[1], 3),
                  'yaw': round(leader[2], 4)}),
             'metrics_2d': dict(result.metrics_2d),
+            # Per window, the leader's see-through ratio and the number of
+            # candidates it excluded (None without a sensor origin).
+            'see_through': (
+                [{'leader': (ratios[validation.leader]
+                             if 0 <= validation.leader < len(ratios)
+                             and math.isfinite(ratios[validation.leader]) else None),
+                  'excluded': sum(r > SurfaceConflictConfig().max_ratio for r in ratios)}
+                 for ratios in validation.see_through]
+                if validation is not None and validation.see_through else None),
             'candidate_count': len(self._surface_poses),
             'clouds': dict(self._surface_cloud_counts),
             'search_complete': self._search_result.complete,

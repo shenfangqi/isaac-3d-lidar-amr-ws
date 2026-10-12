@@ -3,9 +3,11 @@ Issue #13 static 3D surface re-check of 2D localization candidates.
 
 Pure logic (numpy/scipy), no ROS.  Stationary deskewed clouds, already in
 the base frame of the reference keyframe, are placed at each candidate pose
-and scored per height band against the vertices of the map's 3D mesh: the
-share of points within ``tolerance_m`` of a vertex.  Bands with too few
-points are excluded for every candidate; the composite is point-weighted.
+and scored per height band against the map surface: the share of points
+within ``tolerance_m`` of a surface point.  The surface points are the
+mesh vertices or, by default in the manager, dense samples of its triangles
+(``localization_surface_model``).  Bands with too few points are excluded
+for every candidate; the composite is point-weighted.
 
 These are the scoring primitives.  The localization decision built on
 them (independent cloud windows, refined candidates, bounded support and a
@@ -193,14 +195,29 @@ def compare(per_candidate, min_points):
     }
 
 
+def surface_tree(surface):
+    """
+    KD-tree of the map surface points; a prebuilt tree is returned as is.
+
+    ``surface`` is either the (N, 3) surface points (mesh vertices or the
+    dense samples of ``localization_surface_model``) or a ``cKDTree`` of
+    them, so one decision builds the tree once.
+    """
+    if hasattr(surface, 'query'):
+        return surface
+    from scipy.spatial import cKDTree
+    return cKDTree(np.asarray(surface, float))
+
+
 def check_surfaces(vertices, base_points, poses, config=SurfaceCheckConfig()):
     """
-    Score candidate poses (at the reference keyframe) against mesh vertices.
+    Score candidate poses (at the reference keyframe) against the map surface.
 
-    ``base_points`` are stationary cloud points in the reference base frame,
-    already filtered to ``min_range_m``.  Returns a :class:`SurfaceResult`.
+    ``vertices`` are the surface points or their tree (see
+    :func:`surface_tree`).  ``base_points`` are stationary cloud points in
+    the reference base frame, already filtered to ``min_range_m``.  Returns
+    a :class:`SurfaceResult`.
     """
-    from scipy.spatial import cKDTree
     poses = [tuple(float(v) for v in pose) for pose in poses]
     if len(poses) < 2:
         raise ContractError('the 3D re-check needs at least two candidates')
@@ -208,7 +225,7 @@ def check_surfaces(vertices, base_points, poses, config=SurfaceCheckConfig()):
     points = points[np.hypot(points[:, 0], points[:, 1]) >= config.min_range_m]
     if len(points) < config.min_points:
         return SurfaceResult(False, 'TOO_FEW_POINTS', -1, (), 0.0, (), (), len(points))
-    tree = cKDTree(np.asarray(vertices, float))
+    tree = surface_tree(vertices)
     per_candidate = [band_inliers(points, pose, tree, config.bands, config.tolerance_m)
                      for pose in poses]
     result = compare(per_candidate, config.min_band_points)

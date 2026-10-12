@@ -22,6 +22,7 @@ from isaac_3d_lidar_bringup import localization_rotation_policy
 from isaac_3d_lidar_bringup import localization_saved_pose
 from isaac_3d_lidar_bringup import localization_route_planner
 from isaac_3d_lidar_bringup import localization_surface_check
+from isaac_3d_lidar_bringup import localization_surface_model
 from isaac_3d_lidar_bringup import localization_surface_validation
 from isaac_3d_lidar_bringup import localization_translation_contracts
 from isaac_3d_lidar_bringup import localization_translation_guard
@@ -65,6 +66,7 @@ def manager():
     scope.update(vars(localization_rotation_policy))
     scope.update(vars(localization_saved_pose))
     scope.update(vars(localization_surface_check))
+    scope.update(vars(localization_surface_model))
     scope.update(vars(localization_surface_validation))
     scope.update(vars(localization_route_planner))
     scope.update(vars(localization_translation_contracts))
@@ -1753,7 +1755,7 @@ def test_a_budget_limited_search_gives_its_seeds_to_the_3d_decision(
     name, arguments = manager._worker.jobs[-1]
     assert name == 'run_surface_decision_job'
     assert arguments[3] == ((1.0, 2.0, 0.5), (4.0, 6.0, -2.6))
-    assert arguments[-1] == ((0.5, 0.2, 1.0),)
+    assert arguments[-2] == ((0.5, 0.2, 1.0),)      # seeds, then sensor origin
     _guard(manager, 'STOPPED')
     manager._tick()
     status = manager._confined_status()['surface_recheck']
