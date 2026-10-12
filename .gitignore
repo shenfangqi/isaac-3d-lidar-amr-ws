@@ -46,3 +46,5 @@ calibration_data/
 *.swp
 *.swo
 *~
+
+.claude/settings.local.json

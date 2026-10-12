@@ -216,9 +216,15 @@ PROBE_RESOLVABLE = frozenset((
 # prior).  The 3D decision replaces the 2D margin and corridor checks with
 # independent 3D evidence; the leader keeps a 2D sanity check and AMCL still
 # verifies after seeding.  A budget-limited search is handled separately.
+# 2026-10-12 robot (main db3f72d, upper-right twin spot): the 2D corridor
+# check refused UNOBSERVABLE_AXIS on its own leader and the session ended in
+# WAIT_MANUAL_POSE; the 3D decision on the same placement accepts the truth
+# (gap 0.243).  The 3D decision tests observability itself (support extents,
+# WIDE_3D_SUPPORT), so the 2D corridor verdict goes to it too.
 SURFACE_RECHECK_REASONS = frozenset((
     RejectReason.AMBIGUOUS_LOCATION.value,
     RejectReason.NO_VALID_CANDIDATE.value,
+    RejectReason.UNOBSERVABLE_AXIS.value,
 ))
 
 
