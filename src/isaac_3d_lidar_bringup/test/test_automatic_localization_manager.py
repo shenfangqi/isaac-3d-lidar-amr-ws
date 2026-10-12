@@ -1719,10 +1719,16 @@ def test_a_failed_3d_job_keeps_the_2d_verdict(segmented, tmp_path):
     assert manager._confined_status()['surface_recheck']['reason'] == 'JOB_FAILED'
 
 
-def test_other_2d_verdicts_do_not_get_the_3d_decision(segmented, tmp_path):
+def test_an_unobservable_2d_axis_gets_the_3d_decision(segmented, tmp_path):
     manager = segmented
     _surface_session(manager, tmp_path, 'decide', [], reason='UNOBSERVABLE_AXIS')
-    assert manager._state == manager.State.PLAN_PROBE
+    assert any(job[0] == 'run_surface_decision_job' for job in manager._worker.jobs)
+
+
+def test_other_2d_verdicts_do_not_get_the_3d_decision(segmented, tmp_path):
+    manager = segmented
+    _surface_session(manager, tmp_path, 'decide', [], reason='SENSOR_STALE')
+    assert manager._state != manager.State.CANDIDATE_READY
     assert all(job[0] != 'run_surface_decision_job' for job in manager._worker.jobs)
 
 
