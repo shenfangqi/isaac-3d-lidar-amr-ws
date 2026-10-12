@@ -17,7 +17,7 @@ from .localization_surface_check import (
     _map, SurfaceCheckConfig, check_surfaces, outside_variable, planar, solid_points,
     surface_tree)
 from .localization_surface_search import (
-    build_surface_field, coarse_scores, search_surface, SurfaceSearchConfig)
+    build_surface_field, coarse_scores, prune_seeds, search_surface, SurfaceSearchConfig)
 
 
 @dataclass(frozen=True)
@@ -608,7 +608,8 @@ def decide_surface(vertices, train_points, holdout_points, poses, grid, holdout_
         if not found.complete:
             return SurfaceDecision(False, '3D_SEARCH_' + found.reason, -1, (), None,
                                    {'search_3d': len(found.candidates)})
-        seed_poses = tuple(seed_poses) + tuple(c[:3] for c in found.candidates)
+        seed_poses = (prune_seeds(field, train_points, seed_poses, found, coarse_config)
+                      + tuple(c[:3] for c in found.candidates))
     tree = surface_tree(vertices, regions, additions)
     # The leader must be the candidate it started from, and the 2D search
     # treats poses within its cluster radius as one candidate.  A fixed

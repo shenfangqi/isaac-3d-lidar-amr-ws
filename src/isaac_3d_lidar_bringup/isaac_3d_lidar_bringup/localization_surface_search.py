@@ -53,10 +53,14 @@ class SurfaceSearchConfig:
     nms_yaw_rad: float = math.radians(15)
     max_candidates: int = 40
     occupied_threshold: int = 65
+    # Unrefined 2D seeds scoring below best - margin - seed_slack at their
+    # own pose are not refined (``prune_seeds``).
+    seed_slack: float = .05
 
     def __post_init__(self):
         values = (self.voxel_m, self.sigma_m, self.cap_m, self.position_step_m,
-                  self.yaw_step_rad, self.margin, self.nms_xy_m, self.nms_yaw_rad)
+                  self.yaw_step_rad, self.margin, self.nms_xy_m, self.nms_yaw_rad,
+                  self.seed_slack)
         if any(not math.isfinite(v) or v <= 0 for v in values) or self.clearance_m < 0:
             raise ContractError('invalid 3D search limits')
         if (type(self.points) is not int or self.points < 1
@@ -152,6 +156,39 @@ def coarse_scores(field, points, positions, yaws):
     return scores
 
 
+def search_points(points, config=SurfaceSearchConfig()):
+    """Return the subsampled points the coarse search scores (beyond ``min_range_m``)."""
+    points = np.asarray(points, float).reshape(-1, 3)
+    points = points[np.hypot(points[:, 0], points[:, 1]) >= config.min_range_m]
+    if len(points) > config.points:
+        points = points[np.linspace(0, len(points) - 1, config.points).astype(int)]
+    return points
+
+
+def prune_seeds(field, points, seeds, found, config=SurfaceSearchConfig()):
+    """
+    Keep the unrefined seeds a complete coarse 3D search cannot rule out.
+
+    A complete search scored every grid pose and kept every place within
+    ``margin`` of the best: the true pose's nearest node lost at most 0.063
+    (``SurfaceSearchConfig``).  A seed scoring below ``best - margin -
+    seed_slack`` at its own pose is then neither the truth nor a competitor
+    the decision must refine.  2026-10-12 robot (bedside, budget-limited 2D
+    search): 135 seeds took the 3D decision past its 120 s deadline on the
+    Jetson.  An incomplete search keeps every seed.
+    """
+    seeds = tuple(seeds)
+    if not found.complete or not seeds:
+        return seeds
+    points = search_points(points, config)
+    if not len(points):
+        return seeds
+    floor = found.best - config.margin - config.seed_slack
+    return tuple(seed for seed in seeds
+                 if coarse_scores(field, points, [(seed[0], seed[1])], [seed[2]])[0, 0]
+                 >= floor)
+
+
 def _turn(a, b):
     return abs(math.atan2(math.sin(a - b), math.cos(a - b)))
 
@@ -165,10 +202,7 @@ def search_surface(field, points, positions, config=SurfaceSearchConfig()):
     coarse score, best first, or ``complete=False`` if there are more than
     ``max_candidates`` of them.
     """
-    points = np.asarray(points, float).reshape(-1, 3)
-    points = points[np.hypot(points[:, 0], points[:, 1]) >= config.min_range_m]
-    if len(points) > config.points:
-        points = points[np.linspace(0, len(points) - 1, config.points).astype(int)]
+    points = search_points(points, config)
     if not len(points) or not len(positions):
         return SurfaceSearchResult(False, 'NO_POINTS_OR_POSITIONS', (), 0., 0)
     yaws = np.arange(-math.pi, math.pi - 1e-9, config.yaw_step_rad)

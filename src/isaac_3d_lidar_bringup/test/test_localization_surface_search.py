@@ -51,6 +51,23 @@ def test_the_true_pose_leads_the_map_wide_search():
     assert result.evaluated == len(positions) * 36
 
 
+def test_seeds_a_complete_search_rules_out_are_not_refined():
+    config = search.SurfaceSearchConfig(margin=.05)
+    field = search.build_surface_field(SURFACE, config)
+    positions = search.free_positions(_grid(), config)
+    truth = (3.1, 2.3, math.radians(33))
+    scan = _scan_at(truth)
+    result = search.search_surface(field, scan, positions, config)
+    assert result.complete
+    near = (3.15, 2.25, math.radians(36))           # next to the truth: kept
+    wrong = (8.0, 4.5, math.radians(-120))          # far off: pruned
+    assert search.prune_seeds(field, scan, (near, wrong), result, config) == (near,)
+    incomplete = search.SurfaceSearchResult(False, 'TOO_MANY_CANDIDATES', (),
+                                            result.best, 0)
+    assert search.prune_seeds(field, scan, (near, wrong), incomplete, config) == (near, wrong)
+    assert search.prune_seeds(field, scan, (), result, config) == ()
+
+
 def test_every_place_within_the_margin_is_kept_or_the_search_is_incomplete():
     # A long corridor seen to 1.5 m: sliding along it changes nothing.
     corridor = np.concatenate([_wall(0, 0, 10, 0), _wall(0, 2, 10, 2)])
