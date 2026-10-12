@@ -14,6 +14,10 @@ def parse_args():
     """Parse the maximum wait time."""
     parser = argparse.ArgumentParser()
     parser.add_argument('--timeout', type=float, default=150.0)
+    parser.add_argument(
+        '--current-state', action='store_true',
+        help='print the state of the first (latched) status and exit 0; '
+             'exit 2 if none arrives before the timeout')
     return parser.parse_args()
 
 
@@ -34,6 +38,11 @@ def main():
         except (TypeError, ValueError):
             return
         state = status.get('state')
+        if args.current_state:
+            if isinstance(state, str) and state:
+                result['code'] = 0
+                result['status'] = state
+            return
         if state == 'CANDIDATE_READY':
             result['code'] = 5
             result['status'] = status
@@ -85,7 +94,10 @@ def main():
     ):
         rclpy.spin_once(node, timeout_sec=0.2)
 
-    if result['code'] is None:
+    if args.current_state:
+        print(result['status'] or 'NO_STATUS', flush=True)
+        exit_code = 0 if result['code'] == 0 else 2
+    elif result['code'] is None:
         if result['manual_pose_required']:
             print(json.dumps(result['status'], sort_keys=True), flush=True)
             exit_code = 3

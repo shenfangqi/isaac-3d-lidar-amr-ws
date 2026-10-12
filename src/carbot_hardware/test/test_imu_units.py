@@ -59,6 +59,27 @@ def test_stationary_bias_estimator_uses_only_bounded_stationary_samples():
     assert estimator.bias == pytest.approx(0.004)
 
 
+def test_stationary_bias_estimator_matches_the_sorted_window_median():
+    # The sorted window is kept incrementally (200 Hz on the Jetson); the
+    # result must equal the median of exactly the last window samples.
+    import random
+    from collections import deque
+    from statistics import median
+    rng = random.Random(13)
+    estimator = StationaryBiasEstimator(4, 50, 0.03)
+    window = deque(maxlen=50)
+    for _ in range(2000):
+        value = rng.choice([rng.uniform(-0.04, 0.04), 0.01, -0.0, 0.0])
+        stationary = rng.random() < 0.8
+        corrected = estimator.update(value, stationary)
+        if stationary and abs(value) <= 0.03:
+            window.append(value)
+        expected = median(window) if window else 0.0
+        assert estimator.bias == expected
+        assert corrected == value - expected
+        assert estimator.sample_count == len(window)
+
+
 def test_unknown_covariance_gets_explicit_fallback_diagonal():
     assert covariance_with_fallback_diagonal(
         [0.0] * 9, [1.0, 2.0, 3.0]
