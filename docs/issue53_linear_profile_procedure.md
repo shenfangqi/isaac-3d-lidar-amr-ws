@@ -20,7 +20,7 @@
 
 ```bash
 ros2 bag record -o <日期>_issue53_linear_stops_01 /cmd_vel_command /cmd_vel /odom /wheel_ticks \
-  /carbot/status /tf /tf_static /fast_lio/cloud_registered_body
+  /carbot/status /tf_static
 python3 /tmp/jetson_linear_profile_capture.py --mode stops --operator-present
 ```
 
@@ -29,7 +29,7 @@ python3 /tmp/jetson_linear_profile_capture.py --mode stops --operator-present
 - 脚本每 50 ms 检查一次，以下任一情况立即发 3 s 零速度并退出：急停信号、底盘断开或阻塞、里程计过期、偏离直线超过 0.10 m、航向变化超过 10°、比目标多走 0.20 m、离起点超过 0.80 m、累计路程超过 5 m。
 - 参数有硬上限，超出就拒绝运行：速度 ≤ 0.10 m/s，单段 ≤ 0.60 m，每次 watchdog 试验走的距离 ≤ 0.30 m。
 - 前进时低于约 0.05 m/s 车不能持续移动（死区），所以默认用 0.08 m/s。
-- 录包里加了点云（`/fast_lio/cloud_registered_body`）：这也是第一份车动过的点云，可以用来检查 #53 的子图拼接（`scripts/check_submap_changes.py ... --reference last`）。
+- **不要在 Jetson 上录点云**：2026-10-13 在 Jetson 上录 `/fast_lio/cloud_registered_body` 时，`/odom` 出现了最长 1.9 s 的中断，采集中止，随后 FAST-LIO 锁定了故障，要重启整个栈。车动过的点云要换别的方式录，比如在工作站上通过网络录，这个还没验证。
 
 ## 分析（在工作站的容器里）
 
@@ -43,6 +43,7 @@ python3 scripts/analyze_linear_profile.py calibration_data/<stops 录包> calibr
 
 - 每次运动给出：反应时间（停发指令 → 开始减速）、停止尾程、watchdog 停车时间、偏离直线的距离、航向变化、实际速度和指令的比例。全部用里程计位置计算，不用 FAST-LIO 的速度字段（10-08 发现它在运动后会偏）。
 - 前进和后退各至少 3 次有效停车、至少 3 次 watchdog 试验，才写出 ESTIMATED 的 profile，取最差值；否则只写报告，退出码为 1。
+- "停稳"的门槛是 0.02 m/s（FAST-LIO 静止时的速度噪声有 0.007–0.013 m/s）。
 - 合成数据的端到端检查：写出的 profile 哈希和本车参数一致；ESTIMATED 状态被 `check_linear_profile.py` 拒绝，改成 ACCEPTED 后通过（停车外延 0.177 m）。
 
 ## 验收
@@ -51,3 +52,7 @@ python3 scripts/analyze_linear_profile.py calibration_data/<stops 录包> calibr
 2. 用户看过报告后明确决定 ACCEPTED，再把 `status` 改成 ACCEPTED。
 3. `python3 scripts/check_linear_profile.py <profile.json>` 通过。
 4. 之后才能用 `--localization-translation guarded --linear-profile <json>` 启动带平移的定位。
+
+## 2026-10-13 的结果
+
+已验收：`docs/evidence/issue53_linear_profile_accepted_2026-10-13.json`，记录在 `docs/evidence/issue53_linear_profile_review_2026-10-13.md`。前进时每米右偏约 6°，是已知问题，验收时已记录。
