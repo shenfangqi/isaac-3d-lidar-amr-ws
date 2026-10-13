@@ -1,5 +1,13 @@
 # Current authoritative project state
 
+## Issue #53 linear profile and first guarded translation on the robot: 2026-10-13 evening
+
+- main `c639988`; the Jetson runs it (deploy `--check` IN_SYNC). PRs #63–#72 merged.
+- Linear profile ACCEPTED (`docs/evidence/issue53_linear_profile_accepted_2026-10-13.json`, 0.08 m/s, stop extension 0.184 m); the operator saw no anomaly but forward runs turn about 6 deg/m right (`docs/evidence/issue53_linear_profile_review_2026-10-13.md`). Never record point clouds on the Jetson: it stalled FAST-LIO (fault latched until restart).
+- `--force-translation-once` (validation only) drove one guarded forward probe (requested 0.4 m, about 0.20 m driven, operator-confirmed) and reached CANDIDATE_READY at (2.765, 2.792, 87.8 deg) after the new view; two earlier attempts were refused before moving and fixed (#70, #71), reproduced offline by #72. Evidence: `docs/evidence/issue53_forced_translation_robot_2026-10-13.md`.
+- In this home the route planner never chooses a translation by itself (3D separates in place; cramped spots have no common safe route). Open: a 0.6 m request reaches the calibrated lateral limit; the multi-stop 3D submap (#65) is not wired into the manager; moving-cloud bags need recording off the Jetson.
+- Stack stopped at the end; web teleop restored disarmed.
+
 ## Issues #53/#54 offline submap work, handoff: 2026-10-13
 
 - **Resume from `docs/issue13_handoff_2026-10-13.md`** (Chinese); the 2026-10-12 handoff below still holds for user rules, configuration and procedures.
