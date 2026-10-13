@@ -2314,6 +2314,87 @@ def test_route_evidence_covers_the_guards_remaining_distance_despite_jitter(
     assert evidence.stop_extension_m == pytest.approx(guard.stop_extension_m)
 
 
+@pytest.mark.parametrize('seed', range(16))
+def test_manager_and_guard_complete_a_translation_under_jitter_and_reordering(
+        translated, seed):
+    # 2026-10-13 on the robot the first two forced translations were refused
+    # before moving: odometry jitter (SWEEP_TOO_SHORT), then a sweep naming
+    # an odometry sample the guard had not received yet, or no sweep yet
+    # right after MOVE (SWEEP_STALE).  Here the real manager and the real
+    # guard run together: 10 Hz odometry with 1 mm noise; every message
+    # (odometry to either side, requests and sweeps to the guard) arrives
+    # after a random 0-60 ms; the manager ticks at 20 Hz out of phase with
+    # the odometry, the guard at 50 Hz; the guard's command drives the robot
+    # at 79% tracking.
+    from dataclasses import replace
+    import random
+    rng = random.Random(seed)
+    manager = translated
+    _forced_translation_session(manager)
+    assert manager._state == manager.State.EXECUTE_TRANSLATION
+    guard = localization_translation_guard.LinearProbeGuard(
+        manager._linear_profile, expected_hashes=manager._probe_hashes)
+    x0, y0, yaw = manager._last_odom_pose
+    stamp0 = manager._last_odom_stamp_ns
+    travelled, speed = 0.0, 0.0
+    queue = []                        # (arrival, kind, payload)
+    sent_requests, sent_evidence = 0, 0
+    guard.on_emergency(False, 0.0)
+
+    def send(now, kind, payload):
+        queue.append((now + rng.uniform(0.0, 0.06), kind, payload))
+
+    for step in range(1, 3001):
+        t = step * 0.005
+        travelled += speed * 0.005
+        if step % 20 == 0:            # 10 Hz odometry
+            along = travelled + rng.uniform(-0.001, 0.001)
+            sample = localization_motion_guard.OdomSample(
+                stamp0 + int(t * 1e9), x0 + along * math.cos(yaw),
+                y0 + along * math.sin(yaw), yaw, 0.0, 0.0, t)
+            send(t, 'odom_manager', sample)
+            send(t, 'odom_guard', sample)
+        for item in sorted(i for i in queue if i[0] <= t):
+            queue.remove(item)
+            _, kind, payload = item
+            if kind == 'odom_guard':
+                guard.on_odom(replace(payload, receipt_mono=t))
+                guard.on_chassis(True, False, t)
+            elif kind == 'odom_manager':
+                manager._last_odom_pose = (payload.x, payload.y, payload.yaw)
+                manager._last_odom_stamp_ns = payload.stamp_ns
+            elif kind == 'request':
+                guard.request(payload.operation, payload.session, payload.sequence, t,
+                              distance_m=payload.distance_m, speed_mps=payload.speed_mps,
+                              profile_hash=payload.profile_hash)
+            else:
+                guard.on_preview(payload.to_preview(), t)
+        if step % 10 == 3:            # manager at 20 Hz, out of phase
+            manager._translation_status = (
+                localization_translation_contracts.translation_status(guard),
+                time.monotonic())
+            manager._tick()
+            # The STOP handshake for 1.5 s while the robot is still, then
+            # the MOVE; its first sweep follows on the next manager tick.
+            for request in manager.translation_requests[sent_requests:]:
+                if request.operation == 'MOVE' and t < 1.5:
+                    break
+                send(t, 'request', request)
+                sent_requests += 1
+            if sent_requests and any(r.operation == 'MOVE' for r in
+                                     manager.translation_requests[:sent_requests - 1]):
+                for evidence in manager.evidence[sent_evidence:]:
+                    send(t, 'sweep', evidence)
+            sent_evidence = len(manager.evidence)
+        if step % 4 == 0:             # guard at 50 Hz
+            speed = 0.79 * guard.tick(t)
+        if guard.state in ('STOPPED', 'FAULT') and t > 2.0:
+            break
+    assert guard.state == 'STOPPED', (guard.state, guard.reason, seed)
+    expected = 0.4 - guard.stop_extension_m
+    assert expected - 0.02 <= travelled <= 0.4, travelled
+
+
 def test_forced_translation_without_a_safe_forward_accepts_without_moving(translated):
     manager = translated
     # A wall 0.3 m ahead of the winner (1.0, 2.0) facing 0.5 rad.
