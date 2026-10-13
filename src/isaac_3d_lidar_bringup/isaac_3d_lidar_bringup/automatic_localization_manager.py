@@ -639,6 +639,9 @@ class AutomaticLocalizationManager(Node):
             # 2026-10-13 forward runs turned 2.1-2.5 deg right per 0.4 m
             # (about 6 deg/m), so 0.6 m needs about 3.5 deg.
             'route_forward_heading_error_rad': math.radians(4.0),
+            # Longest forward distance driven in the linear profile's runs
+            # (0.41 m on 2026-10-13, less a margin); see _forward_options.
+            'route_max_driven_m': 0.40,
             # Extra forward path the route evidence covers beyond the remainder.
             'route_evidence_margin_m': 0.02,
             'route_plan_timeout_sec': 60.0,
@@ -2966,7 +2969,7 @@ class AutomaticLocalizationManager(Node):
             static_map = static_map_from_grid(self._latest_grid, self._map_hash)
             config = PlannerConfig(
                 rotations=(math.pi / 4, -math.pi / 4, math.pi / 2, -math.pi / 2),
-                forwards=tuple(d for d in (0.2, 0.4, 0.6) if d > self._linear_stop_extension),
+                forwards=self._forward_options(),
                 max_depth=int(self._parameter('route_max_depth')),
                 min_difference=float(self._parameter('route_min_difference')),
                 time_budget_s=max(1.0, float(self._parameter('route_plan_timeout_sec')) - 5.0))
@@ -3018,6 +3021,22 @@ class AutomaticLocalizationManager(Node):
         self._refresh_probe_lease()
         self._transition(State.EXECUTE_TRANSLATION)
 
+    def _forward_options(self):
+        """
+        Return the forward probe lengths the profile covers.
+
+        A request must exceed the stop extension (the guard refuses a
+        shorter one), and the distance actually driven, about the request
+        minus the stop extension, must stay within the runs the linear
+        profile was measured on (``route_max_driven_m``): beyond them its
+        lateral error is not a bound.  2026-10-13: 0.6 m drove about 0.42 m,
+        past the 0.41 m runs, where the right drift reached the calibrated
+        1.2 cm and the guard would end the probe with PATH_DEVIATION.
+        """
+        extension = self._linear_stop_extension
+        driven = float(self._parameter('route_max_driven_m'))
+        return tuple(d for d in (0.2, 0.4, 0.6) if extension < d <= extension + driven)
+
     def _forced_forward(self):
         """
         Return the longest forward probe safe under every plausible candidate.
@@ -3033,14 +3052,7 @@ class AutomaticLocalizationManager(Node):
             return 0., {'status': status}
         fields, model, bounds = self._route_field_pair(), self._route_model(), PoseBounds()
         unsafe = {}
-        # Not 0.6 m: the guard stops at target - stop extension, so 0.6 m
-        # drives about 0.42 m, where the systematic right drift reaches the
-        # calibrated worst lateral error (1.2 cm over 0.41 m runs,
-        # 2026-10-13) and PATH_DEVIATION would end the test.  0.4 m drives
-        # about 0.22 m.
-        for distance in (0.4, 0.2):
-            if distance <= self._linear_stop_extension:
-                continue
+        for distance in sorted(self._forward_options(), reverse=True):
             checks = [check_route(fields, model, (p.x, p.y, p.yaw), bounds,
                                   ((FORWARD, distance),)) for p in poses]
             if all(c.safe for c in checks):

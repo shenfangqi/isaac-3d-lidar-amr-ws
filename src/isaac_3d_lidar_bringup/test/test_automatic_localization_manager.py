@@ -2489,6 +2489,24 @@ def test_forced_translation_is_a_validation_only_guarded_translation_test(transl
         manager._configure_probe_link()
 
 
+def test_forward_probes_stay_within_the_calibrated_runs(translated):
+    # 2026-10-13: the profile's runs drove 0.41 m; 0.6 m (stop extension
+    # 0.184 m) would drive about 0.42 m, where the right drift reaches the
+    # calibrated lateral error.  The fixture's profile has a 0.16 m extension.
+    manager = translated
+    assert manager._linear_stop_extension == pytest.approx(0.16)
+    assert manager._forward_options() == (0.2, 0.4)
+    manager.params['route_max_driven_m'] = 0.5
+    assert manager._forward_options() == (0.2, 0.4, 0.6)
+    manager._linear_stop_extension = 0.25
+    assert manager._forward_options() == (0.4, 0.6)
+    manager.params['route_max_driven_m'] = 0.40
+    _to_route_planning(manager, _plan('ROUTE_FOUND', (('FORWARD', 0.4),)))
+    config = next(job for job in manager._worker.jobs
+                  if job[0] == 'run_route_plan_job')[1][4]
+    assert config.forwards == (0.4, 0.6)     # 0.6 m drives only 0.35 m here
+
+
 def test_route_sweep_allows_the_measured_forward_heading_drift(translated):
     # 2026-10-13: forward runs turned 2.1-2.5 deg per 0.4 m; the default
     # 1.5 deg of the planner's MotionModel was too small.
