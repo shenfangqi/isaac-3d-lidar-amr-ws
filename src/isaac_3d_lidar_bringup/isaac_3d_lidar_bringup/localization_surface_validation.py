@@ -137,17 +137,24 @@ def see_through_ratio(occupancy, points, origin, pose, config):
     Share of rays crossing mapped structure before their last metres.
 
     ``points`` are in the reference base frame and ``origin`` is the sensor
-    position there; ``pose`` places them in the map.  Returns ``nan`` if no
-    ray has a segment to test.
+    position there: one (3,) position, or one per point (n, 3) for a submap
+    whose stops saw from different places (issue #53).  ``pose`` places
+    them in the map.  Returns ``nan`` if no ray has a segment to test.
     """
     points = np.asarray(points, float).reshape(-1, 3)
-    points = points[(points[:, 2] > config.min_point_z_m)]
-    points = _subsample(points, config.max_points)
+    origin = np.asarray(origin, float)
+    keep = points[:, 2] > config.min_point_z_m
+    points = points[keep]
+    origins = origin[keep] if origin.ndim == 2 else origin.reshape(1, 3)
+    if len(points) > config.max_points:
+        chosen = np.linspace(0, len(points) - 1, config.max_points).astype(int)
+        points = points[chosen]
+        origins = origins[chosen] if len(origins) > 1 else origins
     if not len(points):
         return float('nan')
     matrix = planar(*pose)
     world = (matrix @ np.c_[points, np.ones(len(points))].T).T[:, :3]
-    start = (matrix @ np.r_[np.asarray(origin, float), 1.])[:3]
+    start = (matrix @ np.c_[origins, np.ones(len(origins))].T).T[:, :3]
     delta = world - start
     length = np.linalg.norm(delta, axis=1)
     direction = delta / np.maximum(length, 1e-9)[:, None]
@@ -158,12 +165,26 @@ def see_through_ratio(occupancy, points, origin, pose, config):
         return float('nan')
     if not len(occupancy):
         return 0.            # no mapped structure in the band to cross
-    samples = start + direction[:, None, :] * steps[None, :, None]
+    samples = start[:, None, :] + direction[:, None, :] * steps[None, :, None]
     inside = steps[None, :] < end[:, None]
     keys = _voxel_keys(samples, config.voxel_m)
     slot = np.searchsorted(occupancy, keys)
     hit = (occupancy[np.minimum(slot, len(occupancy) - 1)] == keys) & inside
     return float(hit[tested].any(1).mean())
+
+
+@dataclass(frozen=True)
+class WindowOrigins:
+    """Per-point sensor positions of the TRAIN and HOLDOUT points (a submap)."""
+
+    train: np.ndarray
+    holdout: np.ndarray
+
+
+def _window_origins(sensor_origin):
+    if isinstance(sensor_origin, WindowOrigins):
+        return sensor_origin.train, sensor_origin.holdout
+    return sensor_origin, sensor_origin
 
 
 def _rerank(result, survivors, config):
@@ -378,7 +399,8 @@ def validate_surface_evidence(vertices, train_points, holdout_points, poses, *,
     With ``sensor_origin`` (the sensor position in the reference base
     frame), a candidate whose rays see through mapped structure in either
     window (:class:`SurfaceConflictConfig`) is excluded before ranking; the
-    leader and the gap are then taken among the remaining candidates.
+    leader and the gap are then taken among the remaining candidates.  A
+    submap seen from several stops gives :class:`WindowOrigins` instead.
     """
     if not math.isfinite(deadline):
         raise ContractError('finite validation deadline required')
@@ -437,8 +459,9 @@ def validate_surface_evidence(vertices, train_points, holdout_points, poses, *,
         occupancy = surface_occupancy(solid_points(tree), conflict_config)
         see_through = tuple(
             tuple(_map(lambda pose: round(see_through_ratio(
-                occupancy, part, sensor_origin, pose, conflict_config), 4), poses, workers))
-            for part in (train_points, holdout_points))
+                occupancy, part, origin, pose, conflict_config), 4), poses, workers))
+            for part, origin in zip((train_points, holdout_points),
+                                    _window_origins(sensor_origin)))
         if expired():
             return SurfaceValidation(False, 'DEADLINE', -1, train, held, poses=poses,
                                      origins=origins, see_through=see_through)
@@ -474,8 +497,9 @@ def validate_surface_evidence(vertices, train_points, holdout_points, poses, *,
             occupancy = surface_occupancy(getattr(tree, 'full_solid', full.data),
                                           conflict_config)
             ratios = [_map(lambda pose: see_through_ratio(
-                occupancy, part, sensor_origin, pose, conflict_config), poses, workers)
-                for part in (train_points, holdout_points)]
+                occupancy, part, origin, pose, conflict_config), poses, workers)
+                for part, origin in zip((train_points, holdout_points),
+                                        _window_origins(sensor_origin))]
             survivors = [k for k in range(len(poses))
                          if not any(r[k] > conflict_config.max_ratio for r in ratios)]
             plain = [_rerank(p, survivors, check_config) for p in plain]
@@ -506,13 +530,14 @@ def validate_surface_evidence(vertices, train_points, holdout_points, poses, *,
             return result('DEADLINE')
         occupancy = (surface_occupancy(solid_points(tree), conflict_config)
                      if rivals and sensor_origin is not None else None)
-        for part in (train_points, holdout_points):
+        for part, origin in zip((train_points, holdout_points),
+                                _window_origins(sensor_origin)):
             if not rivals:
                 break
             local = check_surfaces(tree, part, (leader, *rivals), check_config)
             for index, pose in enumerate(rivals, start=1):
                 if (occupancy is not None and see_through_ratio(
-                        occupancy, part, sensor_origin, pose, conflict_config)
+                        occupancy, part, origin, pose, conflict_config)
                         > conflict_config.max_ratio):
                     continue
                 if local.composite[index] > local.composite[0] - check_config.min_composite_gap:
