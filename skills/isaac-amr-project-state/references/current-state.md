@@ -1,5 +1,13 @@
 # Current authoritative project state
 
+## Issues #53/#54 offline submap work, handoff: 2026-10-13
+
+- **Resume from `docs/issue13_handoff_2026-10-13.md`** (Chinese); the 2026-10-12 handoff below still holds for user rules, configuration and procedures.
+- Open stacked PRs, merge in order: #63 (shared local submap) → #64 (#54 automatic map overlay) → #65 (#53 multi-stop submap evidence). All offline; no node, launch or config change; no redeploy needed. The Jetson still runs `8228856`.
+- Offline results: the submap comparison finds the bed, the false surface under the bed rail, closed curtains and closed doors in the 2026-10-12 bags; the overlay replay over 14 labelled sessions accepted no wrong pose and 28 adversarial wrong-pose updates committed nothing; a static decision is unchanged by the per-point see-through origins.
+- Next needs the robot: the linear motion profile and segmented-motion bags that include `/fast_lio/cloud_registered_body` (no moving-cloud bag exists yet), then #54 controlled changes at home.
+- Jetson off for the whole session; workstation powered off at the end.
+
 ## Issue #13 3D localization on the real robot, handoff: 2026-10-12
 
 - **Resume from `docs/issue13_handoff_2026-10-12.md`** (Chinese): user rules, versions, configuration, next tasks, procedures, lessons.
