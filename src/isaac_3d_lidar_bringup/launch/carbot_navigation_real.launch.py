@@ -50,6 +50,7 @@ def generate_launch_description():
     control_chain_hash = LaunchConfiguration('control_chain_hash')
     operator_rotation_clear = LaunchConfiguration('operator_rotation_clear')
     force_probe_once = LaunchConfiguration('force_probe_once')
+    force_translation_once = LaunchConfiguration('force_translation_once')
     robot_not_moved = LaunchConfiguration('robot_not_moved')
     saved_pose_path = LaunchConfiguration('saved_pose_path')
     surface_recheck_policy = LaunchConfiguration('surface_recheck_policy')
@@ -277,6 +278,8 @@ def generate_launch_description():
                 **probe_parameters,
                 'force_probe_once': PythonExpression([
                     "'", force_probe_once, "' == 'true'"]),
+                'force_translation_once': PythonExpression([
+                    "'", force_translation_once, "' == 'true'"]),
                 'robot_not_moved': PythonExpression([
                     "'", robot_not_moved, "' == 'true'"]),
                 'saved_pose_path': saved_pose_path,
@@ -487,6 +490,16 @@ def generate_launch_description():
                 'Real-robot test: probe once even if the stationary result '
                 'passed. Only with segmented_rotation, guarded motion and '
                 'validation-only localization.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'force_translation_once',
+            default_value='false',
+            choices=['true', 'false'],
+            description=(
+                'Real-robot test: drive one commonly safe forward probe even if '
+                'the stationary result passed. Only with guarded translation '
+                'and validation-only localization.'
             ),
         ),
         DeclareLaunchArgument(

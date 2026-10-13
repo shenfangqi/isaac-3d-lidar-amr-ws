@@ -36,11 +36,12 @@ robot_not_moved=false
 surface_recheck=record
 localization_translation=forbid
 linear_profile=""
+force_translation_once=false
 map_argument_seen=false
 
 usage() {
   cat <<EOF
-Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [--complex-route-validation] [--localization-strategy STRATEGY] [--localization-motion forbid|guarded --motion-profile JSON [--operator-rotation-clear] --operator-present] [--robot-not-moved] [--surface-recheck off|record|decide] [--localization-translation forbid|guarded --linear-profile JSON] [MAP_YAML]
+Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [--complex-route-validation] [--localization-strategy STRATEGY] [--localization-motion forbid|guarded --motion-profile JSON [--operator-rotation-clear] --operator-present] [--robot-not-moved] [--surface-recheck off|record|decide] [--localization-translation forbid|guarded --linear-profile JSON [--force-translation-once]] [MAP_YAML]
 
 Start saved-map navigation for the physical Carbot and open RViz.
 
@@ -95,6 +96,11 @@ Options:
   --linear-profile JSON
                   Workstation path of an ACCEPTED linear (translation) profile
                   matching the current geometry, extrinsics and control chain.
+  --force-translation-once
+                  Real-robot test of the translation path: after a passed
+                  stationary result, drive the longest forward probe (0.6, 0.4
+                  or 0.2 m) safe under every plausible candidate, once. Only
+                  with --automatic and --localization-translation guarded.
   -h, --help      Show this help.
 
 Environment overrides:
@@ -152,6 +158,9 @@ while (( $# > 0 )); do
       ;;
     --force-probe-once)
       force_probe_once=true
+      ;;
+    --force-translation-once)
+      force_translation_once=true
       ;;
     --robot-not-moved)
       robot_not_moved=true
@@ -254,6 +263,10 @@ if [[ "${localization_motion}" == "guarded" ]]; then
   motion_hashes_json="$(python3 "${script_dir}/check_motion_profile.py" "${motion_profile}")" || exit 2
 elif [[ -n "${motion_profile}" || "${operator_rotation_clear}" == "true" || "${force_probe_once}" == "true" ]]; then
   echo "--motion-profile, --operator-rotation-clear and --force-probe-once require --localization-motion guarded." >&2
+  exit 2
+fi
+if [[ "${force_translation_once}" == "true" && ( "${localization_translation}" != "guarded" || "${automatic_activation}" == "true" ) ]]; then
+  echo "--force-translation-once is a validation-only test: it needs --localization-translation guarded and --automatic." >&2
   exit 2
 fi
 case "${localization_translation}" in
@@ -733,6 +746,15 @@ run_automatic_localization() {
       echo "translation guarded was requested but the manager reports ${translation}." >&2
       return 1
     fi
+    if [[ "${force_translation_once}" == "true" ]]; then
+      local forced_translation
+      forced_translation="$(remote_param_get /automatic_localization_manager force_translation_once)" || return 1
+      if [[ "${forced_translation}" != *"Boolean value is: True"* ]]; then
+        echo "force_translation_once was requested but the manager does not have it enabled." >&2
+        return 1
+      fi
+      echo "强制平移测试已开启：静止定位通过后仍会安全地前进一小段（只验证，不激活 Nav2）。"
+    fi
   fi
   if [[ "${surface_recheck}" == "decide" ]]; then
     local surface
@@ -947,7 +969,8 @@ remote "${jetson_workspace}/scripts/jetson_nvblox_container.sh" \
   "${extrinsics_hash}" "${control_chain_hash}" "${operator_rotation_clear}" \
   "$([[ "${force_probe_once}" == "true" ]] && echo force-probe-once)" \
   "${robot_not_moved}" "${surface_recheck}" \
-  "${localization_translation}" "${remote_linear_profile}" >/dev/null
+  "${localization_translation}" "${remote_linear_profile}" \
+  "$([[ "${force_translation_once}" == "true" ]] && echo force-translation-once)" >/dev/null
 
 echo "[4/8] Running the non-motion hardware preflight..."
 run_preflight_with_readiness_retry

@@ -11,7 +11,7 @@ time_gate="${workspace}/scripts/wait_for_mapping_time_sync.py"
 
 usage() {
   echo "Usage: $0 {start|recreate|stop|status|logs} [compact|full|mapping]" >&2
-  echo "       $0 {start|recreate} navigation-safe MAP_YAML [manual|auto|auto-activate] [none|complex-route-validation] [legacy_full_rotation|stationary_only|segmented_rotation] [forbid|guarded PROFILE_JSON EXTRINSICS_HASH CONTROL_CHAIN_HASH true|false [force-probe-once]] [ROBOT_NOT_MOVED true|false] [SURFACE_RECHECK off|record|decide] [TRANSLATION forbid|guarded LINEAR_PROFILE_JSON]" >&2
+  echo "       $0 {start|recreate} navigation-safe MAP_YAML [manual|auto|auto-activate] [none|complex-route-validation] [legacy_full_rotation|stationary_only|segmented_rotation] [forbid|guarded PROFILE_JSON EXTRINSICS_HASH CONTROL_CHAIN_HASH true|false [force-probe-once]] [ROBOT_NOT_MOVED true|false] [SURFACE_RECHECK off|record|decide] [TRANSLATION forbid|guarded LINEAR_PROFILE_JSON [force-translation-once]]" >&2
   echo "       $0 {start|recreate} navigation-diagnostic MAP_YAML" >&2
   echo "       Append 'auto' for validation or 'auto-activate' for guarded Nav2 activation." >&2
 }
@@ -128,6 +128,19 @@ case "${mode}" in
       container_linear="/workspaces/isaac_ros-dev${linear_profile#${workspace}}"
       printf -v quoted_container_linear '%q' "${container_linear}"
       translation_launch_argument=" translation_policy:=guarded linear_profile_path:=${quoted_container_linear}"
+      if [[ "${17:-}" == "force-translation-once" ]]; then
+        if [[ "${initialization}" != "auto" ]]; then
+          echo "force-translation-once is a validation-only test; use initialization 'auto'." >&2
+          exit 2
+        fi
+        translation_launch_argument+=" force_translation_once:=true"
+      elif [[ -n "${17:-}" ]]; then
+        echo "The 17th argument must be empty or 'force-translation-once'." >&2
+        exit 2
+      fi
+    elif [[ -n "${17:-}" ]]; then
+      echo "force-translation-once requires translation guarded." >&2
+      exit 2
     elif [[ "${translation}" != "forbid" ]]; then
       echo "translation must be forbid or guarded." >&2
       exit 2
