@@ -98,9 +98,10 @@ Options:
                   matching the current geometry, extrinsics and control chain.
   --force-translation-once
                   Real-robot test of the translation path: after a passed
-                  stationary result, drive the longest forward probe (0.6, 0.4
-                  or 0.2 m) safe under every plausible candidate, once. Only
-                  with --automatic and --localization-translation guarded.
+                  stationary result, request a 0.4 m (else 0.2 m) forward
+                  probe safe under every plausible candidate, once; the guard
+                  stops early by the stop extension. Only with --automatic
+                  and --localization-translation guarded.
   -h, --help      Show this help.
 
 Environment overrides:

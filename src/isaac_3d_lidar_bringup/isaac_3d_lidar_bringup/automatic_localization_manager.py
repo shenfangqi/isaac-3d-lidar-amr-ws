@@ -633,6 +633,8 @@ class AutomaticLocalizationManager(Node):
             # 2026-10-13 forward runs turned 2.1-2.5 deg right per 0.4 m
             # (about 6 deg/m), so 0.6 m needs about 3.5 deg.
             'route_forward_heading_error_rad': math.radians(4.0),
+            # Extra forward path the route evidence covers beyond the remainder.
+            'route_evidence_margin_m': 0.02,
             'route_plan_timeout_sec': 60.0,
             'route_max_depth': 2,
             'route_min_difference': 0.15,
@@ -2932,7 +2934,12 @@ class AutomaticLocalizationManager(Node):
             return 0., {'status': status}
         fields, model, bounds = self._route_field_pair(), self._route_model(), PoseBounds()
         unsafe = {}
-        for distance in (0.6, 0.4, 0.2):
+        # Not 0.6 m: the guard stops at target - stop extension, so 0.6 m
+        # drives about 0.42 m, where the systematic right drift reaches the
+        # calibrated worst lateral error (1.2 cm over 0.41 m runs,
+        # 2026-10-13) and PATH_DEVIATION would end the test.  0.4 m drives
+        # about 0.22 m.
+        for distance in (0.4, 0.2):
             if distance <= self._linear_stop_extension:
                 continue
             checks = [check_route(fields, model, (p.x, p.y, p.yaw), bounds,
@@ -2976,7 +2983,17 @@ class AutomaticLocalizationManager(Node):
             return
         odom = SE2(*self._last_odom_pose)
         delta = self._translation_start.inverse().compose(odom)
-        remaining = max(0.0, self._translation_target - delta.x)
+        # The guard needs evidence covering ITS remaining distance, measured
+        # from its own start pose.  At rest the two progress estimates differ
+        # by odometry jitter (2026-10-13: 0.599 m of evidence for 0.6 m was
+        # refused as SWEEP_TOO_SHORT before the robot moved), so cover the
+        # larger remainder plus a margin: a longer checked path only adds
+        # safety.
+        status = self._fresh_translation_status(time.monotonic())
+        guard_progress = status.progress_m if status is not None else 0.0
+        remaining = max(0.0, self._translation_target - min(delta.x, guard_progress))
+        if remaining > 0.0:
+            remaining += float(self._parameter('route_evidence_margin_m'))
         clear, reason = True, ''
         if remaining > 1e-3:
             fields, model = self._route_field_pair(), self._route_model()

@@ -77,13 +77,18 @@ class LinearGuardConfig:
     max_odom_step_m: float = .20
     stop_margin_m: float = .02
     max_segments: int = 3
+    # A sweep is checked against the odometry sample it was computed at, at
+    # most this much older than the newest sample (2026-10-13: one 10 Hz
+    # odometry step at 0.06 m/s already exceeds the 5 mm pose tolerance).
+    max_preview_lag_s: float = .3
 
     def __post_init__(self):
         if any(isinstance(getattr(self, name), bool)
                or not math.isfinite(getattr(self, name)) or getattr(self, name) <= 0
                for name in self.__dataclass_fields__):
             raise ContractError('linear guard limits must be positive')
-        if self.freshness_s > .5 or type(self.max_segments) is not int:
+        if (self.freshness_s > .5 or type(self.max_segments) is not int
+                or self.max_preview_lag_s > self.freshness_s):
             raise ContractError('invalid freshness or segment count')
 
 
@@ -108,6 +113,7 @@ class LinearProbeGuard:
         self._intent = None
         self._lease = self._session_start = self._last_tick = None
         self._odom = self._still_since = self._preview = None
+        self._odom_history = []           # (stamp_ns, x, y, yaw), last second
         self._measured_speed = None
         self._emergency = self._chassis = None
         self._speed = PoseSpeed(config.speed_window_s)
@@ -207,6 +213,9 @@ class LinearProbeGuard:
             if self.state in ('MOVING', 'STOPPING') and self._start is not None:
                 self.total_travel_m += step
         self._odom = sample
+        self._odom_history = [h for h in self._odom_history
+                              if sample.stamp_ns - h[0] <= 1_000_000_000]
+        self._odom_history.append((sample.stamp_ns, sample.x, sample.y, sample.yaw))
         speed = self._speed.update(sample.stamp_ns / 1e9, sample.x, sample.y)
         self._measured_speed = speed
         if (self.state == 'MOVING' and speed is not None
@@ -304,11 +313,21 @@ class LinearProbeGuard:
         if (not self._fresh(receipt, now, c.freshness_s)
                 or abs(self._odom.stamp_ns - preview.snapshot_stamp_ns) / 1e9 > c.freshness_s):
             return 'SWEEP_STALE'
-        pose = SE2(self._odom.x, self._odom.y, self._odom.yaw)
-        # The adapter must resweep at the current pose; stale geometry cannot
-        # follow a moving robot merely by refreshing the message receipt.
-        if (math.hypot(preview.start.x - pose.x, preview.start.y - pose.y) > .005
-                or abs(normalize_angle(preview.start.yaw - pose.yaw)) > .01):
+        # The sweep must start exactly at the odometry sample it names, and
+        # be at most max_preview_lag_s behind the newest one: stale geometry
+        # cannot follow a moving robot merely by refreshing the message
+        # receipt.  A recent sweep from a pose the robot has since driven
+        # past still covers the rest of the path, since the remaining-
+        # distance check below uses the current progress and the path
+        # deviation check bounds the drift from the straight line.
+        lag = (self._odom.stamp_ns - preview.snapshot_stamp_ns) / 1e9
+        if not 0 <= lag <= c.max_preview_lag_s:
+            return 'SWEEP_STALE'
+        named = next((h for h in reversed(self._odom_history)
+                      if h[0] == preview.snapshot_stamp_ns), None)
+        if (named is None
+                or math.hypot(preview.start.x - named[1], preview.start.y - named[2]) > .005
+                or abs(normalize_angle(preview.start.yaw - named[3])) > .01):
             return 'SWEEP_POSE_MISMATCH'
         if not preview.geometry_clear:
             return preview.reason or 'UNKNOWN_SWEEP'
