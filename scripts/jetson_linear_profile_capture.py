@@ -19,14 +19,18 @@ Modes:
             trial is reported as FAIL.
 
 Every 50 ms the script aborts (3 s of zero commands, nonzero exit) on a
-localization emergency, a blocked/disconnected/stale chassis, stale
-odometry, a lateral offset beyond --max-lateral, a heading change beyond
---max-yaw-deg, an overrun 0.20 m past the target, a position more than
---max-excursion from where the script started, or more than --max-path of
-total travel.  It sees no obstacles: keep the straight line clear.
-Record /cmd_vel_command and /odom (and /fast_lio/cloud_registered_body for
-the submap work) with ``ros2 bag record`` while it runs, then analyse with
-scripts/analyze_linear_profile.py.
+localization emergency, a blocked/disconnected/stale chassis, odometry
+older than --odom-timeout (the guard's 0.5 s), a lateral offset beyond
+--max-lateral, a heading change beyond --max-yaw-deg, an overrun 0.20 m
+past the target, a position more than --max-excursion from where the
+script started, or more than --max-path of total travel.  It sees no
+obstacles: keep the straight line clear.
+
+Record /cmd_vel_command, /odom, /wheel_ticks and /carbot/status with
+``ros2 bag record`` while it runs, then analyse with
+scripts/analyze_linear_profile.py.  Do not record point clouds on the
+Jetson: on 2026-10-13 that stalled FAST-LIO (odometry silent > 2 s, fault
+latched until restart).
 """
 
 import argparse
@@ -66,7 +70,7 @@ def check_envelope(args):
             and 0.5 <= args.safety_net <= 2.0
             and 0.0 < args.max_lateral <= 0.15 and 0.0 < args.max_yaw_deg <= 15.0
             and args.distance + OVERRUN_M <= args.max_excursion <= 1.0
-            and 0.0 < args.max_path <= 6.0):
+            and 0.0 < args.max_path <= 6.0 and 0.1 <= args.odom_timeout <= 0.5):
         raise SystemExit('argument outside the supervised envelope')
 
 
@@ -171,7 +175,7 @@ class Capture:
             raise Abort('chassis status missing or stale')
         if not chassis[1] or chassis[2]:
             raise Abort('chassis disconnected or motion blocked')
-        if odom is None or now - odom[0] > 0.3:
+        if odom is None or now - odom[0] > self.args.odom_timeout:
             raise Abort('odometry stale')
         if path > self.args.max_path:
             raise Abort(f'travel budget exceeded ({path:.2f} m)')
@@ -307,6 +311,8 @@ def parse(argv=None):
     parser.add_argument('--max-yaw-deg', type=float, default=10.0)
     parser.add_argument('--max-excursion', type=float, default=0.80)
     parser.add_argument('--max-path', type=float, default=5.0)
+    parser.add_argument('--odom-timeout', type=float, default=0.5,
+                        help='s; the translation guard freshness limit (0.5 s)')
     args = parser.parse_args(argv)
     check_envelope(args)
     return args

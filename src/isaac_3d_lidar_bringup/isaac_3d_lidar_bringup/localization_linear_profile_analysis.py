@@ -106,9 +106,16 @@ def _speeds(window, span_s):
     return speeds
 
 
-def analyze_linear(segment, odometry, *, stop_linear=.01, settle_s=.5, max_gap_s=.2,
+def analyze_linear(segment, odometry, *, stop_linear=.02, settle_s=.5, max_gap_s=.2,
                    tail_window_s=3., motion_m=.01, span_s=.2, max_overspeed=1.1):
-    """Analyse one :class:`Segment` against time-sorted :class:`Pose` odometry."""
+    """
+    Analyse one :class:`Segment` against time-sorted :class:`Pose` odometry.
+
+    Settled means below ``stop_linear`` for ``settle_s``: 0.02 m/s, the
+    project's stationarity limit, since FAST-LIO odometry at rest shows
+    0.007-0.013 m/s of position noise (2026-10-06); with 0.01 m/s one of the
+    four 2026-10-13 watchdog trials never settled.
+    """
     direction = 1 if segment.speed > 0 else -1
     commanded = abs(segment.speed)
 

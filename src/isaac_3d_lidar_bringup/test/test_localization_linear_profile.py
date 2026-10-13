@@ -133,7 +133,8 @@ def test_the_capture_refuses_outside_the_supervised_envelope():
     args = capture.parse(['--mode', 'stops', '--operator-present'])
     assert args.speed == .08 and args.distance == .4
     for extra in ([], ['--speed', '0.12'], ['--distance', '0.7'], ['--hold', '3', '--speed',
-                  '0.1'], ['--max-excursion', '0.5'], ['--max-lateral', '0.3']):
+                  '0.1'], ['--max-excursion', '0.5'], ['--max-lateral', '0.3'],
+                  ['--odom-timeout', '1.0']):
         argv = ['--mode', 'watchdog'] + extra
         if extra:
             argv.append('--operator-present')
@@ -145,4 +146,4 @@ def test_the_capture_refuses_outside_the_supervised_envelope():
     assert capture.check_envelope(SimpleNamespace(
         operator_present=True, speed=.08, distance=.4, pairs=4, trials=4, hold=2.,
         safety_net=1.5, max_lateral=.1, max_yaw_deg=10., max_excursion=.8,
-        max_path=5.)) is None
+        max_path=5., odom_timeout=.5)) is None

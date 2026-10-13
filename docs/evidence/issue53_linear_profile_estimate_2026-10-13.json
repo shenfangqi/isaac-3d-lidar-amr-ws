@@ -1,0 +1,17 @@
+{
+  "control_chain_hash": "f7942d7c4e72fe5946076e2f2123e316ca60d30f7e3139e4922596d3fc413284",
+  "evidence_ids": [
+    "2026-10-13_issue53_linear_stops_02",
+    "2026-10-13_issue53_linear_watchdog_01"
+  ],
+  "extrinsics_hash": "7691c3c24bd782869c291d7121f4679fb5da1e453340635343061c98580b4bf3",
+  "geometry_hash": "c92b05c46bf28ccb46de7269aa753f2c56d8577709017bc6c60a4f3f0584b9fe",
+  "kind": "LINEAR_PROFILE",
+  "lateral_error_m": 0.011552774324698575,
+  "max_speed_mps": 0.08,
+  "reaction_s": 0.15844178199768066,
+  "schema_version": 1,
+  "status": "ESTIMATED",
+  "stop_tail_m": 0.022684904873952645,
+  "watchdog_s": 0.8129758834838867
+}
