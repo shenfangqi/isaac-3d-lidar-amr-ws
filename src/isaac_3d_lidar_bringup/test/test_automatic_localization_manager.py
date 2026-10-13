@@ -1835,6 +1835,78 @@ def test_surface_point_sets_split_clouds_by_source_time(segmented):
     assert set(first[:, 0]) == {1.0, 2.0} and set(second[:, 0]) == {3.0, 4.0}
 
 
+def _window(value, count, origin):
+    return np.full((count, 3), float(value)), np.tile(np.asarray(origin, float), (count, 1))
+
+
+def test_submap_windows_join_earlier_stops_in_the_reference_frame(segmented):
+    # Issue #53: the stops kept before each translation join this view, all
+    # in this view's base frame, every point with its own sensor position.
+    manager = segmented
+    manager._last_odom_pose = (1.0, 0.0, 0.0)
+    manager._submap_stops = [{'windows': (_window(2.0, 3, (0.0, 0.0, 0.3)),
+                                          _window(5.0, 4, (0.0, 0.0, 0.3))),
+                              'xy': (0.0, 0.0)}]
+    manager._surface_window_parts = lambda train, now, odom_frame=False: (
+        _window(7.0, 5, (0.0, 0.0, 0.3)), _window(8.0, 6, (0.0, 0.0, 0.3)))
+    train = (NS(T_odom_base=localization_contracts.SE2(1.0, 0.0, math.pi / 2)),)
+    (first, second, origins), status = manager._submap_windows(train, 0.0)
+    assert status == {'used': True, 'stops': 2, 'path_m': 1.0}
+    assert len(first) == 8 and len(second) == 10
+    # Odom (2, 2, 2) seen from the reference at odom (1, 0) facing +y.
+    assert first[-1] == pytest.approx((2.0, -1.0, 2.0))
+    # The earlier stop's sensor (odom (0, 0)) is 1 m behind and to the side.
+    assert origins.train[-1] == pytest.approx((0.0, 1.0, 0.3))
+    assert origins.holdout[0] == pytest.approx((0.0, 0.0, 0.3))
+    assert len(origins.train) == 8 and len(origins.holdout) == 10
+
+
+@pytest.mark.parametrize('stops, far', [(4, False), (1, True)])
+def test_submap_windows_beyond_the_limits_use_this_view_only(segmented, stops, far):
+    manager = segmented
+    manager._last_odom_pose = (3.5 if far else 0.1, 0.0, 0.0)
+    manager._submap_stops = [{'windows': (_window(1.0, 2, (0, 0, .3)),) * 2,
+                              'xy': (0.0, 0.0)}] * stops
+    windows, status = manager._submap_windows((NS(T_odom_base=None),), 0.0)
+    assert windows is None and status['reason'] == 'SUBMAP_LIMITS'
+    assert status['stops'] == stops + 1
+
+
+def test_a_stop_is_kept_capped_before_the_robot_moves(segmented):
+    manager = segmented
+    manager._surface_vertices = np.zeros((10, 3))
+    manager._last_odom_pose = (0.5, 0.25, 0.0)
+    manager._submap_stops = []
+    manager.params['surface_submap_points_per_window'] = 4
+    manager._surface_window_parts = lambda train, now, odom_frame=False: (
+        _window(1.0, 10, (0, 0, .3)), _window(2.0, 3, (0, 0, .3)))
+    manager._archive_submap_stop(0.0)
+    (first, first_origins), (second, _) = manager._submap_stops[0]['windows']
+    assert len(first) == len(first_origins) == 4 and len(second) == 3
+    assert manager._submap_stops[0]['xy'] == (0.5, 0.25)
+    manager._surface_window_parts = lambda train, now, odom_frame=False: (
+        _window(1.0, 0, (0, 0, .3)), _window(2.0, 3, (0, 0, .3)))
+    manager._archive_submap_stop(0.0)            # an empty window: not kept
+    assert len(manager._submap_stops) == 1
+
+
+@pytest.mark.parametrize('submap, used', [({'used': True, 'stops': 2}, True),
+                                          (None, False),
+                                          ({'used': False, 'reason': 'SUBMAP_LIMITS'}, False)])
+def test_after_a_translation_only_a_multi_stop_3d_decision_may_decide(
+        segmented, tmp_path, submap, used):
+    manager = segmented
+    _surface_session(manager, tmp_path, 'decide', [_decision(True)])
+    train, holdout, _gates = manager._surface_inputs
+    manager._surface_inputs = (train, holdout, ('earlier view',))
+    manager._surface_submap = submap
+    _guard(manager, 'STOPPED')
+    manager._tick()
+    status = manager._confined_status()['surface_recheck']
+    assert status['used'] is used and status['submap'] == submap
+    assert (manager._state == manager.State.STOP_AND_VERIFY) is used
+
+
 def _incomplete_candidates(unrefined=((0.5, 0.2, 1.0),)):
     complete = _two_candidates()
     return localization_contracts.SearchResult(
