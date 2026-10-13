@@ -152,7 +152,9 @@ def test_samples_localize_without_a_bag_then_record_the_still_scene():
     start = source.index('start_real_robot_navigation_rviz.sh" --automatic')
     record = source.index('ros2 bag record')
     assert start < record
-    assert '--surface-recheck record' in source
+    # Record mode by default; SURFACE_RECHECK=decide is opt-in (2026-10-12).
+    assert 'RECHECK=${SURFACE_RECHECK:-record}' in source
+    assert '--surface-recheck "${RECHECK}"' in source
     assert 'publish_pose_markers.py' in source
     markers = (SCRIPTS / 'publish_pose_markers.py').read_text()
     assert 'TRANSIENT_LOCAL' in markers and 'cmd_vel' not in markers
