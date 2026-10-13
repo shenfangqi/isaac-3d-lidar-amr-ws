@@ -2174,7 +2174,8 @@ def test_forward_route_runs_under_map_evidence_and_starts_a_new_view(translated)
     _linear(manager, 'MOVING')
     manager._tick()
     evidence = manager.evidence[-1]
-    assert evidence.clear and evidence.remaining_m == pytest.approx(0.4)
+    assert evidence.clear and evidence.remaining_m == pytest.approx(
+        0.4 + manager.params['route_evidence_margin_m'])
     assert evidence.stop_extension_m == pytest.approx(manager._linear_stop_extension)
     assert evidence.map_hash == manager._map_hash
     _linear(manager, 'STOPPING')
@@ -2267,7 +2268,7 @@ def test_forced_translation_drives_once_then_accepts_the_next_result(translated)
     status = manager._confined_status()['translation']
     assert status['forced_test'] and status['plan']['status'] == 'FORCED_FORWARD'
     move = manager.translation_requests[-1]
-    assert move.operation == 'MOVE' and move.distance_m == pytest.approx(0.6)
+    assert move.operation == 'MOVE' and move.distance_m == pytest.approx(0.4)
     assert move.speed_mps == pytest.approx(0.08)
     assert manager.seeds == []
     _linear(manager, 'MOVING')
@@ -2291,6 +2292,26 @@ def test_forced_translation_drives_once_then_accepts_the_next_result(translated)
     # One MOVE request (renewed under the same sequence while it runs).
     assert len({r.sequence for r in manager.translation_requests
                 if r.operation == 'MOVE'}) == 1
+
+
+@pytest.mark.parametrize('jitter_m', [0.001, -0.001, 0.003])
+def test_route_evidence_covers_the_guards_remaining_distance_despite_jitter(
+        translated, jitter_m):
+    # 2026-10-13 on the robot: the manager's odometry had crept 1 mm ahead
+    # of the guard's start, so 0.599 m of evidence for a 0.6 m request was
+    # refused (SWEEP_TOO_SHORT) before the robot moved.
+    manager = translated
+    _forced_translation_session(manager)
+    x, y, yaw = manager._last_odom_pose
+    manager._last_odom_pose = (x + jitter_m * math.cos(yaw), y + jitter_m * math.sin(yaw),
+                               yaw)
+    _linear(manager, 'MOVING')                        # guard progress 0.0
+    manager._tick()
+    guard = localization_translation_guard.LinearProbeGuard(
+        manager._linear_profile, expected_hashes=manager._probe_hashes)
+    evidence = manager.evidence[-1]
+    assert evidence.remaining_m >= 0.4
+    assert evidence.stop_extension_m == pytest.approx(guard.stop_extension_m)
 
 
 def test_forced_translation_without_a_safe_forward_accepts_without_moving(translated):

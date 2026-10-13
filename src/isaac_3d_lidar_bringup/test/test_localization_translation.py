@@ -186,11 +186,27 @@ def test_stationary_stall_and_current_pose_resweep_required():
         move(g, t)
         g.tick(t)
     assert g.reason == 'NO_PROGRESS'
+    # A sweep one odometry step old still covers the path ahead (2026-10-13:
+    # at 0.06 m/s one 10 Hz step is 6 mm, beyond the 5 mm pose tolerance).
     g = ready()
     move(g)
     observation(g, 1.3)
     g.on_odom(odom(1.4, x=.01))
-    assert g.tick(1.4) == 0 and g.reason == 'SWEEP_POSE_MISMATCH'
+    g.on_chassis(True, False, 1.4)
+    assert g.tick(1.4) > 0 and g.state == 'MOVING'
+    # ... but not one older than max_preview_lag_s,
+    g.on_odom(odom(1.5, x=.015))
+    g.on_odom(odom(1.6, x=.02))
+    g.on_odom(odom(1.7, x=.025))
+    g.on_chassis(True, False, 1.7)
+    g._lease = 1.7
+    assert g.tick(1.7) == 0 and g.reason == 'SWEEP_STALE'
+    # ... and the sweep must start at the odometry sample it names.
+    g = ready()
+    move(g)
+    observation(g, 1.3)
+    g.on_preview(replace(g._preview[0], start=SE2(.01, 0., 0.)), 1.3)
+    assert g.tick(1.3) == 0 and g.reason == 'SWEEP_POSE_MISMATCH'
 
 
 @pytest.mark.parametrize('fault', ['odom', 'preview', 'short', 'identity', 'speed', 'tiny'])
