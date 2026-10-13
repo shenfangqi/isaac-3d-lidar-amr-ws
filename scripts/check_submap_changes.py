@@ -142,9 +142,10 @@ def main():
     parser.add_argument('--refine', action='store_true',
                         help='refine the pose on the 3D fit before comparing')
     parser.add_argument('--every', type=int, default=1, help='use every n-th cloud')
-    parser.add_argument('--reference', choices=('middle', 'last'), default='middle',
+    parser.add_argument('--reference', choices=('first', 'middle', 'last'), default='middle',
                         help='the cloud whose robot pose the pose describes')
     parser.add_argument('--seconds', type=float, help='only the last N s of clouds')
+    parser.add_argument('--first-seconds', type=float, help='only the first N s of clouds')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     if (args.pose is None) == (args.truth is None):
@@ -171,7 +172,10 @@ def main():
     if args.seconds:
         end_ns = frames[-1].stamp_ns
         frames = [f for f in frames if f.stamp_ns >= end_ns - args.seconds * 1e9]
-    reference = frames[-1 if args.reference == 'last' else len(frames) // 2]
+    if args.first_seconds:
+        start_ns = frames[0].stamp_ns
+        frames = [f for f in frames if f.stamp_ns <= start_ns + args.first_seconds * 1e9]
+    reference = frames[{'first': 0, 'last': -1}.get(args.reference, len(frames) // 2)]
     read_s = time.monotonic() - started
     submap = build_submap(frames, reference.odom_T_base, SubmapConfig())
     build_s = time.monotonic() - started - read_s
