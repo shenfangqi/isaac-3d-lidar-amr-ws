@@ -137,6 +137,7 @@ from isaac_3d_lidar_bringup.localization_surface_search import (
 from isaac_3d_lidar_bringup.localization_surface_validation import (
     run_surface_decision_job,
     SurfaceConflictConfig,
+    WindowOrigins,
 )
 from isaac_3d_lidar_bringup.localization_translation_contracts import (
     decode_linear_profile,
@@ -607,6 +608,11 @@ class AutomaticLocalizationManager(Node):
             'localization_scan_min_height': 0.22,
             'localization_scan_max_height': 0.35,
             'surface_max_points_per_cloud': 6000,
+            # Multi-stop 3D submap after translations (issue #53): stops
+            # kept per window and limits (localization_submap_decision).
+            'surface_submap_points_per_window': 40000,
+            'surface_submap_max_stops': 4,
+            'surface_submap_max_path_m': 3.0,
             'surface_min_composite_gap': 0.15,
             'surface_min_leader_composite': 0.70,
             # Gap of refined candidates at this inlier tolerance; the leader's
@@ -936,15 +942,38 @@ class AutomaticLocalizationManager(Node):
                 for chunk in (parts[:half], parts[half:])]
         return tuple(np.vstack(chunk) if chunk else np.zeros((0, 3)) for chunk in sets)
 
-    def _surface_cloud_parts(self, train, now):
+    def _surface_window_parts(self, train, now, odom_frame=False):
+        """
+        Return the earlier and later halves of this view's stationary clouds.
+
+        Each half is ``(points, origins)``: the points and, per point, the
+        sensor position it was seen from (reference base frame, or the odom
+        frame with ``odom_frame``).
+        """
+        parts = sorted(self._surface_cloud_parts(train, now, odom_frame),
+                       key=lambda item: item[0])
+        half = len(parts) // 2
+        windows = []
+        for chunk in (parts[:half], parts[half:]):
+            if not chunk:
+                windows.append((np.zeros((0, 3)), np.zeros((0, 3))))
+                continue
+            windows.append((np.vstack([part[1] for part in chunk]),
+                            np.vstack([np.broadcast_to(part[2], (len(part[1]), 3))
+                                       for part in chunk])))
+        return tuple(windows)
+
+    def _surface_cloud_parts(self, train, now, odom_frame=False):
         """
         ``[(stamp_ns, points, sensor_origin)]`` of stationary clouds.
 
-        Points and origin are in the reference base frame.  Each cloud uses
-        the full 3D base<-sensor transform and the planar odometry at its own
-        source stamp; clouds without both are skipped.
+        Points and origin are in the reference base frame (the odom frame
+        with ``odom_frame``).  Each cloud uses the full 3D base<-sensor
+        transform and the planar odometry at its own source stamp; clouds
+        without both are skipped.
         """
-        reference = train[0].T_odom_base.inverse()
+        reference = (SE2(0.0, 0.0, 0.0) if odom_frame
+                     else train[0].T_odom_base.inverse())
         window = float(self._parameter('surface_cloud_window_sec'))
         parts = []
         for stamp_ns, frame, xyz, received in self._surface_clouds:
@@ -964,6 +993,64 @@ class AutomaticLocalizationManager(Node):
             homogeneous = np.c_[xyz, np.ones(len(xyz))]
             parts.append((stamp_ns, (matrix @ homogeneous.T).T[:, :3], matrix[:3, 3]))
         return parts
+
+    def _archive_submap_stop(self, now):
+        """
+        Keep this stop's clouds, in the odom frame, before the robot moves.
+
+        Their source-stamp transforms are still in the TF buffer now; after a
+        translation they may not be.  Each window is subsampled to
+        ``surface_submap_points_per_window`` to bound the decision's cost.
+        """
+        if self._surface_vertices is None or self._last_odom_pose is None:
+            return
+        cap = int(self._parameter('surface_submap_points_per_window'))
+        windows = []
+        for points, origins in self._surface_window_parts((), now, odom_frame=True):
+            if len(points) > cap:
+                keep = np.linspace(0, len(points) - 1, cap).astype(int)
+                points, origins = points[keep], origins[keep]
+            windows.append((points, origins))
+        if min(len(points) for points, _ in windows) == 0:
+            return
+        self._submap_stops.append({'windows': tuple(windows),
+                                   'xy': tuple(self._last_odom_pose[:2])})
+
+    def _submap_windows(self, train, now):
+        """
+        Return the multi-stop TRAIN and HOLDOUT sets, or None with a reason.
+
+        The stops kept before each translation join this view's clouds, all
+        in this view's reference base frame; every point keeps the sensor
+        position it was seen from (issue #53, localization_submap_decision).
+        The path through the stops and their number are bounded; beyond
+        them only this view is used.
+        """
+        stops = getattr(self, '_submap_stops', [])
+        if not stops:
+            return None, None
+        here = tuple(self._last_odom_pose[:2])
+        positions = [stop['xy'] for stop in stops] + [here]
+        path = sum(math.hypot(b[0] - a[0], b[1] - a[1])
+                   for a, b in zip(positions, positions[1:]))
+        count = len(stops) + 1
+        if (count > int(self._parameter('surface_submap_max_stops'))
+                or path > float(self._parameter('surface_submap_max_path_m'))):
+            return None, {'used': False, 'reason': 'SUBMAP_LIMITS', 'stops': count,
+                          'path_m': round(path, 3)}
+        reference = train[0].T_odom_base.inverse()
+        matrix = planar(reference.x, reference.y, reference.yaw)
+        sets = [[part] for part in self._surface_window_parts(train, now)]
+        for stop in stops:
+            for index, (points, origins) in enumerate(stop['windows']):
+                sets[index].append(tuple(
+                    (matrix @ np.c_[block, np.ones(len(block))].T).T[:, :3]
+                    for block in (points, origins)))
+        (first, first_origins), (second, second_origins) = (
+            (np.vstack([p for p, _ in chunk]), np.vstack([o for _, o in chunk]))
+            for chunk in sets)
+        return ((first, second, WindowOrigins(first_origins, second_origins)),
+                {'used': True, 'stops': count, 'path_m': round(path, 3)})
 
     def _surface_sensor_origin(self, train, now):
         """Median sensor position of the stationary clouds, or None."""
@@ -1007,7 +1094,12 @@ class AutomaticLocalizationManager(Node):
                 'ranked_count': len(ranked),
                 'search_complete': result.complete}
             return False
-        first, second = self._surface_point_sets(train, now)
+        submap, self._surface_submap = self._submap_windows(train, now)
+        if submap is not None:
+            first, second, origin = submap
+        else:
+            first, second = self._surface_point_sets(train, now)
+            origin = self._surface_sensor_origin(train, now)
         minimum = self._surface_config.min_points
         if len(ranked) < 2 or min(len(first), len(second)) < minimum:
             self._surface_status = {
@@ -1030,7 +1122,7 @@ class AutomaticLocalizationManager(Node):
             float(self._parameter('surface_max_2d_conflict')),
             self._surface_rank_config, self._surface_config,
             float(self._parameter('surface_decision_timeout_sec')), tuple(seeds),
-            self._surface_sensor_origin(train, now), SurfaceConflictConfig(),
+            origin, SurfaceConflictConfig(),
             None if self._surface_search_field is None else (
                 self._surface_search_field,
                 free_positions(self._latest_grid, self._surface_search_config),
@@ -1050,9 +1142,12 @@ class AutomaticLocalizationManager(Node):
                 for part in ((validation.train, validation.holdout)
                              if validation is not None else (None, None))]
         _train, _holdout, gates = self._surface_inputs
-        # Earlier views (a translation in this session) are not part of the
-        # 3D decision; it is evidence only then.
-        use = self._surface_policy == 'decide' and result.accepted and not gates
+        # After a translation the 3D decision may decide only if it covered
+        # every stop (the multi-stop submap); with this view alone it is
+        # evidence only.
+        submap = getattr(self, '_surface_submap', None)
+        covered = not gates or bool(submap and submap.get('used'))
+        use = self._surface_policy == 'decide' and result.accepted and covered
         self._surface_status = {
             'policy': self._surface_policy, 'resolved': result.accepted,
             'reason': result.reason,
@@ -1079,6 +1174,7 @@ class AutomaticLocalizationManager(Node):
             'candidate_count': len(self._surface_poses),
             'clouds': dict(self._surface_cloud_counts),
             'search_complete': self._search_result.complete,
+            'submap': submap,
             'used': use}
         self.get_logger().info(
             f'3D decision ({self._surface_policy}): accepted={result.accepted} '
@@ -1263,6 +1359,8 @@ class AutomaticLocalizationManager(Node):
                                  if self._translation_enabled else None)
             self._translation_status = None
             self._translated = False
+            self._submap_stops = []
+            self._surface_submap = None
             self._route_rotation = None
             self._route_status = None
             self._guard_release_confirmed = False
@@ -2911,6 +3009,7 @@ class AutomaticLocalizationManager(Node):
 
     def _start_translation(self, distance):
         """Request one guarded forward probe of ``distance`` metres."""
+        self._archive_submap_stop(time.monotonic())
         self._translation_start = SE2(*self._last_odom_pose)
         self._translation_target = distance
         self._translation_moved = False
