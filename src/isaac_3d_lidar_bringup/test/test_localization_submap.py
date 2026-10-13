@@ -38,12 +38,17 @@ def _box(centre, size, step=.03):
     return grid[on_face]
 
 
-def _visible(scene, origin, voxel=.05):
-    """Scene points the sensor at ``origin`` sees first along its rays (coarse z-buffer)."""
+def _visible(scene, origin, bin_rad=.01):
+    """
+    Scene points the sensor at ``origin`` sees first along its rays (coarse z-buffer).
+
+    ``bin_rad`` must exceed the angular spacing of the nearest surface's
+    points, or points behind it leak through the gaps.
+    """
     delta = scene - origin
     distance = np.linalg.norm(delta, axis=1)
-    azimuth = np.round(np.arctan2(delta[:, 1], delta[:, 0]) / .01).astype(int)
-    elevation = np.round(np.arcsin(delta[:, 2] / distance) / .01).astype(int)
+    azimuth = np.round(np.arctan2(delta[:, 1], delta[:, 0]) / bin_rad).astype(int)
+    elevation = np.round(np.arcsin(delta[:, 2] / distance) / bin_rad).astype(int)
     order = np.lexsort((distance, elevation, azimuth))
     key = np.c_[azimuth, elevation][order]
     first = np.r_[True, (np.diff(key, axis=0) != 0).any(1)]
