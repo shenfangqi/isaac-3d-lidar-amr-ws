@@ -215,9 +215,11 @@ def observe(state, submap, pose, surface, regions=None, config=OverlayConfig(),
 
 def _recent(state, config):
     """
-    Per tracked cell, over the newest run of one kind within the window:
-    occupied and free session counts and the spread of the occupied
-    viewpoints (largest distance between their robot positions).
+    Count the recent evidence of every tracked cell.
+
+    Over the newest run of one kind within the window: occupied and free
+    session counts and the spread of the occupied viewpoints (largest
+    distance between their robot positions).
     """
     occupied = np.zeros(len(state.keys), int)
     free = np.zeros(len(state.keys), int)
