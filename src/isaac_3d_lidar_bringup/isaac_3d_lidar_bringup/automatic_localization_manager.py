@@ -535,6 +535,11 @@ class AutomaticLocalizationManager(Node):
             # stationary result already passed.  Validation-only, guarded
             # segmented_rotation only.
             'force_probe_once': False,
+            # Real-robot test of the translation path: after a passed
+            # stationary result, drive the longest forward probe that is
+            # safe under every plausible candidate, once.  Validation-only,
+            # guarded translation only.
+            'force_translation_once': False,
             'train_frames_per_view': 3,
             'holdout_frames_per_view': 3,
             'max_views': 8,
@@ -621,7 +626,13 @@ class AutomaticLocalizationManager(Node):
             'route_evidence_topic': '/automatic_localization/route_evidence',
             'translation_status_topic':
                 '/automatic_localization/translation_status',
-            'translation_speed_mps': 0.05,
+            # The accepted 2026-10-13 linear profile was measured at 0.08 m/s;
+            # forward motion is not sustained below about 0.05 m/s.
+            'translation_speed_mps': 0.08,
+            # Heading change the route sweep allows per forward primitive:
+            # 2026-10-13 forward runs turned 2.1-2.5 deg right per 0.4 m
+            # (about 6 deg/m), so 0.6 m needs about 3.5 deg.
+            'route_forward_heading_error_rad': math.radians(4.0),
             'route_plan_timeout_sec': 60.0,
             'route_max_depth': 2,
             'route_min_difference': 0.15,
@@ -687,7 +698,10 @@ class AutomaticLocalizationManager(Node):
         if policy not in ('forbid', 'guarded'):
             raise ContractError('translation_policy must be forbid or guarded')
         self._translation_reason = 'translation_policy=forbid'
+        self._force_translation_once = bool(self._parameter('force_translation_once'))
         if policy == 'forbid':
+            if self._force_translation_once:
+                raise ContractError('force_translation_once needs translation_policy guarded')
             return
         if self._motion_policy != MotionPolicy.GUARDED:
             raise ContractError('translation_policy guarded needs motion_policy guarded')
@@ -720,6 +734,12 @@ class AutomaticLocalizationManager(Node):
             self._on_translation_status, 10)
         if not self._translation_enabled:
             self.get_logger().error(f'translation disabled: {self._translation_reason}')
+        if self._force_translation_once and not (
+                self._translation_enabled and self._validation_only):
+            raise ContractError(
+                'force_translation_once is a test of the translation path: it '
+                'needs guarded translation with an ACCEPTED linear profile and '
+                'validation_only (Nav2 never activates)')
 
     def _on_translation_status(self, message):
         try:
@@ -1100,6 +1120,11 @@ class AutomaticLocalizationManager(Node):
                          '(robot_not_moved)')
         elif not decision.accepted:
             self._reject_or_probe(decision.reason, now)
+        elif getattr(self, '_force_translation_pending', False):
+            # Test mode: the result passed, but drive one commonly safe
+            # forward probe anyway; the next accepted result is used.
+            self._force_translation_pending = False
+            self._start_forced_translation(decision.winner, now)
         elif getattr(self, '_force_probe_pending', False):
             # Test mode: the result passed, but probe once anyway; the
             # next accepted result after that probe is used normally.
@@ -1240,6 +1265,8 @@ class AutomaticLocalizationManager(Node):
             self._route_status = None
             self._guard_release_confirmed = False
             self._force_probe_pending = self._force_probe_once
+            self._force_translation_pending = getattr(
+                self, '_force_translation_once', False)
             self._refresh_probe_lease()
             self._probe_hypothesis_counts = []
             self._probe_unknown_cells = None
@@ -2769,7 +2796,10 @@ class AutomaticLocalizationManager(Node):
         return MotionModel(
             footprint=self._footprint, padding_m=self._rotation_gate.padding_m,
             forward_stop_extension_m=self._linear_stop_extension,
-            forward_lateral_error_m=profile.lateral_error_m, calibrated=True)
+            forward_lateral_error_m=profile.lateral_error_m,
+            forward_heading_error_rad=float(
+                self._parameter('route_forward_heading_error_rad')),
+            calibrated=True)
 
     def _route_candidates(self):
         """
@@ -2875,13 +2905,57 @@ class AutomaticLocalizationManager(Node):
             self._route_rotation = value
             self._transition(State.PLAN_PROBE)
             return
+        self._start_translation(value)
+
+    def _start_translation(self, distance):
+        """Request one guarded forward probe of ``distance`` metres."""
         self._translation_start = SE2(*self._last_odom_pose)
-        self._translation_target = value
+        self._translation_target = distance
         self._translation_moved = False
-        self._translation.move(value, float(self._parameter('translation_speed_mps')),
+        self._translation.move(distance, float(self._parameter('translation_speed_mps')),
                                self._linear_profile.digest)
         self._refresh_probe_lease()
         self._transition(State.EXECUTE_TRANSLATION)
+
+    def _forced_forward(self):
+        """
+        Return the longest forward probe safe under every plausible candidate.
+
+        Returns ``(distance, status)``; distance 0 if none is safe.  Only
+        distances beyond the stop extension count (the guard refuses a
+        shorter one).  The candidates are those the route planner uses, and
+        the route evidence is re-checked while moving, as for a planned route.
+        """
+        poses, _focus = self._route_candidates()
+        if not poses:
+            status = (self._route_status or {}).get('status', 'NO_CANDIDATES')
+            return 0., {'status': status}
+        fields, model, bounds = self._route_field_pair(), self._route_model(), PoseBounds()
+        unsafe = {}
+        for distance in (0.6, 0.4, 0.2):
+            if distance <= self._linear_stop_extension:
+                continue
+            checks = [check_route(fields, model, (p.x, p.y, p.yaw), bounds,
+                                  ((FORWARD, distance),)) for p in poses]
+            if all(c.safe for c in checks):
+                self._route_poses, self._route_bounds = poses, bounds
+                return distance, {'status': 'FORCED_FORWARD', 'distance': distance,
+                                  'candidates': len(poses)}
+            unsafe[str(distance)] = sorted({c.reason for c in checks if not c.safe})
+        return 0., {'status': 'NO_SAFE_FORWARD', 'candidates': len(poses),
+                    'unsafe': unsafe}
+
+    def _start_forced_translation(self, winner, now):
+        """Run the forced translation test, or accept normally if none is safe."""
+        self._route_status = None
+        distance, status = self._forced_forward()
+        self._route_status = status
+        self.get_logger().info(f'force_translation_once: {status}')
+        if distance <= 0:
+            self._accept_confined(winner, now)
+            return
+        self._probe_reason = 'FORCED_TRANSLATION_TEST'
+        self._start_translation(distance)
 
     def _route_field_pair(self):
         """Clearance fields of the current map, built once per map hash."""
@@ -3143,6 +3217,7 @@ class AutomaticLocalizationManager(Node):
                 'enabled': getattr(self, '_translation_enabled', False),
                 'reason': getattr(self, '_translation_reason', ''),
                 'translated': getattr(self, '_translated', False),
+                'forced_test': getattr(self, '_force_translation_once', False),
                 'plan': getattr(self, '_route_status', None)},
             'saved_pose_prior': (
                 'used' if getattr(self, '_saved_prior_used', False)

@@ -203,12 +203,29 @@ def test_robot_not_moved_is_plumbed_as_a_per_launch_attestation():
             'stationary_only or segmented_rotation.') in start
     assert 'robot_not_moved was requested but the manager' in start
     assert '"${robot_not_moved}" "${surface_recheck}" \\' in start
-    assert '"${localization_translation}" "${remote_linear_profile}" >/dev/null' in start
+    assert '"${localization_translation}" "${remote_linear_profile}" \\' in start
     assert 'robot_not_moved="${13:-false}"' in container
     assert 'auto_launch_argument+=" robot_not_moved:=true"' in container
     block = launch.split("'robot_not_moved',", 1)[1]
     assert block.lstrip().startswith("default_value='false'")
     assert '/workspaces/isaac_ros-dev/state/carbot_last_pose.json' in launch
+
+
+def test_forced_translation_is_plumbed_as_a_validation_only_test():
+    start = (SCRIPTS / 'start_real_robot_navigation_rviz.sh').read_text()
+    container = (SCRIPTS / 'jetson_nvblox_container.sh').read_text()
+    launch = (PROJECT_DIR / 'src/isaac_3d_lidar_bringup/launch/'
+              'carbot_navigation_real.launch.py').read_text()
+    assert '--force-translation-once)' in start
+    assert ('--force-translation-once is a validation-only test: it needs '
+            '--localization-translation guarded and --automatic.') in start
+    assert 'force_translation_once was requested but the manager' in start
+    assert ('"$([[ "${force_translation_once}" == "true" ]] && echo '
+            'force-translation-once)" >/dev/null') in start
+    assert 'translation_launch_argument+=" force_translation_once:=true"' in container
+    assert 'force-translation-once requires translation guarded.' in container
+    block = launch.split("'force_translation_once',", 1)[1]
+    assert block.lstrip().startswith("default_value='false'")
 
 
 def test_surface_recheck_is_plumbed_with_record_as_the_default():
@@ -220,7 +237,7 @@ def test_surface_recheck_is_plumbed_with_record_as_the_default():
     assert '--surface-recheck)' in start
     assert 'surface_recheck decide was requested but the manager reports' in start
     assert '"${robot_not_moved}" "${surface_recheck}" \\' in start
-    assert '"${localization_translation}" "${remote_linear_profile}" >/dev/null' in start
+    assert '"${localization_translation}" "${remote_linear_profile}" \\' in start
     assert 'surface_recheck="${14:-record}"' in container
     assert ('auto_launch_argument+=" surface_recheck_policy:=${surface_recheck}'
             '${translation_launch_argument}"') in container

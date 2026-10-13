@@ -2237,6 +2237,92 @@ def test_evidence_refuses_when_the_remaining_path_is_unsafe_for_any_candidate(tr
     assert not evidence.clear and evidence.reason == 'OBSTACLE_IN_SWEEP'
 
 
+def _forced_translation_session(manager, walls=()):
+    """Run a passing stationary result with force_translation_once set."""
+    grid = _free_grid(walls=walls)
+    manager._latest_grid = grid
+    manager._map_hash = localization_hypotheses.map_hash(grid)
+    manager.params['force_translation_once'] = True
+    manager._configure_probe_link()
+    winner = localization_contracts.Hypothesis(
+        1.0, 2.0, 0.5, 0.9, 0.9, 0.0, 0, (0.9,), (0.05, 0.05, 0.02))
+    accepted = localization_hypotheses.QualityDecision(True, '', winner)
+    manager._worker = FakeWorker([_search_result(), accepted,
+                                  _search_result(), accepted])
+    _start_to_collect(manager)
+    _feed(manager, 3)
+    manager._tick()
+    manager._tick()
+    _feed(manager, 3)
+    manager._tick()
+    manager._latest_safety_scan = _room_scan(manager)
+    _guard(manager, 'STOPPED')
+    manager._tick()                       # passed, but translate anyway
+
+
+def test_forced_translation_drives_once_then_accepts_the_next_result(translated):
+    manager = translated
+    _forced_translation_session(manager)
+    assert manager._state == manager.State.EXECUTE_TRANSLATION
+    status = manager._confined_status()['translation']
+    assert status['forced_test'] and status['plan']['status'] == 'FORCED_FORWARD'
+    move = manager.translation_requests[-1]
+    assert move.operation == 'MOVE' and move.distance_m == pytest.approx(0.6)
+    assert move.speed_mps == pytest.approx(0.08)
+    assert manager.seeds == []
+    _linear(manager, 'MOVING')
+    manager._tick()
+    assert manager.evidence[-1].clear
+    _linear(manager, 'STOPPING')
+    manager._tick()
+    _linear(manager, 'STOPPED')
+    manager._state_started -= manager.params['translation_settle_sec']
+    manager._tick()
+    assert manager._state == manager.State.COLLECT_STATIC and manager._translated
+
+    _feed(manager, 3)
+    manager._tick()
+    manager._tick()
+    _feed(manager, 3)
+    manager._tick()
+    manager._tick()                       # second pass is accepted
+    assert manager._state == manager.State.STOP_AND_VERIFY
+    assert len(manager.seeds) == 1
+    # One MOVE request (renewed under the same sequence while it runs).
+    assert len({r.sequence for r in manager.translation_requests
+                if r.operation == 'MOVE'}) == 1
+
+
+def test_forced_translation_without_a_safe_forward_accepts_without_moving(translated):
+    manager = translated
+    # A wall 0.3 m ahead of the winner (1.0, 2.0) facing 0.5 rad.
+    _forced_translation_session(manager, walls=[(1.25, 1.6, 1.45, 2.8)])
+    assert manager._state == manager.State.STOP_AND_VERIFY
+    plan = manager._confined_status()['translation']['plan']
+    assert plan['status'] == 'NO_SAFE_FORWARD' and plan['unsafe']
+    assert all(r.operation != 'MOVE' for r in manager.translation_requests)
+
+
+def test_forced_translation_is_a_validation_only_guarded_translation_test(translated):
+    manager = translated
+    manager.params['force_translation_once'] = True
+    manager._validation_only = False
+    with pytest.raises(localization_contracts.ContractError):
+        manager._configure_probe_link()
+    manager._validation_only = True
+    manager.params['translation_policy'] = 'forbid'
+    with pytest.raises(localization_contracts.ContractError):
+        manager._configure_probe_link()
+
+
+def test_route_sweep_allows_the_measured_forward_heading_drift(translated):
+    # 2026-10-13: forward runs turned 2.1-2.5 deg per 0.4 m; the default
+    # 1.5 deg of the planner's MotionModel was too small.
+    model = translated._route_model()
+    assert model.forward_heading_error_rad == pytest.approx(math.radians(4))
+    assert translated.params['translation_speed_mps'] == pytest.approx(0.08)
+
+
 def test_navigation_waits_for_the_translation_core_to_release(translated):
     manager = translated
     manager._begin_confined_session(time.monotonic())
