@@ -57,6 +57,10 @@ class LinearProfile:
                                          separators=(',', ':')).encode()).hexdigest()
 
 
+# Not a fault: command zero until a sweep for a received odometry sample arrives.
+WAIT_FOR_SWEEP = 'WAIT_FOR_SWEEP'
+
+
 @dataclass(frozen=True)
 class LinearGuardConfig:
     lease_s: float = .30
@@ -113,6 +117,7 @@ class LinearProbeGuard:
         self._intent = None
         self._lease = self._session_start = self._last_tick = None
         self._odom = self._still_since = self._preview = None
+        self._previews = []
         self._odom_history = []           # (stamp_ns, x, y, yaw), last second
         self._measured_speed = None
         self._emergency = self._chassis = None
@@ -240,6 +245,9 @@ class LinearProbeGuard:
             self._fault('INVALID_SWEEP')
             return
         self._preview = (preview, receipt_mono)
+        # Recent sweeps: the sender may see an odometry sample before this
+        # guard does, so the newest sweep can name a sample not yet here.
+        self._previews = (self._previews + [self._preview])[-10:]
 
     def on_emergency(self, active, receipt_mono):
         self._emergency = (active is False, receipt_mono)
@@ -275,6 +283,9 @@ class LinearProbeGuard:
         if self.state == 'STOPPED':
             return 0.
         reason = self._motion_fault(now)
+        if reason == WAIT_FOR_SWEEP:
+            self.command_mps = 0.
+            return 0.
         if reason:
             self._fault(reason)
             return 0.
@@ -307,12 +318,6 @@ class LinearProbeGuard:
                 or now - self._segment_start > c.max_segment_s
                 or self.total_travel_m >= c.max_total_travel_m):
             return 'MOTION_BUDGET_EXHAUSTED'
-        if self._preview is None:
-            return 'SWEEP_STALE'
-        preview, receipt = self._preview
-        if (not self._fresh(receipt, now, c.freshness_s)
-                or abs(self._odom.stamp_ns - preview.snapshot_stamp_ns) / 1e9 > c.freshness_s):
-            return 'SWEEP_STALE'
         # The sweep must start exactly at the odometry sample it names, and
         # be at most max_preview_lag_s behind the newest one: stale geometry
         # cannot follow a moving robot merely by refreshing the message
@@ -320,9 +325,33 @@ class LinearProbeGuard:
         # past still covers the rest of the path, since the remaining-
         # distance check below uses the current progress and the path
         # deviation check bounds the drift from the straight line.
-        lag = (self._odom.stamp_ns - preview.snapshot_stamp_ns) / 1e9
-        if not 0 <= lag <= c.max_preview_lag_s:
+        #
+        # The newest sweep always rules: a refusal or a stale one faults at
+        # once.  Only when it names an odometry sample this guard has not
+        # received yet (2026-10-13: the manager saw a sample first and the
+        # guard latched SWEEP_STALE) does the newest earlier sweep for a
+        # received sample stand in, and without one the guard holds still.
+        if not self._previews:
+            # Right after MOVE, before the first sweep.
+            if now - self._segment_start <= c.freshness_s:
+                return WAIT_FOR_SWEEP
             return 'SWEEP_STALE'
+        preview, receipt = self._previews[-1]
+        if not self._fresh(receipt, now, c.freshness_s):
+            return 'SWEEP_STALE'
+        if not preview.geometry_clear:
+            return preview.reason or 'UNKNOWN_SWEEP'
+        lag = (self._odom.stamp_ns - preview.snapshot_stamp_ns) / 1e9
+        if not -c.max_preview_lag_s <= lag <= c.max_preview_lag_s:
+            return 'SWEEP_STALE'
+        if lag < 0:
+            earlier = [p for p, r in reversed(self._previews[:-1])
+                       if self._fresh(r, now, c.freshness_s)
+                       and 0 <= (self._odom.stamp_ns - p.snapshot_stamp_ns) / 1e9
+                       <= c.max_preview_lag_s]
+            if not earlier:
+                return WAIT_FOR_SWEEP
+            preview = earlier[0]
         named = next((h for h in reversed(self._odom_history)
                       if h[0] == preview.snapshot_stamp_ns), None)
         if (named is None
