@@ -209,6 +209,51 @@ def test_stationary_stall_and_current_pose_resweep_required():
     assert g.tick(1.3) == 0 and g.reason == 'SWEEP_POSE_MISMATCH'
 
 
+def test_a_sweep_ahead_of_the_guards_odometry_waits_instead_of_faulting():
+    # 2026-10-13 on the robot: the manager received an odometry sample
+    # before the guard, so its sweep named a sample the guard did not have
+    # yet, and the guard latched SWEEP_STALE before moving.
+    g = ready()
+    move(g)
+    ahead = odom(1.3)
+    grid = replace(_grid(half=2, resolution=.05), stamp_ns=ahead.stamp_ns)
+    g.on_preview(preview_translation(grid, FOOTPRINT, SE2(0, 0, 0), .4,
+                                     stop_extension_m=g.stop_extension_m,
+                                     now_ns=ahead.stamp_ns), 1.25)
+    g.on_chassis(True, False, 1.25)
+    assert g.tick(1.25) == 0 and g.state == 'MOVING'      # waiting, not a fault
+    g.on_odom(ahead)
+    g.on_chassis(True, False, 1.3)
+    move(g, 1.3)
+    assert g.tick(1.3) > 0 and g.state == 'MOVING'
+    # While moving, a sweep ahead again falls back to the latest received one.
+    later = odom(1.4)
+    grid = replace(grid, stamp_ns=later.stamp_ns)
+    g.on_preview(preview_translation(grid, FOOTPRINT, SE2(0, 0, 0), .4,
+                                     stop_extension_m=g.stop_extension_m,
+                                     now_ns=later.stamp_ns), 1.35)
+    g.on_chassis(True, False, 1.35)
+    move(g, 1.35)
+    assert g.tick(1.35) > 0 and g.state == 'MOVING'
+    # A refusal always rules, even with an earlier clear sweep at hand.
+    g.on_preview(replace(g._preview[0], geometry_clear=False, reason='OBSTACLE_IN_SWEEP'),
+                 1.36)
+    assert g.tick(1.36) == 0 and g.reason == 'OBSTACLE_IN_SWEEP'
+
+
+def test_no_sweep_right_after_move_waits_then_faults():
+    g = ready()
+    move(g)
+    g.on_chassis(True, False, 1.3)
+    assert g.tick(1.3) == 0 and g.state == 'MOVING'
+    for t in (1.4, 1.5, 1.6, 1.7, 1.8):
+        g.on_odom(odom(t))
+        g.on_chassis(True, False, t)
+        move(g, t)
+        g.tick(t)
+    assert g.state == 'FAULT' and g.reason == 'SWEEP_STALE'
+
+
 @pytest.mark.parametrize('fault', ['odom', 'preview', 'short', 'identity', 'speed', 'tiny'])
 def test_additional_fail_closed_boundaries(fault):
     g = ready()
