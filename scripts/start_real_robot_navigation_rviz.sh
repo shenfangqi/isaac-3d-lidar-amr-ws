@@ -18,6 +18,7 @@ rviz_container="carbot-real-navigation-rviz"
 display="${DISPLAY:-:1}"
 xauthority="${XAUTHORITY:-/run/user/$(id -u)/gdm/Xauthority}"
 initial_pose_timeout="${CARBOT_INITIAL_POSE_TIMEOUT:-600}"
+ready_timeout="${CARBOT_READY_TIMEOUT:-180}"
 health_check_only=false
 # Normal startup uses the merged guarded localization flow and activates Nav2
 # only after the automatic map match passes. Manual alignment remains an
@@ -110,6 +111,8 @@ Environment overrides:
   CARBOT_JETSON_IDENTITY_FILE  SSH key used by the fallback connection
   CARBOT_NAV_MAP               Jetson map YAML path
   CARBOT_INITIAL_POSE_TIMEOUT  Seconds to wait for RViz 2D Pose Estimate
+  CARBOT_READY_TIMEOUT         Seconds to wait for the localization manager and
+                               motion guard to be ready (default: 180)
   CARBOT_ROS_IMAGE             Local ROS/RViz Docker image
 EOF
 }
@@ -319,6 +322,12 @@ if (( initial_pose_timeout < 1 )); then
   echo "CARBOT_INITIAL_POSE_TIMEOUT must be a positive integer." >&2
   exit 2
 fi
+case "${ready_timeout}" in
+  ''|*[!0-9]*|0)
+    echo "CARBOT_READY_TIMEOUT must be a positive integer." >&2
+    exit 2
+    ;;
+esac
 
 ssh_options=(-o BatchMode=yes -o ConnectTimeout=5)
 if [[ -r "${jetson_identity_file}" ]]; then
@@ -357,6 +366,10 @@ deploy_runtime_helpers() {
   scp "${ssh_options[@]}" \
     "${script_dir}/jetson_navigation_wait.py" \
     "${jetson_host}:/tmp/jetson_navigation_wait.py" \
+    >/dev/null
+  scp "${ssh_options[@]}" \
+    "${script_dir}/jetson_localization_ready.py" \
+    "${jetson_host}:/tmp/jetson_localization_ready.py" \
     >/dev/null
 }
 
@@ -494,43 +507,50 @@ clear_command_compensation_latch() {
 }
 
 run_preflight_with_readiness_retry() {
-  local output status failure_lines
+  local output status failure_lines deadline static_tf_restarted=false
 
-  # A failing command fires the ERR trap even under set +e; only the
-  # right-hand side of || keeps it from aborting before the retry below.
-  status=0
-  output="$(remote bash /tmp/carbot_nav_preflight.sh 2>&1)" || status=$?
-  printf '%s\n' "${output}"
-  if ((status == 0)); then
-    return 0
-  fi
-
-  failure_lines="$(grep '^FAIL:' <<<"${output}" || true)"
   # Retry only failures that can be caused by cold-start DDS discovery or a
-  # late publisher/TF.  Hardware/service failures, nonzero velocity,
-  # localization emergency stops, and LIO stability failures never enter this
-  # branch and therefore still abort immediately.
-  if [[ -z "${failure_lines}" ]] || grep -Evq \
-      '^FAIL: (/wheel_ticks|/odom|/livox/lidar|/scan|/scan_localization|odom -> base_footprint|base_footprint -> livox_frame|map_server is inactive|/cmd_vel has exactly one compensator publisher|/cmd_vel has a base-controller subscriber|/cmd_vel_command has no publisher before Nav2 activation|/cmd_vel_command has exactly one compensator subscriber|/odom has exactly one publisher)$' \
-      <<<"${failure_lines}"; then
-    return "${status}"
-  fi
-
-  echo
-  if grep -q '^FAIL: base_footprint -> livox_frame$' <<<"${failure_lines}"; then
-    # 2026-10-12: twice the carbot-description service was still running
-    # but its static TF no longer reached new subscribers, so FAST-LIO's
-    # base adapter waited for base_footprint -> imu_link and /odom never
-    # came.  Restarting the service restored it both times.  It publishes
-    # only static transforms; nothing moves.
-    echo "Static TF missing; restarting carbot-description.service, waiting 10 seconds and retrying once..."
-    remote systemctl --user restart carbot-description.service
-    sleep 10
-  else
-    echo "Readiness-only preflight failure detected; waiting 5 seconds and retrying once..."
-    sleep 5
-  fi
-  remote bash /tmp/carbot_nav_preflight.sh
+  # late publisher/TF, every 5 s for at most 60 s (a freshly booted Jetson
+  # needed more than the single 5 s retry, 2026-10-14).  Hardware/service
+  # failures, nonzero velocity, localization emergency stops and LIO
+  # stability failures still abort at once.
+  deadline=$((SECONDS + 60))
+  while true; do
+    # A failing command fires the ERR trap even under set +e; only the
+    # right-hand side of || keeps it from aborting before the retry below.
+    status=0
+    output="$(remote bash /tmp/carbot_nav_preflight.sh 2>&1)" || status=$?
+    printf '%s\n' "${output}"
+    if ((status == 0)); then
+      return 0
+    fi
+    failure_lines="$(grep '^FAIL:' <<<"${output}" || true)"
+    if [[ -z "${failure_lines}" ]] || grep -Evq \
+        '^FAIL: (/wheel_ticks|/odom|/livox/lidar|/scan|/scan_localization|odom -> base_footprint|base_footprint -> livox_frame|map_server is inactive|/cmd_vel has exactly one compensator publisher|/cmd_vel has a base-controller subscriber|/cmd_vel_command has no publisher before Nav2 activation|/cmd_vel_command has exactly one compensator subscriber|/odom has exactly one publisher)$' \
+        <<<"${failure_lines}"; then
+      return "${status}"
+    fi
+    if ((SECONDS >= deadline)); then
+      echo "Readiness-only preflight failures persisted for 60 seconds." >&2
+      return "${status}"
+    fi
+    echo
+    if [[ "${static_tf_restarted}" == "false" ]] \
+        && grep -q '^FAIL: base_footprint -> livox_frame$' <<<"${failure_lines}"; then
+      # 2026-10-12: twice the carbot-description service was still running
+      # but its static TF no longer reached new subscribers, so FAST-LIO's
+      # base adapter waited for base_footprint -> imu_link and /odom never
+      # came.  Restarting the service restored it both times.  It publishes
+      # only static transforms; nothing moves.
+      echo "Static TF missing; restarting carbot-description.service and retrying..."
+      remote systemctl --user restart carbot-description.service
+      static_tf_restarted=true
+      sleep 10
+    else
+      echo "Readiness-only preflight failure; retrying in 5 seconds ($((deadline - SECONDS)) s left)..."
+      sleep 5
+    fi
+  done
 }
 
 check_rviz() {
@@ -641,46 +661,52 @@ activate_navigation() {
   control activate-navigation --timeout 90
 }
 
-remote_param_get() {
-  # Restarting the workstation DDS anchor for RViz can briefly invalidate
-  # the CLI discovery graph although the node runs.  Retry only "node not
-  # found", a CLI timeout (exit 124) or a broken CLI daemon, at most 10
-  # times; any other error fails immediately.  --no-daemon avoids the
-  # shared ros2 daemon, which failed with "!rclpy.ok()" on 2026-10-10 and
-  # 2026-10-12 and aborted the startup.
-  local node="$1" name="$2" attempt output status
-  for attempt in {1..10}; do
-    status=0
-    output="$(remote_ros "timeout 10s ros2 param get --no-daemon ${node} ${name}" 2>&1)" \
-      || status=$?
-    if (( status == 0 )); then
-      printf '%s\n' "${output}"
-      return 0
-    fi
-    if [[ "${output}" != *"Node not found"* && "${output}" != *"rclpy.ok()"* ]] \
-        && (( status != 124 )); then
-      printf '%s\n' "${output}"
-      return "${status}"
-    fi
-    sleep 1
-  done
-  echo "Timed out waiting for ${node} parameter ${name}."
-  return 1
+read_localization_settings() {
+  # One rclpy process in the navigation container waits for the manager to
+  # spin (latched status WAIT_FOR_START), reads every manager setting checked
+  # below, and with guarded motion waits for the motion guard's status.  It
+  # replaces up to eight `ros2 param get --no-daemon` calls, each a new
+  # process rediscovering the DDS graph, which on a freshly booted Jetson
+  # failed after their ten tries and aborted the startup (2026-10-14, twice).
+  local guard_flag="" output status=0
+  if [[ "${localization_motion}" == "guarded" ]]; then
+    guard_flag="--guard"
+  fi
+  echo "Waiting for the localization manager to be ready (at most ${ready_timeout} s)..."
+  output="$(remote docker exec carbot-nvblox bash -lc \
+    "source /opt/ros/humble/setup.bash; source /workspaces/isaac_ros-dev/install/setup.bash; exec python3 /tmp/jetson_localization_ready.py --timeout ${ready_timeout} ${guard_flag} --params validation_only localization_strategy motion_policy translation_policy force_translation_once force_probe_once surface_recheck_policy robot_not_moved" \
+    2>&1)" || status=$?
+  grep '^READY_CHECK' <<<"${output}" || true
+  localization_settings="$(grep '^{' <<<"${output}" | tail -n 1 || true)"
+  if (( status != 0 )) || [[ -z "${localization_settings}" ]]; then
+    printf '%s\n' "${output}" | grep -v '^READY_CHECK' | tail -n 5 >&2
+    echo "The localization manager did not become ready (exit ${status})." >&2
+    return 1
+  fi
+  echo "PASS: localization manager ready after $(setting seconds) s."
+}
+
+setting() {
+  # Print one field of the settings read above, e.g. params.motion_policy.
+  python3 -c '
+import json, sys
+value = json.loads(sys.argv[1])
+for key in sys.argv[2].split("."):
+    value = value[key]
+print("\n".join(value) if isinstance(value, list) else value)' \
+    "${localization_settings}" "$1"
 }
 
 verify_motion_guard() {
   # The manager's motion policy must match the request.  Guarded rotation
   # also needs a running guard that accepted the profile; forbid needs none.
-  local policy nodes attempt
-  policy="$(remote_param_get /automatic_localization_manager motion_policy)" || {
-    printf '%s\n' "${policy}" >&2
-    return 1
-  }
-  if [[ "${policy}" != *"String value is: ${localization_motion}"* ]]; then
+  local policy nodes
+  policy="$(setting params.motion_policy)"
+  if [[ "${policy}" != "${localization_motion}" ]]; then
     echo "Deployed motion policy (${policy}) does not match ${localization_motion}." >&2
     return 1
   fi
-  nodes="$(remote_ros 'timeout 10s ros2 node list --no-daemon' 2>&1)" || return 1
+  nodes="$(setting nodes)"
   if [[ "${localization_motion}" != "guarded" ]]; then
     if grep -qx '/localization_motion_guard' <<<"${nodes}"; then
       echo "A motion guard is running although motion is forbidden." >&2
@@ -688,11 +714,6 @@ verify_motion_guard() {
     fi
     return 0
   fi
-  for attempt in {1..10}; do
-    grep -qx '/localization_motion_guard' <<<"${nodes}" && break
-    sleep 1
-    nodes="$(remote_ros 'timeout 10s ros2 node list --no-daemon' 2>&1)" || true
-  done
   if ! grep -qx '/localization_motion_guard' <<<"${nodes}"; then
     echo "Guarded rotation was requested but no motion guard is running." >&2
     return 1
@@ -703,9 +724,7 @@ verify_motion_guard() {
     return 1
   fi
   if [[ "${force_probe_once}" == "true" ]]; then
-    local forced
-    forced="$(remote_param_get /automatic_localization_manager force_probe_once)" || return 1
-    if [[ "${forced}" != *"Boolean value is: True"* ]]; then
+    if [[ "$(setting params.force_probe_once)" != "True" ]]; then
       echo "force_probe_once was requested but the manager does not have it enabled." >&2
       return 1
     fi
@@ -715,42 +734,32 @@ verify_motion_guard() {
 }
 
 run_automatic_localization() {
+  read_localization_settings || return 1
   # Refuse to arm an older deployed manager that can still activate Nav2.
-  local validation_mode
-  validation_mode="$(remote_param_get /automatic_localization_manager validation_only)" || {
-    printf '%s\n' "${validation_mode}" >&2
-    return 1
-  }
-  local expected_validation='Boolean value is: True'
+  local expected_validation=True
   if [[ "${automatic_activation}" == "true" ]]; then
-    expected_validation='Boolean value is: False'
+    expected_validation=False
   fi
-  if [[ "${validation_mode}" != *"${expected_validation}"* ]]; then
+  if [[ "$(setting params.validation_only)" != "${expected_validation}" ]]; then
     echo "Automatic-localization activation mode does not match the requested workflow." >&2
     return 1
   fi
   local deployed_strategy
-  deployed_strategy="$(remote_param_get /automatic_localization_manager localization_strategy)" || {
-    printf '%s\n' "${deployed_strategy}" >&2
-    echo "The deployed manager does not report a localization strategy; rebuild the Jetson workspace." >&2
-    return 1
-  }
-  if [[ "${deployed_strategy}" != *"String value is: ${localization_strategy}"* ]]; then
+  deployed_strategy="$(setting params.localization_strategy)"
+  if [[ "${deployed_strategy}" != "${localization_strategy}" ]]; then
     echo "Deployed localization strategy (${deployed_strategy}) does not match ${localization_strategy}." >&2
     return 1
   fi
   verify_motion_guard || return 1
   if [[ "${localization_translation}" == "guarded" ]]; then
     local translation
-    translation="$(remote_param_get /automatic_localization_manager translation_policy)" || return 1
-    if [[ "${translation}" != *"String value is: guarded"* ]]; then
+    translation="$(setting params.translation_policy)"
+    if [[ "${translation}" != "guarded" ]]; then
       echo "translation guarded was requested but the manager reports ${translation}." >&2
       return 1
     fi
     if [[ "${force_translation_once}" == "true" ]]; then
-      local forced_translation
-      forced_translation="$(remote_param_get /automatic_localization_manager force_translation_once)" || return 1
-      if [[ "${forced_translation}" != *"Boolean value is: True"* ]]; then
+      if [[ "$(setting params.force_translation_once)" != "True" ]]; then
         echo "force_translation_once was requested but the manager does not have it enabled." >&2
         return 1
       fi
@@ -759,16 +768,14 @@ run_automatic_localization() {
   fi
   if [[ "${surface_recheck}" == "decide" ]]; then
     local surface
-    surface="$(remote_param_get /automatic_localization_manager surface_recheck_policy)" || return 1
-    if [[ "${surface}" != *"String value is: decide"* ]]; then
+    surface="$(setting params.surface_recheck_policy)"
+    if [[ "${surface}" != "decide" ]]; then
       echo "surface_recheck decide was requested but the manager reports ${surface}." >&2
       return 1
     fi
   fi
   if [[ "${robot_not_moved}" == "true" ]]; then
-    local attested
-    attested="$(remote_param_get /automatic_localization_manager robot_not_moved)" || return 1
-    if [[ "${attested}" != *"Boolean value is: True"* ]]; then
+    if [[ "$(setting params.robot_not_moved)" != "True" ]]; then
       echo "robot_not_moved was requested but the manager does not have it enabled." >&2
       return 1
     fi

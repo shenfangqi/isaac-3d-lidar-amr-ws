@@ -229,11 +229,15 @@ run_container() {
   test -f "${dds_profile}"
   test -f "${time_gate}"
 
+  # No restart policy: after a power cut the Jetson used to bring the last
+  # navigation stack back by itself at boot (2026-10-14), loading the CPU
+  # while the operator's next startup recreated it.  Only the scripts start
+  # it.
   docker run -d \
     --name "${container_name}" \
     --label "carbot.mode=${mode}" \
     --label "carbot.launch=${launch_command}" \
-    --restart unless-stopped \
+    --restart no \
     --runtime nvidia \
     --network host \
     --ipc host \
