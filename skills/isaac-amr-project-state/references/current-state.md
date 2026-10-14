@@ -2,12 +2,12 @@
 
 ## Issue #53 robot session: 2026-10-14 evening
 
-- The Jetson runs `c72fada` (#76–#80), `--check` IN_SYNC. Evidence: `docs/evidence/issue53_robot_2026-10-14.md`.
+- The Jetson runs `35c940f` (#76–#82), `--check` IN_SYNC. Evidence: `docs/evidence/issue53_robot_2026-10-14.md`.
 - At (2.75, 2.78) the static decide-mode localization reached CANDIDATE_READY (2D alone); offline the 3D fit on its bag is 0.815 with the height limit (0.641 without).
-- Forced translation: two refusals before moving (`SWEEP_STALE`, the manager lagged on odometry), then one success (about 24 cm, CANDIDATE_READY, guard RELEASED). #80 (evidence in its own thread) failed its first robot round the same way: one Python process. Plan B (merged after #80, NOT yet deployed): the manager sends a `RoutePlan` at MOVE and the guard node checks the remaining path itself from its own odometry and `/map`; offline co-simulation, node test and replay of today's bags pass.
+- Forced translation: the route evidence from the manager went stale under load (`SWEEP_STALE`, 3 of 4 attempts on #79/#80). #82: the guard node checks the remaining path itself from its own odometry, `/map` and the manager's `RoutePlan` (2.3 ms per check on the Jetson). On #82, 3/3 forced translations succeeded (about 0.22 m each, CANDIDATE_READY, guard RELEASED).
 - When recording during a translation, never subscribe to `/cmd_vel_command` (preflight requires the compensator as its only subscriber).
 - Moving-cloud bag 03: stitching holds; the multi-stop 3D decision passes offline at 0.81 with 1/4/7 stops (0.62 without the height limit). The online multi-stop decision has not been triggered on the robot (2D was unambiguous after both translations).
-- Next robot session: deploy plan B, time the guard's route check on the Jetson, then forced translations; then #54 controlled changes once its runtime design is confirmed.
+- Next: #54 controlled changes once its runtime design is confirmed; the online multi-stop 3D decision still has not been triggered on the robot.
 
 ## Issue #53 3D fit only below the map top: 2026-10-14 (offline)
 
