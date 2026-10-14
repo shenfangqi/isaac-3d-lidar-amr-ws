@@ -9,7 +9,8 @@ import pytest
 
 from isaac_3d_lidar_bringup.localization_contracts import ContractError
 from isaac_3d_lidar_bringup.localization_surface_check import (
-    check_surfaces, planar, pointcloud2_xyz, SurfaceCheckConfig,
+    check_surfaces, MAP_TOP_MARGIN_M, map_top_m, planar, pointcloud2_xyz,
+    resolve_max_height, SurfaceCheckConfig,
 )
 
 pytest.importorskip('scipy.spatial')
@@ -103,7 +104,53 @@ def test_a_poor_absolute_fit_is_not_resolved_even_with_a_gap():
     assert not result.resolved and result.reason == 'LEADER_FIT_TOO_LOW'
 
 
+def _above_the_map(pose, top=2.0, ceiling=3.2):
+    """Wall tops seen between the mapped top and the ceiling, base frame."""
+    points = []
+    for z in np.arange(top + 0.05, ceiling, 0.05):
+        for x in np.arange(0.0, 4.0, 0.05):
+            points += [(x, 0.0, z), (x, 3.0, z)]
+        for y in np.arange(0.0, 3.0, 0.05):
+            points += [(0.0, y, z), (4.0, y, z)]
+    return _seen_from(np.array(points), pose)
+
+
+def test_points_above_the_map_top_are_not_scored():
+    # Issue #53, (2.75, 2.78): the map stops at 2.31 m while the LiDAR sees
+    # the wall tops up to the ceiling, holding the true pose below 0.70.
+    mesh = _room()
+    truth = (3.0, 2.0, math.radians(30))
+    twin = (1.0, 1.0, truth[2] + math.pi)
+    points = np.vstack([_seen_from(mesh, truth), _above_the_map(truth)])
+    config = SurfaceCheckConfig(min_band_points=50, min_points=200,
+                                min_composite_gap=0.02, min_leader_composite=0.7)
+    capped = SurfaceCheckConfig(min_band_points=50, min_points=200, min_composite_gap=0.02,
+                                min_leader_composite=0.7,
+                                max_height_m=resolve_max_height(-1, mesh))
+    assert check_surfaces(mesh, points, [twin, truth], config).reason == 'LEADER_FIT_TOO_LOW'
+    result = check_surfaces(mesh, points, [twin, truth], capped)
+    assert result.resolved and result.leader == 1
+    # A planar pose keeps the height: every candidate loses the same points.
+    assert result.points == check_surfaces(
+        mesh, _seen_from(mesh, truth), [twin, truth], capped).points
+
+
+def test_the_height_limit_settings():
+    mesh = _room()
+    top = map_top_m(mesh)
+    assert 1.9 <= top <= 1.96
+    assert resolve_max_height(-1, mesh) == pytest.approx(top + MAP_TOP_MARGIN_M)
+    assert resolve_max_height(0, mesh) == math.inf
+    assert resolve_max_height(2.4, mesh) == 2.4
+    with pytest.raises(ContractError):
+        resolve_max_height(math.nan, mesh)
+
+
 def test_config_is_validated():
+    with pytest.raises(ContractError):
+        SurfaceCheckConfig(max_height_m=0)
+    with pytest.raises(ContractError):
+        SurfaceCheckConfig(max_height_m=math.nan)
     with pytest.raises(ContractError):
         SurfaceCheckConfig(tolerance_m=0)
     with pytest.raises(ContractError):

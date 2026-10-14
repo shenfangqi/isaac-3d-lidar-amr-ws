@@ -2525,3 +2525,19 @@ def test_navigation_waits_for_the_translation_core_to_release(translated):
     manager._translation.release()
     _linear(manager, 'RELEASED')
     assert manager._guard_released(time.monotonic())
+
+
+@pytest.mark.parametrize('setting, expected', [
+    (-1.0, localization_surface_check.MAP_TOP_MARGIN_M), (0.0, math.inf), (2.4, 2.4)])
+def test_the_3d_check_scores_points_up_to_the_map_top(segmented, tmp_path, setting, expected):
+    # Issue #53: the map stops at 2.31 m; the wall tops and ceiling above it
+    # cannot fit any candidate.  The test mesh lies at z = 0.
+    manager = segmented
+    manager.get_logger = lambda: NS(info=lambda m: None, warn=lambda m: None)
+    manager.params.update({'surface_recheck_policy': 'record',
+                           'surface_mesh_path': str(_mesh(tmp_path)),
+                           'surface_spacing_m': 0.0, 'surface_search_policy': 'off',
+                           'surface_max_height_m': setting})
+    manager._configure_surface_check()
+    assert manager._surface_config.max_height_m == pytest.approx(expected)
+    assert manager._surface_rank_config.max_height_m == pytest.approx(expected)

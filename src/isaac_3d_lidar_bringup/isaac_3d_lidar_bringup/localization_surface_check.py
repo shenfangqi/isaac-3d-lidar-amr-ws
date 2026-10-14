@@ -42,6 +42,10 @@ class SurfaceCheckConfig:
     min_leader_composite: float = 0.70
     min_points: int = 20000
     bands: tuple = DEFAULT_BANDS
+    # Points above the mapped structure cannot fit any candidate; they only
+    # dilute the composite.  A planar pose keeps a point's height, so this
+    # drops the same points for every candidate (see map_top_m).
+    max_height_m: float = math.inf
 
     def __post_init__(self):
         for name in ('tolerance_m', 'min_range_m', 'min_composite_gap',
@@ -49,6 +53,8 @@ class SurfaceCheckConfig:
             value = getattr(self, name)
             if not (math.isfinite(value) and value > 0):
                 raise ContractError(f'{name} must be positive')
+        if math.isnan(self.max_height_m) or self.max_height_m <= 0:
+            raise ContractError('max_height_m must be positive')
         if type(self.min_band_points) is not int or self.min_band_points < 1:
             raise ContractError('min_band_points must be a positive integer')
         if type(self.min_points) is not int or self.min_points < 1:
@@ -151,6 +157,46 @@ def pointcloud2_xyz(message, max_points=None):
     if max_points is not None and len(xyz) > max_points:
         xyz = xyz[np.linspace(0, len(xyz) - 1, max_points).astype(int)]
     return xyz
+
+
+# Scored height above the map top: the top is a quantile, and returns just
+# above it can still meet the surface within the inlier tolerance.
+MAP_TOP_MARGIN_M = 0.05
+
+
+def map_top_m(surface_points, share=0.99):
+    """
+    Height below which ``share`` of the map surface lies.
+
+    The mapper stops at a height limit (carbot_map_20260928_215841: 99% of
+    the surface below 2.31 m) while the LiDAR also sees the wall tops and
+    ceiling above it; those returns have no surface to fit.  The quantile
+    ignores a few stray high samples.
+    """
+    return float(np.quantile(np.asarray(surface_points, float)[:, 2], share))
+
+
+def resolve_max_height(setting, surface_points):
+    """
+    Return ``max_height_m`` for a height-limit setting.
+
+    < 0: the map top plus MAP_TOP_MARGIN_M; 0: no limit; > 0: that height.
+    """
+    setting = float(setting)
+    if math.isnan(setting):
+        raise ContractError('the height limit must be a number')
+    if setting < 0:
+        return map_top_m(surface_points) + MAP_TOP_MARGIN_M
+    return math.inf if setting == 0 else setting
+
+
+def scored_points(points, config):
+    """Points the check scores: beyond ``min_range_m``, below ``max_height_m``."""
+    points = np.asarray(points, float).reshape(-1, 3)
+    keep = np.hypot(points[:, 0], points[:, 1]) >= config.min_range_m
+    if math.isfinite(config.max_height_m):
+        keep &= points[:, 2] <= config.max_height_m
+    return points[keep]
 
 
 def outside_variable(tree, world):
@@ -277,14 +323,14 @@ def check_surfaces(vertices, base_points, poses, config=SurfaceCheckConfig(), wo
 
     ``vertices`` are the surface points or their tree (see
     :func:`surface_tree`).  ``base_points`` are stationary cloud points in
-    the reference base frame, already filtered to ``min_range_m``.  Returns
+    the reference base frame; points nearer than ``min_range_m`` or above
+    ``max_height_m`` are not scored.  Returns
     a :class:`SurfaceResult`.
     """
     poses = [tuple(float(v) for v in pose) for pose in poses]
     if len(poses) < 2:
         raise ContractError('the 3D re-check needs at least two candidates')
-    points = np.asarray(base_points, float).reshape(-1, 3)
-    points = points[np.hypot(points[:, 0], points[:, 1]) >= config.min_range_m]
+    points = scored_points(base_points, config)
     if len(points) < config.min_points:
         return SurfaceResult(False, 'TOO_FEW_POINTS', -1, (), 0.0, (), (), len(points))
     tree = surface_tree(vertices)

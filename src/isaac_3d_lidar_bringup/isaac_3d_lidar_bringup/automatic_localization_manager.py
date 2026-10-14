@@ -2,6 +2,7 @@
 
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from enum import Enum
 import hashlib
 import json
@@ -120,8 +121,10 @@ from isaac_3d_lidar_bringup.localization_saved_pose import (
 )
 from isaac_3d_lidar_bringup.localization_surface_check import (
     load_ply_vertices,
+    map_top_m,
     planar,
     pointcloud2_xyz,
+    resolve_max_height,
     SurfaceCheckConfig,
     transform,
 )
@@ -614,10 +617,17 @@ class AutomaticLocalizationManager(Node):
             'surface_submap_max_stops': 4,
             'surface_submap_max_path_m': 3.0,
             'surface_min_composite_gap': 0.15,
-            'surface_min_leader_composite': 0.70,
+            # Leader's absolute 3D fit; 0.78 with surface_max_height_m (see
+            # localization_surface_validation.FIT_CHECK).
+            'surface_min_leader_composite': 0.78,
             # Gap of refined candidates at this inlier tolerance; the leader's
             # absolute fit keeps the 0.10 m tolerance (localization_surface_validation).
             'surface_rank_tolerance_m': 0.05,
+            # Highest observed point the 3D check scores: < 0 = the map top
+            # (99% of the surface below it) plus 0.05 m, 0 = no limit.  At
+            # (2.75, 2.78) 26% of the points were wall tops and ceiling above
+            # the 2.31 m map top and held the true pose at fit 0.63 (#53).
+            'surface_max_height_m': -1.0,
             # Gross-contradiction cap on the 3D leader's 2D conflict ratio;
             # labelled true poses reached 0.275-0.292 (gate 0.25).
             'surface_max_2d_conflict': 0.35,
@@ -808,6 +818,16 @@ class AutomaticLocalizationManager(Node):
             self._guard_release_confirmed = True
         return released
 
+    def _configure_surface_height(self):
+        """Apply surface_max_height_m to both 3D check configurations."""
+        limit = resolve_max_height(self._parameter('surface_max_height_m'),
+                                   self._surface_vertices)
+        self.get_logger().info(
+            f'3D check scores points up to {limit:.2f} m '
+            f'(map top {map_top_m(self._surface_vertices):.2f} m)')
+        self._surface_config = replace(self._surface_config, max_height_m=limit)
+        self._surface_rank_config = replace(self._surface_rank_config, max_height_m=limit)
+
     def _configure_surface_check(self):
         """Validate the 3D re-check policy and load the mesh once."""
         policy = str(self._parameter('surface_recheck_policy'))
@@ -869,6 +889,8 @@ class AutomaticLocalizationManager(Node):
             if policy != 'off':
                 self._load_surface_additions(
                     policy, model.mesh_sha256 if spacing > 0 else file_sha256(path))
+            if policy != 'off':
+                self._configure_surface_height()
         self._surface_policy = policy
         search = str(self._parameter('surface_search_policy'))
         if search not in ('off', 'union'):
