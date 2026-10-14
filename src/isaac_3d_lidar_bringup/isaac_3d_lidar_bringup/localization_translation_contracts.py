@@ -8,10 +8,13 @@ decoded strictly (exact fields, finite numbers, known enums).
 
 * :class:`TranslationRequest` - manager -> guard lease (10 Hz), STOP / MOVE
   / RELEASE, with a target distance, a speed cap and the linear profile hash.
-* :class:`RouteEvidence` - manager -> guard, every cycle: the remaining
-  forward path re-checked on the static map under *every* plausible
-  candidate from the current odometry pose.  The guard refuses motion when
-  it is stale, at another pose, too short or not clear.
+* :class:`RoutePlan` - manager -> guard, once per MOVE (re-sent unchanged):
+  every plausible candidate at the start odometry pose, their pose bound,
+  the map and the motion envelope.  The guard re-checks the remaining
+  forward path on the static map itself, from its own odometry
+  (``localization_translation_route``), and refuses motion when it is not
+  clear.  2026-10-14: evidence computed by the manager arrived too late
+  under load (SWEEP_STALE) twice before the robot moved.
 * :class:`TranslationStatus` - guard -> manager.
 """
 
@@ -21,7 +24,6 @@ import math
 
 from .localization_contracts import ContractError, SE2
 from .localization_translation_guard import LinearProfile
-from .localization_translation_policy import TranslationPreview
 
 TRANSLATION_SCHEMA = 1
 OPERATIONS = ('STOP', 'MOVE', 'RELEASE')
@@ -113,70 +115,81 @@ def decode_translation_request(text):
                               data['profile_hash'])
 
 
-@dataclass(frozen=True)
-class RouteEvidence:
-    """
-    Remaining forward path, checked on the static map under all candidates.
+MAX_PLAN_CANDIDATES = 32
 
-    ``start_*`` is the odometry pose the check used (odom frame), at source
-    stamp ``odom_stamp_ns``.  ``candidate_digest`` binds the evidence to the
-    candidate set that was checked.
+
+@dataclass(frozen=True)
+class RoutePlan:
+    """
+    Candidates for one MOVE; the guard checks their remaining path itself.
+
+    ``start_*`` is the manager's odometry pose (odom frame, source stamp
+    ``start_stamp_ns``) at which every ``candidates`` pose (map frame,
+    ``(x, y, yaw)``) holds; the robot is stopped there.  ``bounds_*`` is
+    the candidates' pose bound, ``heading_error_rad`` the forward heading
+    drift of the motion envelope and ``margin_m`` the extra path checked
+    beyond the remainder.
     """
 
     session: str
     sequence: int
-    odom_stamp_ns: int
+    start_stamp_ns: int
     start_x: float
     start_y: float
     start_yaw: float
-    remaining_m: float
-    stop_extension_m: float
-    clear: bool
-    reason: str
+    candidates: tuple
+    bounds_xy_m: float
+    bounds_yaw_rad: float
+    heading_error_rad: float
+    margin_m: float
     map_hash: str
-    candidate_digest: str
 
     def __post_init__(self):
         _session(self.session)
         _integer(self.sequence, 'sequence')
-        _integer(self.odom_stamp_ns, 'odom_stamp_ns', minimum=1)
-        for name in ('start_x', 'start_y', 'start_yaw', 'remaining_m',
-                     'stop_extension_m'):
+        _integer(self.start_stamp_ns, 'start_stamp_ns', minimum=1)
+        for name in ('start_x', 'start_y', 'start_yaw'):
             _number(getattr(self, name), name)
-        if self.remaining_m < 0 or self.stop_extension_m < 0:
-            _fail('remaining_m and stop_extension_m cannot be negative')
-        if type(self.clear) is not bool or not isinstance(self.reason, str):
-            _fail('clear must be a bool and reason a string')
-        if self.clear and self.reason:
-            _fail('clear evidence cannot carry a refusal reason')
-        if not self.clear and not self.reason:
-            _fail('refusing evidence needs a reason')
+        if (not isinstance(self.candidates, tuple)
+                or not 1 <= len(self.candidates) <= MAX_PLAN_CANDIDATES):
+            _fail(f'candidates must be a tuple of 1..{MAX_PLAN_CANDIDATES} poses')
+        for pose in self.candidates:
+            if not isinstance(pose, tuple) or len(pose) != 3:
+                _fail('each candidate must be (x, y, yaw)')
+            for value in pose:
+                _number(value, 'candidate')
+        limits = (('bounds_xy_m', 0.5), ('bounds_yaw_rad', 0.5),
+                  ('heading_error_rad', 0.35), ('margin_m', 0.2))
+        for name, limit in limits:
+            if not 0 <= _number(getattr(self, name), name) <= limit:
+                _fail(f'{name} must be within [0, {limit}]')
         _digest(self.map_hash, 'map_hash')
-        _digest(self.candidate_digest, 'candidate_digest')
 
-    def to_preview(self):
-        """Convert to the guard preview form (pose and stamp checked there)."""
-        start = SE2(self.start_x, self.start_y, self.start_yaw)
-        distance = max(self.remaining_m, 1e-3)
-        return TranslationPreview(
-            self.clear, self.reason, distance, self.stop_extension_m, start,
-            start.compose(SE2(distance, 0.0, 0.0)), self.odom_stamp_ns)
+    @property
+    def start(self):
+        return SE2(self.start_x, self.start_y, self.start_yaw)
 
 
-def encode_route_evidence(evidence):
-    return json.dumps({'schema_version': TRANSLATION_SCHEMA,
-                       'kind': 'ROUTE_EVIDENCE', **asdict(evidence)}, sort_keys=True)
+def encode_route_plan(plan):
+    data = asdict(plan)
+    data['candidates'] = [list(pose) for pose in plan.candidates]
+    return json.dumps({'schema_version': TRANSLATION_SCHEMA, 'kind': 'ROUTE_PLAN', **data},
+                      sort_keys=True)
 
 
-def decode_route_evidence(text):
+def decode_route_plan(text):
     data = _load(text)
-    _exact(data, ('schema_version', 'kind', 'session', 'sequence', 'odom_stamp_ns',
-                  'start_x', 'start_y', 'start_yaw', 'remaining_m',
-                  'stop_extension_m', 'clear', 'reason', 'map_hash',
-                  'candidate_digest'), 'route evidence')
-    _header(data, 'ROUTE_EVIDENCE')
+    _exact(data, ('schema_version', 'kind', 'session', 'sequence', 'start_stamp_ns',
+                  'start_x', 'start_y', 'start_yaw', 'candidates', 'bounds_xy_m',
+                  'bounds_yaw_rad', 'heading_error_rad', 'margin_m', 'map_hash'),
+           'route plan')
+    _header(data, 'ROUTE_PLAN')
+    if not isinstance(data['candidates'], list) or not all(
+            isinstance(pose, list) for pose in data['candidates']):
+        _fail('candidates must be a list of [x, y, yaw]')
     data = {k: v for k, v in data.items() if k not in ('schema_version', 'kind')}
-    return RouteEvidence(**data)
+    data['candidates'] = tuple(tuple(pose) for pose in data['candidates'])
+    return RoutePlan(**data)
 
 
 @dataclass(frozen=True)

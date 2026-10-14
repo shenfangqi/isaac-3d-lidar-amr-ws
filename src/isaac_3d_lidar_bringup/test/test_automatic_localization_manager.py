@@ -29,9 +29,12 @@ from isaac_3d_lidar_bringup import localization_variable_regions
 from isaac_3d_lidar_bringup import localization_surface_validation
 from isaac_3d_lidar_bringup import localization_translation_contracts
 from isaac_3d_lidar_bringup import localization_translation_guard
+from isaac_3d_lidar_bringup import localization_translation_route
 from isaac_3d_lidar_bringup.automatic_localization_quality import (
     angular_difference, quaternion_yaw, trim_time_window,
 )
+
+SE2 = localization_contracts.SE2
 
 
 class FakeTime:
@@ -77,6 +80,7 @@ def manager():
     scope.update(vars(localization_route_planner))
     scope.update(vars(localization_translation_contracts))
     scope.update(vars(localization_translation_guard))
+    scope.update(vars(localization_translation_route))
     scope.update(Enum=Enum, Node=object, time=time, math=math, Time=FakeTime,
                  deque=deque, uuid=__import__('uuid'), np=__import__('numpy'),
                  hashlib=__import__('hashlib'), json=__import__('json'), os=__import__('os'),
@@ -2145,16 +2149,16 @@ def translated(segmented, tmp_path):
         _linear_profile(manager)))
     manager.params.update({'translation_policy': 'guarded',
                            'linear_profile_path': str(path)})
-    manager.translation_requests, manager.evidence = [], []
+    manager.translation_requests, manager.plans = [], []
     original = manager.create_publisher
 
     def create_publisher(kind, topic, qos):
         if 'translation_request' in topic:
             return NS(publish=lambda msg: manager.translation_requests.append(
                 localization_translation_contracts.decode_translation_request(msg.data)))
-        if 'route_evidence' in topic:
-            return NS(publish=lambda msg: manager.evidence.append(
-                localization_translation_contracts.decode_route_evidence(msg.data)))
+        if 'route_plan' in topic:
+            return NS(publish=lambda msg: manager.plans.append(
+                localization_translation_contracts.decode_route_plan(msg.data)))
         return original(kind, topic, qos)
 
     manager.create_publisher = create_publisher
@@ -2167,11 +2171,23 @@ def translated(segmented, tmp_path):
     return manager
 
 
-def _send_evidence(manager, age_s=0.0):
-    """Run the route evidence group on the manager's current odometry."""
-    manager._evidence_odom = (manager._last_odom_stamp_ns, manager._last_odom_pose,
-                              time.monotonic() - age_s)
-    manager._evidence_tick()
+def _guard_check(manager, guard_start, odom, remaining_m):
+    """Run the guard node's route check on the manager's latest plan."""
+    plan = manager.plans[-1]
+    checker = localization_translation_route.RouteChecker(manager._latest_grid,
+                                                          manager._map_hash)
+    model = localization_translation_route.guard_model(
+        manager._footprint, manager._rotation_gate.padding_m,
+        manager._linear_profile.lateral_error_m, manager._linear_stop_extension, plan)
+    return checker.preview(plan, model, guard_start, odom, remaining_m,
+                           manager._linear_stop_extension)
+
+
+def _at_rest(manager, along_m=0.0):
+    """Return guard odometry ``along_m`` ahead of the manager's start pose."""
+    x, y, yaw = manager._last_odom_pose
+    return NS(stamp_ns=manager._last_odom_stamp_ns + 1, x=x + along_m * math.cos(yaw),
+              y=y + along_m * math.sin(yaw), yaw=yaw)
 
 
 def _linear(manager, state, reason=''):
@@ -2251,14 +2267,19 @@ def test_forward_route_runs_under_map_evidence_and_starts_a_new_view(translated)
     move = manager.translation_requests[-1]
     assert move.operation == 'MOVE' and move.distance_m == pytest.approx(0.4)
     assert move.profile_hash == manager._linear_profile.digest
+    plan = manager.plans[-1]
+    assert plan.sequence == move.sequence and plan.map_hash == manager._map_hash
+    assert len(plan.candidates) == len(manager._route_poses) == 2
+    assert plan.margin_m == pytest.approx(manager.params['route_evidence_margin_m'])
+    assert (plan.start_x, plan.start_y, plan.start_yaw) == manager._last_odom_pose
     _linear(manager, 'MOVING')
     manager._tick()
-    _send_evidence(manager)
-    evidence = manager.evidence[-1]
-    assert evidence.clear and evidence.remaining_m == pytest.approx(
+    assert manager.plans[-1] == plan                  # re-sent unchanged
+    start = SE2(*manager._last_odom_pose)
+    preview = _guard_check(manager, start, _at_rest(manager), 0.4)
+    assert preview.geometry_clear and preview.distance_m == pytest.approx(
         0.4 + manager.params['route_evidence_margin_m'])
-    assert evidence.stop_extension_m == pytest.approx(manager._linear_stop_extension)
-    assert evidence.map_hash == manager._map_hash
+    assert preview.stop_extension_m == pytest.approx(manager._linear_stop_extension)
     _linear(manager, 'STOPPING')
     manager._tick()
     assert manager._state == manager.State.SETTLE_TRANSLATION
@@ -2306,18 +2327,30 @@ def test_a_translation_fault_stops_the_session(translated):
     assert manager.translation_requests[-1].operation == 'STOP'
 
 
-def test_evidence_refuses_when_the_remaining_path_is_unsafe_for_any_candidate(translated):
+def test_the_guard_check_refuses_when_the_path_is_unsafe_for_any_candidate(translated):
     manager = translated
     # A wall 0.3 m ahead of the second candidate only (it faces -x at x=4.5).
     grid = _free_grid(walls=[(3.9, 2.5, 4.0, 3.5)])
     manager._latest_grid = grid
     manager._map_hash = localization_hypotheses.map_hash(grid)
     _to_route_planning(manager, _plan('ROUTE_FOUND', (('FORWARD', 0.4),)))
-    _linear(manager, 'MOVING')
-    manager._tick()
-    _send_evidence(manager)
-    evidence = manager.evidence[-1]
-    assert not evidence.clear and evidence.reason == 'OBSTACLE_IN_SWEEP'
+    start = SE2(*manager._last_odom_pose)
+    preview = _guard_check(manager, start, _at_rest(manager), 0.4)
+    assert not preview.geometry_clear and preview.reason == 'OBSTACLE_IN_SWEEP'
+    # Driven past the wall's reach, the remaining path is clear again.
+    assert _guard_check(manager, start, _at_rest(manager), 0.0).geometry_clear
+
+
+def test_the_guard_check_refuses_another_start_or_map(translated):
+    manager = translated
+    _to_route_planning(manager, _plan('ROUTE_FOUND', (('FORWARD', 0.4),)))
+    start = SE2(*manager._last_odom_pose)
+    moved = SE2(start.x + 0.05, start.y, start.yaw)
+    assert _guard_check(manager, moved, _at_rest(manager), 0.4).reason == (
+        'ROUTE_PLAN_START_MISMATCH')
+    manager._map_hash = 'f' * 64                      # checker on another map
+    assert _guard_check(manager, start, _at_rest(manager), 0.4).reason == (
+        'ROUTE_PLAN_MAP_MISMATCH')
 
 
 def _forced_translation_session(manager, walls=()):
@@ -2355,8 +2388,9 @@ def test_forced_translation_drives_once_then_accepts_the_next_result(translated)
     assert manager.seeds == []
     _linear(manager, 'MOVING')
     manager._tick()
-    _send_evidence(manager)
-    assert manager.evidence[-1].clear
+    assert _guard_check(manager, SE2(manager.plans[-1].start_x, manager.plans[-1].start_y,
+                                     manager.plans[-1].start_yaw),
+                        _at_rest(manager), 0.4).geometry_clear
     _linear(manager, 'STOPPING')
     manager._tick()
     _linear(manager, 'STOPPED')
@@ -2378,55 +2412,17 @@ def test_forced_translation_drives_once_then_accepts_the_next_result(translated)
 
 
 @pytest.mark.parametrize('jitter_m', [0.001, -0.001, 0.003])
-def test_route_evidence_covers_the_guards_remaining_distance_despite_jitter(
+def test_the_guard_check_covers_its_own_remaining_distance_despite_jitter(
         translated, jitter_m):
     # 2026-10-13 on the robot: the manager's odometry had crept 1 mm ahead
     # of the guard's start, so 0.599 m of evidence for a 0.6 m request was
-    # refused (SWEEP_TOO_SHORT) before the robot moved.
+    # refused (SWEEP_TOO_SHORT).  The guard now checks its own remainder.
     manager = translated
     _forced_translation_session(manager)
-    x, y, yaw = manager._last_odom_pose
-    manager._last_odom_pose = (x + jitter_m * math.cos(yaw), y + jitter_m * math.sin(yaw),
-                               yaw)
-    _linear(manager, 'MOVING')                        # guard progress 0.0
-    manager._tick()
-    _send_evidence(manager)
-    guard = localization_translation_guard.LinearProbeGuard(
-        manager._linear_profile, expected_hashes=manager._probe_hashes)
-    evidence = manager.evidence[-1]
-    assert evidence.remaining_m >= 0.4
-    assert evidence.stop_extension_m == pytest.approx(guard.stop_extension_m)
-
-
-def test_route_evidence_waits_for_fresh_odometry(translated):
-    # 2026-10-14 on the robot: after a 1.2 s route check the first sweep
-    # named a 1.2 s old odometry sample and the guard faulted (SWEEP_STALE).
-    manager = translated
-    _forced_translation_session(manager)
-    _linear(manager, 'MOVING')
-    sent = len(manager.evidence)
-    _send_evidence(manager, age_s=1.2)
-    assert len(manager.evidence) == sent
-    manager._tick()
-    assert manager._state == manager.State.EXECUTE_TRANSLATION
-    _send_evidence(manager)
-    assert len(manager.evidence) == sent + 1
-
-
-def test_route_evidence_does_not_wait_for_the_main_thread(translated):
-    # The main callback group sends no evidence: a long route check or
-    # search there cannot delay it (2026-10-14, SWEEP_STALE twice).
-    manager = translated
-    _forced_translation_session(manager)
-    _linear(manager, 'MOVING')
-    sent = len(manager.evidence)
-    manager._tick()
-    assert len(manager.evidence) == sent
-    _send_evidence(manager)
-    assert len(manager.evidence) == sent + 1
-    manager._state = manager.State.SETTLE_TRANSLATION
-    _send_evidence(manager)
-    assert len(manager.evidence) == sent + 1
+    start = SE2(*manager._last_odom_pose)
+    guard_start = start.compose(SE2(jitter_m, 0.0, 0.0))
+    preview = _guard_check(manager, guard_start, _at_rest(manager, jitter_m), 0.4)
+    assert preview.geometry_clear and preview.distance_m >= 0.4
 
 
 @pytest.mark.parametrize('blocked', [False, True])
@@ -2435,19 +2431,20 @@ def test_manager_and_guard_complete_a_translation_under_jitter_and_reordering(
         translated, seed, blocked):
     # 2026-10-13 on the robot the first two forced translations were refused
     # before moving: odometry jitter (SWEEP_TOO_SHORT), then a sweep naming
-    # an odometry sample the guard had not received yet, or no sweep yet
-    # right after MOVE (SWEEP_STALE).  Here the real manager and the real
-    # guard run together: 10 Hz odometry with 1 mm noise; every message
-    # (odometry to either side, requests and sweeps to the guard) arrives
-    # after a random 0-60 ms; the manager ticks at 20 Hz out of phase with
-    # the odometry, the guard at 50 Hz; the guard's command drives the robot
-    # at 79% tracking.
+    # an odometry sample the guard had not received yet (SWEEP_STALE).  Here
+    # the real manager and the real guard run together: 10 Hz odometry with
+    # 1 mm noise; every message (odometry to either side, requests and route
+    # plans to the guard) arrives after a random 0-60 ms; the manager ticks
+    # at 20 Hz out of phase with the odometry, the guard at 50 Hz and its
+    # route check (as the guard node) at 10 Hz; the guard's command drives
+    # the robot at 79% tracking.
     #
-    # ``blocked``: 2026-10-14 the manager's main thread lagged on odometry
-    # around the MOVE (a 1.2 s route check, then a late /odom), and the
-    # guard refused the sweeps (SWEEP_STALE) twice.  Here the main callback
-    # group receives no odometry from 0.2 s until 1 s after the MOVE; the
-    # route evidence group (10 Hz) keeps its own odometry.
+    # ``blocked``: 2026-10-14 the manager lagged on odometry around the MOVE
+    # (route checks of 1-5 s, then late /odom) and the guard refused the
+    # manager's route evidence (SWEEP_STALE) three times.  Here the manager
+    # does not tick from 0.3 s until the MOVE at 1.5 s and receives no
+    # odometry from 0.2 s until 1 s after the MOVE; the guard checks the
+    # path itself and must not notice.
     from dataclasses import replace
     import random
     rng = random.Random(seed)
@@ -2456,12 +2453,14 @@ def test_manager_and_guard_complete_a_translation_under_jitter_and_reordering(
     assert manager._state == manager.State.EXECUTE_TRANSLATION
     guard = localization_translation_guard.LinearProbeGuard(
         manager._linear_profile, expected_hashes=manager._probe_hashes)
+    checker = localization_translation_route.RouteChecker(manager._latest_grid,
+                                                          manager._map_hash)
     x0, y0, yaw = manager._last_odom_pose
     stamp0 = manager._last_odom_stamp_ns
     travelled, speed = 0.0, 0.0
     queue = []                        # (arrival, kind, payload)
-    sent_requests, sent_evidence = 0, 0
-    evidence_odom, move_t = None, None
+    sent_requests, sent_plans = 0, 0
+    plans, move_t = {}, None
     guard.on_emergency(False, 0.0)
 
     def send(now, kind, payload):
@@ -2484,7 +2483,6 @@ def test_manager_and_guard_complete_a_translation_under_jitter_and_reordering(
                 guard.on_odom(replace(payload, receipt_mono=t))
                 guard.on_chassis(True, False, t)
             elif kind == 'odom_manager':
-                evidence_odom = (payload, t)
                 if blocked and 0.2 <= t and (move_t is None or t < move_t + 1.0):
                     continue
                 manager._last_odom_pose = (payload.x, payload.y, payload.yaw)
@@ -2494,14 +2492,15 @@ def test_manager_and_guard_complete_a_translation_under_jitter_and_reordering(
                               distance_m=payload.distance_m, speed_mps=payload.speed_mps,
                               profile_hash=payload.profile_hash)
             else:
-                guard.on_preview(payload.to_preview(), t)
-        if step % 10 == 3:            # manager at 20 Hz, out of phase
+                plans[(payload.session, payload.sequence)] = payload
+        stalled = blocked and 0.3 <= t < 1.5
+        if step % 10 == 3 and not stalled:     # manager at 20 Hz, out of phase
             manager._translation_status = (
                 localization_translation_contracts.translation_status(guard),
                 time.monotonic())
             manager._tick()
             # The STOP handshake for 1.5 s while the robot is still, then
-            # the MOVE; its first sweep follows on the next manager tick.
+            # the MOVE with its route plan.
             for request in manager.translation_requests[sent_requests:]:
                 if request.operation == 'MOVE' and t < 1.5:
                     break
@@ -2509,15 +2508,18 @@ def test_manager_and_guard_complete_a_translation_under_jitter_and_reordering(
                 sent_requests += 1
                 if request.operation == 'MOVE' and move_t is None:
                     move_t = t
-        if step % 20 == 7 and evidence_odom is not None:   # evidence group, 10 Hz
-            sample, received = evidence_odom
-            manager._evidence_odom = (sample.stamp_ns, (sample.x, sample.y, sample.yaw),
-                                      time.monotonic() - (t - received))
-            manager._evidence_tick()
             if move_t is not None:
-                for evidence in manager.evidence[sent_evidence:]:
-                    send(t, 'sweep', evidence)
-            sent_evidence = len(manager.evidence)
+                for plan in manager.plans[sent_plans:]:
+                    send(t, 'plan', plan)
+            sent_plans = len(manager.plans)
+        plan = plans.get((guard.session, guard.sequence))
+        if step % 20 == 7 and guard.state == 'MOVING' and plan is not None:
+            model = localization_translation_route.guard_model(       # guard node
+                manager._footprint, manager._rotation_gate.padding_m,
+                manager._linear_profile.lateral_error_m, guard.stop_extension_m, plan)
+            guard.on_preview(checker.preview(
+                plan, model, guard._start, guard._odom,
+                max(0.0, guard.target_m - guard.progress_m), guard.stop_extension_m), t)
         if step % 4 == 0:             # guard at 50 Hz
             speed = 0.79 * guard.tick(t)
         if guard.state in ('STOPPED', 'FAULT') and t > 2.0:

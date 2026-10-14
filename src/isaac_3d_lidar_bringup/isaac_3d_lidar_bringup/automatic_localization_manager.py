@@ -4,7 +4,6 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from enum import Enum
-import hashlib
 import json
 import math
 import os
@@ -17,9 +16,7 @@ from nav2_msgs.srv import ManageLifecycleNodes
 from nav_msgs.msg import OccupancyGrid, Odometry
 import numpy as np
 import rclpy
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.duration import Duration
-from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
@@ -106,7 +103,6 @@ from isaac_3d_lidar_bringup.localization_rotation_policy import (
 )
 from isaac_3d_lidar_bringup.localization_route_planner import (
     check_route,
-    ClearanceField,
     FORWARD,
     MotionModel,
     PlannerConfig,
@@ -147,12 +143,13 @@ from isaac_3d_lidar_bringup.localization_surface_validation import (
 from isaac_3d_lidar_bringup.localization_translation_contracts import (
     decode_linear_profile,
     decode_translation_status,
-    encode_route_evidence,
+    encode_route_plan,
     encode_translation_request,
-    RouteEvidence,
+    RoutePlan,
     TranslationLink,
 )
 from isaac_3d_lidar_bringup.localization_translation_guard import LinearProbeGuard
+from isaac_3d_lidar_bringup.localization_translation_route import route_fields
 from isaac_3d_lidar_bringup.localization_surface_additions import load_surface_additions
 from isaac_3d_lidar_bringup.localization_variable_regions import (
     load_variable_regions, mask_grid)
@@ -436,17 +433,6 @@ class AutomaticLocalizationManager(Node):
             else None)
 
         self._timer = self.create_timer(0.1, self._tick)
-        # Route evidence runs in its own callback group (its own executor
-        # thread): odometry in, evidence out every 0.1 s.  The main group's
-        # route checks and searches hold its thread for 1-2 s on the Jetson,
-        # and 2026-10-14 evidence built there named odometry that old; the
-        # guard refused it (SWEEP_STALE) twice before the robot moved.
-        self._evidence_odom = None
-        evidence_group = MutuallyExclusiveCallbackGroup()
-        self.create_subscription(Odometry, self._parameter('odom_topic'),
-                                 self._on_evidence_odom, 20,
-                                 callback_group=evidence_group)
-        self.create_timer(0.1, self._evidence_tick, callback_group=evidence_group)
         self._publish_status(force=True)
 
     def _declare_parameters(self):
@@ -652,7 +638,7 @@ class AutomaticLocalizationManager(Node):
             'linear_profile_path': '',
             'translation_request_topic':
                 '/automatic_localization/translation_request',
-            'route_evidence_topic': '/automatic_localization/route_evidence',
+            'route_plan_topic': '/automatic_localization/route_plan',
             'translation_status_topic':
                 '/automatic_localization/translation_status',
             # The accepted 2026-10-13 linear profile was measured at 0.08 m/s;
@@ -665,12 +651,9 @@ class AutomaticLocalizationManager(Node):
             # Longest forward distance driven in the linear profile's runs
             # (0.41 m on 2026-10-13, less a margin); see _forward_options.
             'route_max_driven_m': 0.40,
-            # Extra forward path the route evidence covers beyond the remainder.
+            # Extra forward path the guard's route check covers beyond the
+            # remainder (sent in the route plan).
             'route_evidence_margin_m': 0.02,
-            # Route evidence is only sent from odometry received this
-            # recently (the guard allows 0.3 s between the sweep's sample and
-            # its newest one); otherwise it waits at zero speed.
-            'route_evidence_max_odom_age_sec': 0.2,
             'route_plan_timeout_sec': 60.0,
             'route_max_depth': 2,
             'route_min_difference': 0.15,
@@ -765,8 +748,8 @@ class AutomaticLocalizationManager(Node):
                 self._translation_reason = ''
         self._translation_request_publisher = self.create_publisher(
             String, self._parameter('translation_request_topic'), 10)
-        self._route_evidence_publisher = self.create_publisher(
-            String, self._parameter('route_evidence_topic'), 10)
+        self._route_plan_publisher = self.create_publisher(
+            String, self._parameter('route_plan_topic'), 10)
         self.create_subscription(
             String, self._parameter('translation_status_topic'),
             self._on_translation_status, 10)
@@ -3057,6 +3040,15 @@ class AutomaticLocalizationManager(Node):
         self._translation_moved = False
         self._translation.move(distance, float(self._parameter('translation_speed_mps')),
                                self._linear_profile.digest)
+        bounds = self._route_bounds
+        self._route_plan = RoutePlan(
+            self._session, self._translation.sequence, self._last_odom_stamp_ns,
+            *self._last_odom_pose,
+            tuple((p.x, p.y, p.yaw) for p in self._route_poses),
+            bounds.xy_m, bounds.yaw_rad,
+            float(self._parameter('route_forward_heading_error_rad')),
+            float(self._parameter('route_evidence_margin_m')), self._map_hash)
+        self._publish_route_plan()
         self._refresh_probe_lease()
         self._transition(State.EXECUTE_TRANSLATION)
 
@@ -3118,72 +3110,18 @@ class AutomaticLocalizationManager(Node):
         """Clearance fields of the current map, built once per map hash."""
         cached = getattr(self, '_route_fields', None)
         if cached is None or cached[0] != self._map_hash:
-            static_map = static_map_from_grid(self._latest_grid, self._map_hash)
-            cached = (self._map_hash, (
-                ClearanceField(static_map),
-                ClearanceField(static_map, blocked=static_map.data == 100,
-                               outside_blocked=False)))
+            cached = (self._map_hash, route_fields(
+                static_map_from_grid(self._latest_grid, self._map_hash)))
             self._route_fields = cached
         return cached[1]
 
-    def _publish_route_evidence(self):
-        """Re-check the remaining path under every candidate; send evidence."""
-        latest = self._evidence_odom
-        # Without a fresh sample the guard waits (zero speed) for the next
-        # tick; a sweep from an old sample would fault it.
-        if (latest is None or time.monotonic() - latest[2]
-                > float(self._parameter('route_evidence_max_odom_age_sec'))):
-            return
-        stamp, odom = latest[0], SE2(*latest[1])
-        delta = self._translation_start.inverse().compose(odom)
-        # The guard needs evidence covering ITS remaining distance, measured
-        # from its own start pose.  At rest the two progress estimates differ
-        # by odometry jitter (2026-10-13: 0.599 m of evidence for 0.6 m was
-        # refused as SWEEP_TOO_SHORT before the robot moved), so cover the
-        # larger remainder plus a margin: a longer checked path only adds
-        # safety.
-        status = self._fresh_translation_status(time.monotonic())
-        guard_progress = status.progress_m if status is not None else 0.0
-        remaining = max(0.0, self._translation_target - min(delta.x, guard_progress))
-        if remaining > 0.0:
-            remaining += float(self._parameter('route_evidence_margin_m'))
-        clear, reason = True, ''
-        if remaining > 1e-3:
-            fields, model = self._route_field_pair(), self._route_model()
-            for start in self._route_poses:
-                pose = start.compose(delta)
-                check = check_route(fields, model, (pose.x, pose.y, pose.yaw),
-                                    self._route_bounds, ((FORWARD, remaining),))
-                if not check.safe:
-                    clear, reason = False, check.reason
-                    break
-        digest = hashlib.sha256(json.dumps(
-            [[round(p.x, 4), round(p.y, 4), round(p.yaw, 4)] for p in self._route_poses]
-        ).encode()).hexdigest()
-        self._route_evidence_publisher.publish(String(data=encode_route_evidence(
-            RouteEvidence(self._session, self._translation.sequence, stamp,
-                          odom.x, odom.y, odom.yaw, remaining,
-                          self._linear_stop_extension, clear, reason,
-                          self._map_hash, digest))))
-
-    def _on_evidence_odom(self, message):
-        """Keep the newest odometry for the route evidence (evidence group)."""
-        stamp = message.header.stamp.sec * 10**9 + message.header.stamp.nanosec
-        latest = self._evidence_odom
-        if latest is not None and stamp <= latest[0]:
-            return
-        pose = message.pose.pose
-        self._evidence_odom = (stamp, (pose.position.x, pose.position.y,
-                                       quaternion_yaw(pose.orientation)),
-                               time.monotonic())
-
-    def _evidence_tick(self):
-        """Send route evidence while a translation runs (evidence group)."""
-        if self._state == State.EXECUTE_TRANSLATION:
-            self._publish_route_evidence()
+    def _publish_route_plan(self):
+        """Send the running MOVE's candidates; the guard checks the path itself."""
+        self._route_plan_publisher.publish(String(data=encode_route_plan(self._route_plan)))
 
     def _tick_execute_translation(self, now, state_age):
-        """Follow the guard's translation status (evidence: _evidence_tick)."""
+        """Re-send the route plan and follow the guard's translation status."""
+        self._publish_route_plan()
         status = self._fresh_translation_status(now)
         if status is None:
             if state_age > self._parameter('translation_status_freshness_sec') * 3:
@@ -3544,11 +3482,8 @@ def main(args=None):
     """Run the automatic localization manager until shutdown."""
     rclpy.init(args=args)
     node = AutomaticLocalizationManager()
-    # Two threads: the main callback group, and the route evidence group.
-    executor = MultiThreadedExecutor(num_threads=2)
-    executor.add_node(node)
     try:
-        executor.spin()
+        rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:

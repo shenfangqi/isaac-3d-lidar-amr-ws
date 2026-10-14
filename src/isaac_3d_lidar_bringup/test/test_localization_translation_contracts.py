@@ -6,22 +6,23 @@ import math
 import pytest
 
 from isaac_3d_lidar_bringup.localization_contracts import (
-    ContractError, encode_motion_request, MotionOperation, MotionRequest,
+    ContractError, encode_motion_request, MotionOperation, MotionRequest, SE2,
 )
 from isaac_3d_lidar_bringup.localization_motion_guard import OdomSample
 from isaac_3d_lidar_bringup.localization_translation_contracts import (
-    decode_linear_profile, decode_route_evidence, decode_translation_request,
-    decode_translation_status, encode_linear_profile, encode_route_evidence,
-    encode_translation_request, encode_translation_status, RouteEvidence,
+    decode_linear_profile, decode_route_plan, decode_translation_request,
+    decode_translation_status, encode_linear_profile, encode_route_plan,
+    encode_translation_request, encode_translation_status, RoutePlan,
     translation_status, TranslationRequest,
 )
 from isaac_3d_lidar_bringup.localization_translation_guard import (
     combine_commands, LinearProbeGuard, LinearProfile,
 )
+from isaac_3d_lidar_bringup.localization_translation_policy import TranslationPreview
 
 SESSION = 'session0000000001'
 HASHES = ('a' * 64, 'b' * 64, 'c' * 64)
-MAP, CANDIDATES = 'd' * 64, 'e' * 64
+MAP = 'd' * 64
 
 
 def _profile(status='ACCEPTED'):
@@ -49,29 +50,39 @@ def test_a_rotation_request_cannot_be_read_as_a_translation():
         decode_translation_request(rotate)
 
 
-def _evidence(**changes):
-    values = dict(session=SESSION, sequence=3, odom_stamp_ns=10**9, start_x=1.0,
-                  start_y=2.0, start_yaw=0.5, remaining_m=0.4, stop_extension_m=0.2,
-                  clear=True, reason='', map_hash=MAP, candidate_digest=CANDIDATES)
+def _plan(**changes):
+    values = dict(session=SESSION, sequence=3, start_stamp_ns=10**9, start_x=1.0,
+                  start_y=2.0, start_yaw=0.5, candidates=((1.0, 2.0, 0.5), (4.0, 3.0, -2.6)),
+                  bounds_xy_m=0.05, bounds_yaw_rad=0.05, heading_error_rad=0.07,
+                  margin_m=0.02, map_hash=MAP)
     values.update(changes)
-    return RouteEvidence(**values)
+    return RoutePlan(**values)
 
 
-def test_route_evidence_round_trip_and_preview_form():
-    evidence = _evidence()
-    assert decode_route_evidence(encode_route_evidence(evidence)) == evidence
-    preview = evidence.to_preview()
-    assert preview.geometry_clear and preview.distance_m == pytest.approx(0.4)
-    assert preview.target.x == pytest.approx(1.0 + 0.4 * math.cos(0.5))
-    assert preview.snapshot_stamp_ns == 10**9
-    refused = _evidence(clear=False, reason='OBSTACLE_IN_SWEEP').to_preview()
-    assert not refused.geometry_clear and refused.reason == 'OBSTACLE_IN_SWEEP'
+def test_route_plan_round_trip_and_is_strict():
+    plan = _plan()
+    assert decode_route_plan(encode_route_plan(plan)) == plan
+    assert plan.start == SE2(1.0, 2.0, 0.5)
+    for bad in (dict(candidates=()), dict(candidates=((1.0, 2.0),)),
+                dict(candidates=((1.0, math.nan, 0.0),)), dict(candidates=[(1.0, 2.0, 0.5)]),
+                dict(bounds_xy_m=-0.1), dict(heading_error_rad=0.5), dict(margin_m=0.3),
+                dict(map_hash='x'), dict(start_stamp_ns=0)):
+        with pytest.raises(ContractError):
+            _plan(**bad)
+    data = json.loads(encode_route_plan(plan))
+    data['extra'] = 1
     with pytest.raises(ContractError):
-        _evidence(clear=True, reason='OBSTACLE_IN_SWEEP')
+        decode_route_plan(json.dumps(data))
+    data = json.loads(encode_route_plan(plan))
+    data['kind'] = 'ROUTE_EVIDENCE'
     with pytest.raises(ContractError):
-        _evidence(clear=False, reason='')
-    with pytest.raises(ContractError):
-        _evidence(remaining_m=-0.1)
+        decode_route_plan(json.dumps(data))
+
+
+def _preview(stamp, x, remaining, extension, clear=True, reason=''):
+    start = SE2(x, 0.0, 0.0)
+    return TranslationPreview(clear, reason, max(remaining, 1e-3), extension, start,
+                              start.compose(SE2(max(remaining, 1e-3), 0.0, 0.0)), stamp)
 
 
 def test_linear_profile_round_trip_and_status():
@@ -120,10 +131,9 @@ class _Clock:
                                           self.guard.command_mps, 0.0, self.now))
             self.guard.on_chassis(True, False, self.now)
             if self.guard.state == 'MOVING' or evidence == 'always':
-                self.guard.on_preview(_evidence(
-                    odom_stamp_ns=self.stamp, start_x=self.x, start_y=0.0, start_yaw=0.0,
-                    remaining_m=max(0.0, 0.4 - self.x) + 1e-3,
-                    stop_extension_m=self.guard.stop_extension_m).to_preview(), self.now)
+                self.guard.on_preview(_preview(
+                    self.stamp, self.x, max(0.0, 0.4 - self.x) + 1e-3,
+                    self.guard.stop_extension_m), self.now)
             if self.guard.session:
                 self.guard.request(*self.lease, self.now, **self.target)
             self.guard.tick(self.now)
@@ -156,9 +166,8 @@ def test_missing_or_refusing_map_evidence_stops_the_segment():
     clock.lease = ('MOVE', SESSION, 2)
     clock.target = dict(distance_m=0.4, speed_mps=0.05, profile_hash=profile.digest)
     guard.request('MOVE', SESSION, 2, clock.now, **clock.target)
-    guard.on_preview(_evidence(clear=False, reason='OBSTACLE_IN_SWEEP',
-                               odom_stamp_ns=clock.stamp, start_x=clock.x,
-                               start_y=0.0, start_yaw=0.0).to_preview(), clock.now)
+    guard.on_preview(_preview(clock.stamp, clock.x, 0.4, guard.stop_extension_m,
+                              clear=False, reason='OBSTACLE_IN_SWEEP'), clock.now)
     guard.tick(clock.now + 0.01)
     assert guard.state == 'FAULT' and guard.reason == 'OBSTACLE_IN_SWEEP'
     assert guard.command_mps == 0.0
