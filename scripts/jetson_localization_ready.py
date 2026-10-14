@@ -13,7 +13,10 @@ Stages, all under one deadline, with progress every 10 s:
 1. the manager's latched ``/automatic_localization/status`` arrives (its
    constructor finished and it is spinning) and shows WAIT_FOR_START;
 2. the manager's parameter service answers ``--params``;
-3. with ``--guard``: the motion guard's status topic arrives (it is spinning).
+3. with ``--guard``: the motion guard's status topic arrives (it is
+   spinning) and its node name is in the graph.  Node names are discovered
+   separately from topic data and can lag it; the startup checks the name
+   (2026-10-14: the status had arrived, the name had not, startup refused).
 
 Prints one JSON line ``{"state", "params", "nodes", "seconds"}`` and exits 0, or
 names the stage it was waiting for and exits 2.  Never publishes anything.
@@ -32,6 +35,7 @@ from std_msgs.msg import String
 MANAGER = '/automatic_localization_manager'
 STATUS = '/automatic_localization/status'
 GUARD_STATUS = '/automatic_localization/motion_status'
+GUARD_NODE = '/localization_motion_guard'
 
 
 def parse_args():
@@ -52,6 +56,12 @@ def parameter_value(value):
         ParameterType.PARAMETER_DOUBLE: value.double_value,
         ParameterType.PARAMETER_STRING: value.string_value,
     }.get(value.type)
+
+
+def node_names(node):
+    """Fully qualified names of the nodes in the graph, sorted."""
+    return sorted(f'{namespace.rstrip("/")}/{name}'
+                  for name, namespace in node.get_node_names_and_namespaces())
 
 
 def main():
@@ -108,12 +118,14 @@ def main():
         if args.guard and not seen['guard']:
             stage = 'motion guard status'
             continue
+        if args.guard and GUARD_NODE not in node_names(node):
+            stage = 'motion guard node name'
+            continue
         code = 0
         break
     if code == 0:
-        nodes = sorted(f'{namespace.rstrip("/")}/{name}'
-                       for name, namespace in node.get_node_names_and_namespaces())
-        print(json.dumps({'state': seen['state'], 'params': params, 'nodes': nodes,
+        print(json.dumps({'state': seen['state'], 'params': params,
+                          'nodes': node_names(node),
                           'seconds': round(time.monotonic() - started, 1)},
                          sort_keys=True), flush=True)
     else:
