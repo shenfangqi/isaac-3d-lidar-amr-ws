@@ -116,7 +116,8 @@ def manager():
     node._rotation_progress = 0.0
     node._state = node.State.STOP_AND_VERIFY
     node._state_started = time.monotonic()
-    node._quality_since = 1.
+    node._quality_since = node._quality_passed_at = 1.
+    node._quality_held, node._quality_streak = 3., True   # a hold already met
     node._quality_failure = ''
     node._tf_window = deque()
     node._last_map_odom_time = None
@@ -138,7 +139,6 @@ def manager():
     node._navigation_pause_state = None
     node._pause_future = None
     node._pose_seed_publisher = NS(publish=lambda message: None)
-    node._evidence_odom = None
     node.get_clock = lambda: NS(now=lambda: FakeTime(10 * 10**9))
     node._publish_status = lambda **kwargs: None
     node.get_logger = lambda: NS(info=lambda msg: None)
@@ -154,6 +154,61 @@ def test_all_quality_checks_pass_but_navigation_stays_inactive(manager):
     assert manager._state == manager.State.CANDIDATE_READY
     with pytest.raises(RuntimeError, match='forbids'):
         manager._call_lifecycle(manager._navigation_client)
+
+
+def _quality_sequence(manager, steps):
+    """Run _verify_quality at (time, failure) steps; '' passes."""
+    manager._request_nomotion_update = lambda now: None
+    manager._record_tf = lambda now: None
+    manager._quality_since = None
+    states = []
+    for now, failure in steps:
+        manager._quality_passes = (
+            lambda now, f=failure: manager._reject_quality(f) if f else True)
+        manager._verify_quality(now)
+        states.append((manager._state.value, manager._quality_since))
+    return states
+
+
+def _ticks(start, stop, failure=''):
+    """Quality results every 0.1 s from ``start`` up to ``stop``."""
+    return [(round(start + 0.1 * k, 3), failure) for k in range(round((stop - start) / 0.1))]
+
+
+def test_late_data_pauses_the_quality_hold(manager):
+    # 2026-10-14: a correct pose failed verification after late-data gaps of
+    # 1.3-2.0 s, never holding 3 s in a row.  Fresh passing time adds up.
+    states = _quality_sequence(manager, _ticks(10.0, 12.0) + _ticks(12.0, 13.4, 'STALE_TF')
+                               + _ticks(13.4, 14.4, 'STALE_ODOM') + _ticks(14.4, 15.6))
+    held = [state for state, _ in states]
+    # 1.9 s held up to 11.9 s, then 1.1 s more from 14.4 s (gaps never count).
+    assert held.index('CANDIDATE_READY') == len(_ticks(10.0, 14.4)) + 11
+    assert all(since == 10.0 for _, since in states[:-1])
+
+
+@pytest.mark.parametrize('failure', [
+    'NOT_STATIONARY', 'POST_SEARCH_POSE_DRIFT', 'COVARIANCE_TOO_LARGE', 'SCAN_MISMATCH',
+    'PARTICLES_DISPERSED', 'TF_UNSTABLE'])
+def test_motion_drift_or_a_quality_limit_restarts_the_hold(manager, failure):
+    states = _quality_sequence(manager, _ticks(10.0, 12.5) + [(12.5, failure)]
+                               + _ticks(12.6, 15.0))
+    assert states[len(_ticks(10.0, 12.5))][1] is None
+    assert all(state == 'STOP_AND_VERIFY' for state, _ in states)
+
+
+def test_a_long_late_data_gap_restarts_the_hold(manager):
+    gap = manager.params['quality_max_stale_gap_sec']
+    states = _quality_sequence(manager, _ticks(10.0, 12.5)
+                               + _ticks(12.5, 12.5 + gap + 0.2, 'STALE_TF')
+                               + _ticks(12.7 + gap, 13.7 + gap))
+    assert all(state == 'STOP_AND_VERIFY' for state, _ in states)
+
+
+def test_the_hold_completes_only_on_a_fresh_pass(manager):
+    states = _quality_sequence(manager, _ticks(10.0, 12.95) + [(13.5, 'STALE_SCAN')])
+    assert states[-1][0] == 'STOP_AND_VERIFY'
+    manager._transition(manager.State.STOP_AND_VERIFY)
+    assert manager._quality_since is None and manager._quality_passed_at is None
 
 
 def test_start_navigation_cannot_bypass_validation_mode(manager):
@@ -556,9 +611,21 @@ def test_translation_with_zero_twist_is_moving(manager):
 def test_stop_window_is_reset_during_motion_grace(manager):
     manager._publish_zero = lambda: None
     manager._stopped = lambda now: False
+    manager._last_odom_time = time.monotonic()          # fresh: real motion
+    manager._quality_passed_at = time.monotonic()
     manager._tick()
     assert manager._quality_since is None
     assert manager._quality_failure == 'NOT_STATIONARY'
+
+
+def test_late_odometry_while_verifying_keeps_the_hold(manager):
+    manager._publish_zero = lambda: None
+    manager._stopped = lambda now: False
+    manager._last_odom_time = time.monotonic() - 1.0    # late, not moving
+    manager._quality_since = manager._quality_passed_at = time.monotonic() - 0.2
+    manager._tick()
+    assert manager._quality_failure == 'STALE_ODOM'
+    assert manager._quality_since is not None
 
 
 def test_post_search_amcl_drift_is_rejected_before_acceptance(manager):
