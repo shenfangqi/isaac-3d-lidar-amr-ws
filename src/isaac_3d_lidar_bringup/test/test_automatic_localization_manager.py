@@ -134,6 +134,7 @@ def manager():
     node._navigation_pause_state = None
     node._pause_future = None
     node._pose_seed_publisher = NS(publish=lambda message: None)
+    node._evidence_odom = None
     node.get_clock = lambda: NS(now=lambda: FakeTime(10 * 10**9))
     node._publish_status = lambda **kwargs: None
     node.get_logger = lambda: NS(info=lambda msg: None)
@@ -2163,8 +2164,14 @@ def translated(segmented, tmp_path):
     manager._latest_grid = grid
     manager._map_hash = localization_hypotheses.map_hash(grid)
     manager._last_odom_stamp_ns = 25 * 10**9
-    manager._last_odom_receipt = time.monotonic()
     return manager
+
+
+def _send_evidence(manager, age_s=0.0):
+    """Run the route evidence group on the manager's current odometry."""
+    manager._evidence_odom = (manager._last_odom_stamp_ns, manager._last_odom_pose,
+                              time.monotonic() - age_s)
+    manager._evidence_tick()
 
 
 def _linear(manager, state, reason=''):
@@ -2246,6 +2253,7 @@ def test_forward_route_runs_under_map_evidence_and_starts_a_new_view(translated)
     assert move.profile_hash == manager._linear_profile.digest
     _linear(manager, 'MOVING')
     manager._tick()
+    _send_evidence(manager)
     evidence = manager.evidence[-1]
     assert evidence.clear and evidence.remaining_m == pytest.approx(
         0.4 + manager.params['route_evidence_margin_m'])
@@ -2307,6 +2315,7 @@ def test_evidence_refuses_when_the_remaining_path_is_unsafe_for_any_candidate(tr
     _to_route_planning(manager, _plan('ROUTE_FOUND', (('FORWARD', 0.4),)))
     _linear(manager, 'MOVING')
     manager._tick()
+    _send_evidence(manager)
     evidence = manager.evidence[-1]
     assert not evidence.clear and evidence.reason == 'OBSTACLE_IN_SWEEP'
 
@@ -2346,6 +2355,7 @@ def test_forced_translation_drives_once_then_accepts_the_next_result(translated)
     assert manager.seeds == []
     _linear(manager, 'MOVING')
     manager._tick()
+    _send_evidence(manager)
     assert manager.evidence[-1].clear
     _linear(manager, 'STOPPING')
     manager._tick()
@@ -2380,6 +2390,7 @@ def test_route_evidence_covers_the_guards_remaining_distance_despite_jitter(
                                yaw)
     _linear(manager, 'MOVING')                        # guard progress 0.0
     manager._tick()
+    _send_evidence(manager)
     guard = localization_translation_guard.LinearProbeGuard(
         manager._linear_profile, expected_hashes=manager._probe_hashes)
     evidence = manager.evidence[-1]
@@ -2394,12 +2405,27 @@ def test_route_evidence_waits_for_fresh_odometry(translated):
     _forced_translation_session(manager)
     _linear(manager, 'MOVING')
     sent = len(manager.evidence)
-    manager._last_odom_receipt = time.monotonic() - 1.2
+    _send_evidence(manager, age_s=1.2)
+    assert len(manager.evidence) == sent
+    manager._tick()
+    assert manager._state == manager.State.EXECUTE_TRANSLATION
+    _send_evidence(manager)
+    assert len(manager.evidence) == sent + 1
+
+
+def test_route_evidence_does_not_wait_for_the_main_thread(translated):
+    # The main callback group sends no evidence: a long route check or
+    # search there cannot delay it (2026-10-14, SWEEP_STALE twice).
+    manager = translated
+    _forced_translation_session(manager)
+    _linear(manager, 'MOVING')
+    sent = len(manager.evidence)
     manager._tick()
     assert len(manager.evidence) == sent
-    assert manager._state == manager.State.EXECUTE_TRANSLATION
-    manager._last_odom_receipt = time.monotonic()
-    manager._tick()
+    _send_evidence(manager)
+    assert len(manager.evidence) == sent + 1
+    manager._state = manager.State.SETTLE_TRANSLATION
+    _send_evidence(manager)
     assert len(manager.evidence) == sent + 1
 
 
@@ -2417,10 +2443,11 @@ def test_manager_and_guard_complete_a_translation_under_jitter_and_reordering(
     # the odometry, the guard at 50 Hz; the guard's command drives the robot
     # at 79% tracking.
     #
-    # ``blocked``: 2026-10-14 the forced route check held the manager for
-    # 1.2 s before MOVE, and its timer ran before the queued odometry, so the
-    # first sweep named a 1.2 s old sample (SWEEP_STALE).  Here the manager
-    # receives no odometry for 1.3 s up to one tick after the MOVE is sent.
+    # ``blocked``: 2026-10-14 the manager's main thread lagged on odometry
+    # around the MOVE (a 1.2 s route check, then a late /odom), and the
+    # guard refused the sweeps (SWEEP_STALE) twice.  Here the main callback
+    # group receives no odometry from 0.2 s until 1 s after the MOVE; the
+    # route evidence group (10 Hz) keeps its own odometry.
     from dataclasses import replace
     import random
     rng = random.Random(seed)
@@ -2434,7 +2461,7 @@ def test_manager_and_guard_complete_a_translation_under_jitter_and_reordering(
     travelled, speed = 0.0, 0.0
     queue = []                        # (arrival, kind, payload)
     sent_requests, sent_evidence = 0, 0
-    manager_odom_t, move_t = 0.0, None
+    evidence_odom, move_t = None, None
     guard.on_emergency(False, 0.0)
 
     def send(now, kind, payload):
@@ -2457,11 +2484,11 @@ def test_manager_and_guard_complete_a_translation_under_jitter_and_reordering(
                 guard.on_odom(replace(payload, receipt_mono=t))
                 guard.on_chassis(True, False, t)
             elif kind == 'odom_manager':
-                if blocked and 0.2 <= t and (move_t is None or t < move_t + 0.05):
+                evidence_odom = (payload, t)
+                if blocked and 0.2 <= t and (move_t is None or t < move_t + 1.0):
                     continue
                 manager._last_odom_pose = (payload.x, payload.y, payload.yaw)
                 manager._last_odom_stamp_ns = payload.stamp_ns
-                manager_odom_t = t
             elif kind == 'request':
                 guard.request(payload.operation, payload.session, payload.sequence, t,
                               distance_m=payload.distance_m, speed_mps=payload.speed_mps,
@@ -2472,7 +2499,6 @@ def test_manager_and_guard_complete_a_translation_under_jitter_and_reordering(
             manager._translation_status = (
                 localization_translation_contracts.translation_status(guard),
                 time.monotonic())
-            manager._last_odom_receipt = time.monotonic() - (t - manager_odom_t)
             manager._tick()
             # The STOP handshake for 1.5 s while the robot is still, then
             # the MOVE; its first sweep follows on the next manager tick.
@@ -2483,8 +2509,12 @@ def test_manager_and_guard_complete_a_translation_under_jitter_and_reordering(
                 sent_requests += 1
                 if request.operation == 'MOVE' and move_t is None:
                     move_t = t
-            if sent_requests and any(r.operation == 'MOVE' for r in
-                                     manager.translation_requests[:sent_requests - 1]):
+        if step % 20 == 7 and evidence_odom is not None:   # evidence group, 10 Hz
+            sample, received = evidence_odom
+            manager._evidence_odom = (sample.stamp_ns, (sample.x, sample.y, sample.yaw),
+                                      time.monotonic() - (t - received))
+            manager._evidence_tick()
+            if move_t is not None:
                 for evidence in manager.evidence[sent_evidence:]:
                     send(t, 'sweep', evidence)
             sent_evidence = len(manager.evidence)
