@@ -2,7 +2,8 @@
 
 ## Issue #53 robot session: 2026-10-14 evening
 
-- The Jetson runs `35c940f` (#76–#82), `--check` IN_SYNC. Evidence: `docs/evidence/issue53_robot_2026-10-14.md`.
+- The Jetson runs main with #84 (verification counts only fresh passing time; late data pauses it) and #85 (startup waits once, by time, for the manager and the motion guard via `scripts/jetson_localization_ready.py`, `CARBOT_READY_TIMEOUT` 180 s; preflight retries readiness-only failures for 60 s; the navigation container has no restart policy). #85 started first time 4/4 on the Jetson, including 1 min after a cold boot. Evidence: `docs/evidence/issue53_robot_2026-10-14.md`.
+- Free-placement trials (rotation and translation allowed, operator present): 4 placements localized in place (one by the 3D decision); one correct pose failed verification on late data before #84.
 - At (2.75, 2.78) the static decide-mode localization reached CANDIDATE_READY (2D alone); offline the 3D fit on its bag is 0.815 with the height limit (0.641 without).
 - Forced translation: the route evidence from the manager went stale under load (`SWEEP_STALE`, 3 of 4 attempts on #79/#80). #82: the guard node checks the remaining path itself from its own odometry, `/map` and the manager's `RoutePlan` (2.3 ms per check on the Jetson). On #82, 3/3 forced translations succeeded (about 0.22 m each, CANDIDATE_READY, guard RELEASED).
 - When recording during a translation, never subscribe to `/cmd_vel_command` (preflight requires the compensator as its only subscriber).
