@@ -191,6 +191,12 @@ class State(Enum):
     SETTLE_TRANSLATION = 'SETTLE_TRANSLATION'
 
 
+# Quality failures that only mean the data arrived late (see
+# _interrupt_quality_hold); NOT_STATIONARY, drift and limits are not.
+STALE_QUALITY = frozenset((
+    'STALE_ODOM', 'STALE_AMCL', 'STALE_SCAN', 'SCAN_TF_UNAVAILABLE_OR_STALE_SCORE',
+    'STALE_TF', 'STALE_PARTICLES'))
+
 CONFINED_STATES = frozenset((
     State.COLLECT_STATIC, State.SEARCH_MULTI_VIEW, State.VERIFY_HYPOTHESES,
     State.PLAN_PROBE, State.EXECUTE_PROBE, State.SETTLE_PROBE,
@@ -489,6 +495,12 @@ class AutomaticLocalizationManager(Node):
             'seed_stop_wait_sec': 5.0,
             'verification_timeout_sec': 15.0,
             'quality_hold_sec': 3.0,
+            # quality_hold_sec counts passing time with fresh data only.  A
+            # failure that only means late data (STALE_QUALITY) pauses the
+            # count for at most this long; anything else restarts it.
+            # 2026-10-14: a correct pose failed verification after late-data
+            # gaps of 1.3-2.0 s (Jetson load), never holding 3 s in a row.
+            'quality_max_stale_gap_sec': 3.0,
             # A stale TF clears the stability window.  Allow enough time for a
             # measured scan gap plus the full TF window to be rebuilt.
             'candidate_recheck_grace_sec': 7.0,
@@ -1916,6 +1928,11 @@ class AutomaticLocalizationManager(Node):
     def _transition(self, state):
         self._state = state
         self._state_started = time.monotonic()
+        # A quality hold never carries into another state.
+        self._quality_since = None
+        self._quality_passed_at = None
+        self._quality_held = 0.0
+        self._quality_streak = False
         if state == State.CANDIDATE_READY:
             self._candidate_invalid_since = None
             if self._latest_amcl_pose is not None:
@@ -2045,7 +2062,7 @@ class AutomaticLocalizationManager(Node):
 
     def _quality_passes(self, now):
         if not self._stopped(now):
-            return self._reject_quality('NOT_STATIONARY')
+            return self._reject_quality(self._not_stopped_reason(now))
         if self._latest_amcl_pose is None:
             return self._reject_quality('NO_AMCL_POSE')
         if not self._localization_evidence_recent(
@@ -2198,15 +2215,39 @@ class AutomaticLocalizationManager(Node):
         self._record_tf(now)
         if self._quality_passes(now):
             if self._quality_since is None:
-                self._quality_since = now
-            if now - self._quality_since >= self._parameter(
-                    'quality_hold_sec'):
+                self._quality_since, self._quality_held = now, 0.0
+            elif getattr(self, '_quality_streak', False):
+                self._quality_held += now - self._quality_passed_at
+            self._quality_passed_at, self._quality_streak = now, True
+            if self._quality_held >= self._parameter('quality_hold_sec'):
                 self._transition(
                     State.CANDIDATE_READY if self._validation_only
                     else State.START_NAVIGATION
                 )
         else:
-            self._quality_since = None
+            self._interrupt_quality_hold(now)
+
+    def _not_stopped_reason(self, now):
+        """STALE_ODOM when odometry is late, else NOT_STATIONARY."""
+        return ('STALE_ODOM' if not self._recent(self._last_odom_time, now)
+                else 'NOT_STATIONARY')
+
+    def _interrupt_quality_hold(self, now):
+        """
+        Pause the quality hold on late data; restart it on anything else.
+
+        Late data is no evidence for or against the pose: the time without
+        it is not counted, but what was held stays, for at most
+        ``quality_max_stale_gap_sec`` since the last pass.  Motion, drift
+        and every quality limit restart the hold at once.
+        """
+        self._quality_streak = False
+        passed = getattr(self, '_quality_passed_at', None)
+        if (self._quality_since is not None and passed is not None
+                and self._quality_failure in STALE_QUALITY
+                and now - passed <= self._parameter('quality_max_stale_gap_sec')):
+            return
+        self._quality_since = None
 
     def _start_global_search(self):
         scans = list(self._stationary_search_scans)
@@ -2520,8 +2561,8 @@ class AutomaticLocalizationManager(Node):
             if stopped:
                 self._verify_quality(now)
             else:
-                self._quality_since = None
-                self._quality_failure = 'NOT_STATIONARY'
+                self._quality_failure = self._not_stopped_reason(now)
+                self._interrupt_quality_hold(now)
             if (
                 self._state == State.STOP_AND_VERIFY
                 and state_age > self._parameter('verification_timeout_sec')
@@ -3448,6 +3489,8 @@ class AutomaticLocalizationManager(Node):
             'tf_yaw_span': tf_yaw_span,
             'tf_window_age_sec': tf_window_age,
             'quality_hold_age_sec': age(self._quality_since),
+            'quality_held_sec': (round(getattr(self, '_quality_held', 0.0), 3)
+                                 if self._quality_since is not None else None),
             'candidate_invalid_age_sec': age(self._candidate_invalid_since),
             'stationary_age_sec': age(self._stationary_since),
             'moving_age_sec': age(self._moving_since),
