@@ -14,8 +14,8 @@ import numpy as np
 from .localization_contracts import ContractError, SE2
 from .localization_hypotheses import score_pose
 from .localization_surface_check import (
-    _map, SurfaceCheckConfig, check_surfaces, outside_variable, planar, solid_points,
-    surface_tree)
+    _map, SurfaceCheckConfig, check_surfaces, outside_variable, planar, scored_points,
+    solid_points, surface_tree)
 from .localization_surface_search import (
     build_surface_field, coarse_scores, prune_seeds, search_surface, SurfaceSearchConfig)
 
@@ -414,9 +414,7 @@ def validate_surface_evidence(vertices, train_points, holdout_points, poses, *,
     origins = tuple(range(len(starts)))
     unconverged = False
     if refine_config is not None:
-        train_xyz = np.asarray(train_points, float).reshape(-1, 3)
-        train_xyz = train_xyz[np.hypot(train_xyz[:, 0], train_xyz[:, 1])
-                              >= check_config.min_range_m]
+        train_xyz = scored_points(train_points, check_config)
         seeds = starts
         if nearby_config is not None:
             sample = _subsample(train_xyz, nearby_config.points)
@@ -547,8 +545,7 @@ def validate_surface_evidence(vertices, train_points, holdout_points, poses, *,
     for used, (lo, hi) in zip(held.bands_used, check_config.bands):
         if used:
             mask |= (points[:, 2] >= lo) & (points[:, 2] < hi)
-    mask &= np.hypot(points[:, 0], points[:, 1]) >= check_config.min_range_m
-    points = points[mask]
+    points = scored_points(points[mask], check_config)
     cfg = support_config
     if len(points) > cfg.max_points:
         points = points[np.linspace(0, len(points)-1, cfg.max_points).astype(int)]
@@ -601,7 +598,11 @@ class SurfaceDecision:
 # at 0.05 m but only 0.123-0.182 at 0.10 m; both thresholds are unchanged and
 # provisional.
 RANK_CHECK = SurfaceCheckConfig(tolerance_m=.05, min_leader_composite=.01)
-FIT_CHECK = SurfaceCheckConfig()
+# The leader's absolute fit with points above the map top unscored (the
+# manager default, #53): 16 labelled true poses fit 0.89-0.96 and the
+# multi-stop truth at (2.75, 2.78) 0.815, while wrong leaders with the truth
+# removed reached 0.742; 0.70 no longer separated them.
+FIT_CHECK = SurfaceCheckConfig(min_leader_composite=0.78)
 
 
 def decide_surface(vertices, train_points, holdout_points, poses, grid, holdout_frames,

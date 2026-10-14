@@ -1,5 +1,11 @@
 # Current authoritative project state
 
+## Issue #53 3D fit only below the map top: 2026-10-14 (offline)
+
+- The low fit at (2.75, 2.78) was the map's height limit, not the scene: the mesh stops at 2.31 m (99%) and 26–38% of the scored points there were wall tops and ceiling. The operator confirmed the added objects in RViz (balcony through the back door, chairs, an open door leaf, a plant top); ignoring them gained only 0.01–0.02.
+- New (not yet deployed): the 3D check scores points only up to the map top + 0.05 m (`surface_max_height_m` = −1, 2.363 m for this map) and the leader-fit threshold is 0.78 (was 0.70). 16 labelled bags: 16/16 true poses accepted (fit 0.89–0.96), 0/16 wrong with the truth removed (highest wrong fit 0.742); the multi-stop decision at (2.75, 2.78) now passes at 0.815. Evidence: `docs/evidence/issue53_surface_height_cap_2026-10-14.md`.
+- Next robot session: deploy #76, #77 and this change, `--check`, then a static localization at (2.75, 2.78) and a forced translation there.
+
 ## Issue #53 linear profile and first guarded translation on the robot: 2026-10-13 evening
 
 - The Jetson runs `c639988` (PRs #63–#72). Merged later and NOT yet deployed (deploy at the next robot session, then `--check`): #76 the manager uses the multi-stop 3D submap after a translation; #77 forward probes only up to the calibrated driven distance (0.6 m excluded with this profile).

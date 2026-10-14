@@ -34,13 +34,14 @@ from isaac_3d_lidar_bringup.localization_submap_decision import (  # noqa: E402
     Stop, SubmapDecisionConfig, submap_windows)
 from isaac_3d_lidar_bringup.localization_surface_additions import (  # noqa: E402
     load_surface_additions)
-from isaac_3d_lidar_bringup.localization_surface_check import surface_tree  # noqa: E402
+from isaac_3d_lidar_bringup.localization_surface_check import (  # noqa: E402
+    resolve_max_height, SurfaceCheckConfig, surface_tree)
 from isaac_3d_lidar_bringup.localization_surface_model import (  # noqa: E402
     load_surface_model)
 from isaac_3d_lidar_bringup.localization_surface_search import (  # noqa: E402
     build_surface_field, free_positions, search_surface, SurfaceSearchConfig)
 from isaac_3d_lidar_bringup.localization_surface_validation import (  # noqa: E402
-    SurfaceRefineConfig, validate_surface_evidence)
+    FIT_CHECK, SurfaceRefineConfig, validate_surface_evidence)
 from isaac_3d_lidar_bringup.localization_variable_regions import (  # noqa: E402
     load_variable_regions)
 from recheck_candidates_3d import same_pose  # noqa: E402
@@ -96,6 +97,9 @@ def main():
     parser.add_argument('--window-s', type=float, default=2.5)
     parser.add_argument('--max-path-m', type=float, default=SubmapDecisionConfig.max_path_m)
     parser.add_argument('--truth', type=Path, help='robot pose at the LAST stop')
+    parser.add_argument('--max-height', type=float, default=-1.,
+                        help='highest scored point: < 0 map top + margin (the manager '
+                             'default), 0 no limit')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     if args.output.exists():
@@ -126,7 +130,9 @@ def main():
         result = validate_surface_evidence(
             tree, train, holdout, [c[:3] for c in found.candidates],
             deadline=time.monotonic() + 900, refine_config=SurfaceRefineConfig(),
-            sensor_origin=origins)
+            sensor_origin=origins, check_config=SurfaceCheckConfig(
+                min_leader_composite=FIT_CHECK.min_leader_composite,
+                max_height_m=resolve_max_height(args.max_height, model.points)))
         leader = (result.poses[result.leader]
                   if result.poses and 0 <= result.leader < len(result.poses) else None)
         report.update(supported=result.supported, reason=result.reason,
