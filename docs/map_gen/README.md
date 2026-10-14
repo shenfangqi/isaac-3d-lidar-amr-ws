@@ -471,6 +471,8 @@ docs/map_nav/README.md
 
 ## 11. 真机迁移
 
+实车建新地图的完整操作步骤（建图、保存、用新地图自动定位）见 `docs/map_gen/real_robot_mapping.md`。
+
 保留前沿算法和保存流程，替换接口与安全参数：
 
 ```text
