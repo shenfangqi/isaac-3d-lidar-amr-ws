@@ -67,7 +67,7 @@ def test_sweep_tf_lookup_waits_for_the_source_time_transform():
     assert 'Time.from_msg(stamp)' in lookup
     assert "timeout=Duration(seconds=float(self._value('tf_wait_sec')))" in (
         lookup)
-    assert 'MultiThreadedExecutor(num_threads=3)' in source
+    assert 'MultiThreadedExecutor(num_threads=4)' in source
 
 
 def test_profile_hash_is_stable_and_content_bound():
@@ -282,10 +282,10 @@ def test_guard_without_carbot_msgs_never_permits_motion(ros_context,
         guard.destroy_node()
 
 
-def test_translation_round_trip_follows_map_evidence(ros_context, tmp_path):
+def test_translation_round_trip_follows_its_own_map_check(ros_context, tmp_path):
     rclpy, context = ros_context
     from geometry_msgs.msg import Twist
-    from nav_msgs.msg import Odometry
+    from nav_msgs.msg import OccupancyGrid, Odometry
     from rclpy.executors import MultiThreadedExecutor
     from rclpy.node import Node
     from rclpy.parameter import Parameter
@@ -296,9 +296,10 @@ def test_translation_round_trip_follows_map_evidence(ros_context, tmp_path):
 
     import isaac_3d_lidar_bringup.localization_motion_guard_node as module
     from isaac_3d_lidar_bringup.localization_translation_contracts import (
-        encode_linear_profile, encode_route_evidence, encode_translation_request,
-        RouteEvidence, TranslationRequest,
+        encode_linear_profile, encode_route_plan, encode_translation_request,
+        RoutePlan, TranslationRequest,
     )
+    from isaac_3d_lidar_bringup.localization_hypotheses import grid_snapshot, map_hash
     from isaac_3d_lidar_bringup.localization_translation_guard import LinearProfile
 
     # Synthetic ACCEPTED linear profile for this test robot only.
@@ -318,7 +319,8 @@ def test_translation_round_trip_follows_map_evidence(ros_context, tmp_path):
         Parameter('emergency_topic', value=f'{NS}/emergency_stop_t'),
         Parameter('chassis_status_topic', value=f'{NS}/carbot_status_t'),
         Parameter('translation_request_topic', value=f'{NS}/translation_request'),
-        Parameter('route_evidence_topic', value=f'{NS}/route_evidence'),
+        Parameter('route_plan_topic', value=f'{NS}/route_plan'),
+        Parameter('map_topic', value=f'{NS}/map_t'),
         Parameter('translation_status_topic', value=f'{NS}/translation_status'),
     ])
     assert guard._core.permission.permitted is False      # rotation forbidden
@@ -326,7 +328,7 @@ def test_translation_round_trip_follows_map_evidence(ros_context, tmp_path):
 
     harness = Node('translation_harness', context=context)
     state = {'x': 0.0, 'speed': 0.0, 'linear': [], 'angular': [], 'status': [],
-             'request': None, 'clear': True}
+             'request': None, 'plan': None}
     harness.create_subscription(
         Twist, f'{NS}/cmd_vel_command_t',
         lambda m: (state['linear'].append(m.linear.x),
@@ -335,12 +337,30 @@ def test_translation_round_trip_follows_map_evidence(ros_context, tmp_path):
         String, f'{NS}/translation_status',
         lambda m: state['status'].append(json.loads(m.data)), 10)
     requests = harness.create_publisher(String, f'{NS}/translation_request', 10)
-    evidence = harness.create_publisher(String, f'{NS}/route_evidence', 10)
+    plans = harness.create_publisher(String, f'{NS}/route_plan', 10)
     odom = harness.create_publisher(Odometry, f'{NS}/odom_t', qos_profile_sensor_data)
     latched = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                          durability=DurabilityPolicy.TRANSIENT_LOCAL)
     harness.create_publisher(Bool, f'{NS}/emergency_stop_t',
                              latched).publish(Bool(data=False))
+    maps = harness.create_publisher(OccupancyGrid, f'{NS}/map_t', latched)
+
+    def free_map(blocked=()):
+        # 4 x 4 m free map at 0.05 m with a closed border.
+        grid = OccupancyGrid()
+        grid.header.frame_id = 'map'
+        grid.info.width = grid.info.height = 80
+        grid.info.resolution = 0.05
+        grid.info.origin.orientation.w = 1.0
+        grid.data = [100 if r in (0, 79) or c in (0, 79) or (r, c) in blocked else 0
+                     for r in range(80) for c in range(80)]
+        return grid
+
+    grid = free_map()
+    maps.publish(grid)
+    # The hash of the map as received (float32 resolution), as the manager sees it.
+    from rclpy.serialization import deserialize_message, serialize_message
+    received = deserialize_message(serialize_message(grid), OccupancyGrid)
     chassis = harness.create_publisher(CarbotStatus, f'{NS}/carbot_status_t',
                                        qos_profile_sensor_data)
 
@@ -363,12 +383,8 @@ def test_translation_round_trip_follows_map_evidence(ros_context, tmp_path):
             state['speed'] = state['linear'][-1]
         if state['request'] is not None:
             requests.publish(String(data=encode_translation_request(state['request'])))
-            remaining = max(0.0, 0.4 - state['x'])
-            evidence.publish(String(data=encode_route_evidence(RouteEvidence(
-                'translation0001', state['request'].sequence, stamp.nanoseconds,
-                state['x'], 0.0, 0.0, remaining + 1e-3, 1.0,
-                state['clear'], '' if state['clear'] else 'OBSTACLE_IN_SWEEP',
-                'd' * 64, 'e' * 64))))
+        if state['plan'] is not None:
+            plans.publish(String(data=encode_route_plan(state['plan'])))
 
     harness.create_timer(0.5, publish_chassis)
     harness.create_timer(0.05, publish_inputs)
@@ -384,16 +400,20 @@ def test_translation_round_trip_follows_map_evidence(ros_context, tmp_path):
         time.sleep(2.0)
         assert harness.count_publishers(f'{NS}/cmd_vel_command_t') == 1
         assert state['status'][-1]['state'] == 'STOPPED', state['status'][-1]
+        # One candidate, 1 m from the west wall facing east, at the start.
+        state['plan'] = RoutePlan(
+            'translation0001', 2, 10**9, state['x'], 0.0, 0.0, ((1.0, 2.0, 0.0),),
+            0.05, 0.05, 0.07, 0.02, map_hash(grid_snapshot(received)))
         state['request'] = TranslationRequest('translation0001', 2, 'MOVE', 0.4,
                                               0.05, linear.digest)
         time.sleep(1.5)
-        assert max(state['linear']) > 0.01, state['status'][-1]
+        assert max(state['linear']) > 0.01, state['status'][-1]['reason']
         assert max(abs(a) for a in state['angular']) == 0.0
-        state['clear'] = False                      # the map path is refused
-        time.sleep(0.5)
+        maps.publish(free_map(blocked={(40, 30)}))  # another map: the plan is refused
+        time.sleep(0.8)
         assert state['linear'][-1] == 0.0
         assert state['status'][-1]['state'] == 'FAULT'
-        assert state['status'][-1]['reason'] == 'OBSTACLE_IN_SWEEP'
+        assert state['status'][-1]['reason'] == 'ROUTE_PLAN_MAP_MISMATCH'
     finally:
         executor.shutdown()
         guard.destroy_node()

@@ -8,7 +8,9 @@ is permitted and a STOP handshake has opened a session; RELEASE destroys it.
 
 Translation (phase 2) is a separate core with its own versioned messages and
 its own linear profile; without an ACCEPTED linear profile matching this
-robot it can never command motion.  Rotation and translation share the one
+robot it can never command motion.  Its remaining path is re-checked here on
+the static map every 0.1 s, in its own callback group, from this node's own
+odometry and the manager's route plan (issue #53).  Rotation and translation share the one
 publisher and may never be active together.
 """
 
@@ -17,7 +19,7 @@ import threading
 import time
 
 from geometry_msgs.msg import Twist
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import OccupancyGrid, Odometry
 import rclpy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.duration import Duration
@@ -55,6 +57,7 @@ from .localization_motion_guard import (
     profile_hash,
     SweepVerdict,
 )
+from .localization_hypotheses import grid_snapshot, map_hash
 from .localization_rotation_policy import (
     evaluate_localization_rotation,
     evidence_from_scan,
@@ -64,12 +67,13 @@ from .localization_rotation_policy import (
 )
 from .localization_translation_contracts import (
     decode_linear_profile,
-    decode_route_evidence,
+    decode_route_plan,
     decode_translation_request,
     encode_translation_status,
     translation_status,
 )
 from .localization_translation_guard import combine_commands, LinearProbeGuard
+from .localization_translation_route import guard_model, RouteChecker
 
 
 CANONICAL_FOOTPRINT = [0.155, 0.133, 0.155, -0.133,
@@ -134,7 +138,8 @@ class MotionGuardNode(Node):
         declare('linear_profile_path', '')
         declare('translation_request_topic',
                 '/automatic_localization/translation_request')
-        declare('route_evidence_topic', '/automatic_localization/route_evidence')
+        declare('route_plan_topic', '/automatic_localization/route_plan')
+        declare('map_topic', '/map')
         declare('translation_status_topic',
                 '/automatic_localization/translation_status')
 
@@ -167,6 +172,9 @@ class MotionGuardNode(Node):
         if CarbotStatus is None:
             linear_profile = None
         self._linear = LinearProbeGuard(linear_profile, expected_hashes=self._hashes)
+        self._linear_profile = linear_profile
+        self._route_checker = None
+        self._route_plans = {}              # (session, sequence) -> RoutePlan
         self._lock = threading.Lock()
         self._attest = bool(value('operator_rotation_clear'))
         self._attestation = None
@@ -178,6 +186,7 @@ class MotionGuardNode(Node):
 
         control = MutuallyExclusiveCallbackGroup()
         sweep = MutuallyExclusiveCallbackGroup()
+        route = MutuallyExclusiveCallbackGroup()
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, self)
         self.create_subscription(String, value('request_topic'),
@@ -202,9 +211,11 @@ class MotionGuardNode(Node):
         self.create_subscription(String, value('translation_request_topic'),
                                  self._on_translation_request, 10,
                                  callback_group=control)
-        self.create_subscription(String, value('route_evidence_topic'),
-                                 self._on_route_evidence, 10,
-                                 callback_group=control)
+        self.create_subscription(String, value('route_plan_topic'),
+                                 self._on_route_plan, 10, callback_group=control)
+        self.create_subscription(OccupancyGrid, value('map_topic'), self._on_map,
+                                 latched, callback_group=route)
+        self.create_timer(0.1, self._route_cycle, callback_group=route)
         self._status = self.create_publisher(String, value('status_topic'), 1)
         self._translation_status = self.create_publisher(
             String, value('translation_status_topic'), 1)
@@ -252,15 +263,54 @@ class MotionGuardNode(Node):
             except ContractError as error:
                 self.get_logger().warning(f'translation request refused: {error}')
 
-    def _on_route_evidence(self, message):
+    def _on_route_plan(self, message):
         try:
-            evidence = decode_route_evidence(message.data)
+            plan = decode_route_plan(message.data)
         except ContractError as error:
-            self.get_logger().warning(f'invalid route evidence: {error}')
+            self.get_logger().warning(f'invalid route plan: {error}')
             return
         with self._lock:
-            if evidence.session == self._linear.session:
-                self._linear.on_preview(evidence.to_preview(), time.monotonic())
+            if plan.session != self._linear.session:
+                return
+            key = (plan.session, plan.sequence)
+            known = self._route_plans.get(key)
+            if known is not None and known != plan:
+                self._linear._fault('CONTROL_CONFLICT')
+                return
+            self._route_plans = {k: v for k, v in self._route_plans.items()
+                                 if k[1] >= plan.sequence - 4}
+            self._route_plans[key] = plan
+
+    def _on_map(self, message):
+        # Route group: building the clearance fields never delays control.
+        grid = grid_snapshot(message)
+        try:
+            checker = RouteChecker(grid, map_hash(grid))
+        except ContractError as error:
+            self.get_logger().error(f'map unusable for the route check: {error}')
+            checker = None
+        self._route_checker = checker
+
+    def _route_cycle(self):
+        """Re-check the remaining path of a running MOVE (route group)."""
+        with self._lock:
+            linear = self._linear
+            if linear.state != 'MOVING' or linear._odom is None or linear._start is None:
+                return
+            key = (linear.session, linear.sequence)
+            plan = self._route_plans.get(key)
+            odom, start = linear._odom, linear._start
+            remaining = max(0.0, linear.target_m - linear.progress_m)
+            extension = linear.stop_extension_m
+        checker = self._route_checker
+        if plan is None or checker is None:
+            return          # no preview: the guard holds, then faults SWEEP_STALE
+        model = guard_model(self._footprint, self._gate.padding_m,
+                            self._linear_profile.lateral_error_m, extension, plan)
+        preview = checker.preview(plan, model, start, odom, remaining, extension)
+        with self._lock:
+            if (self._linear.session, self._linear.sequence) == key:
+                self._linear.on_preview(preview, time.monotonic())
 
     def _on_request(self, message):
         try:
@@ -411,9 +461,9 @@ class MotionGuardNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = MotionGuardNode()
-    # Sweep evaluation (which may wait for TF), the control cycle and the
-    # TF listener each get a thread.
-    executor = MultiThreadedExecutor(num_threads=3)
+    # Sweep evaluation (which may wait for TF), the control cycle, the
+    # translation route check and the TF listener each get a thread.
+    executor = MultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
     try:
         executor.spin()
