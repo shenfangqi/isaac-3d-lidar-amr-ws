@@ -17,7 +17,9 @@ from nav2_msgs.srv import ManageLifecycleNodes
 from nav_msgs.msg import OccupancyGrid, Odometry
 import numpy as np
 import rclpy
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.duration import Duration
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
@@ -434,6 +436,17 @@ class AutomaticLocalizationManager(Node):
             else None)
 
         self._timer = self.create_timer(0.1, self._tick)
+        # Route evidence runs in its own callback group (its own executor
+        # thread): odometry in, evidence out every 0.1 s.  The main group's
+        # route checks and searches hold its thread for 1-2 s on the Jetson,
+        # and 2026-10-14 evidence built there named odometry that old; the
+        # guard refused it (SWEEP_STALE) twice before the robot moved.
+        self._evidence_odom = None
+        evidence_group = MutuallyExclusiveCallbackGroup()
+        self.create_subscription(Odometry, self._parameter('odom_topic'),
+                                 self._on_evidence_odom, 20,
+                                 callback_group=evidence_group)
+        self.create_timer(0.1, self._evidence_tick, callback_group=evidence_group)
         self._publish_status(force=True)
 
     def _declare_parameters(self):
@@ -655,10 +668,8 @@ class AutomaticLocalizationManager(Node):
             # Extra forward path the route evidence covers beyond the remainder.
             'route_evidence_margin_m': 0.02,
             # Route evidence is only sent from odometry received this
-            # recently.  2026-10-14: a 1.2 s route check before MOVE left the
-            # first evidence on a 1.2 s old sample (the timer runs before the
-            # queued odometry) and the guard refused it as SWEEP_STALE; it
-            # allows 0.3 s between the sweep's sample and its newest one.
+            # recently (the guard allows 0.3 s between the sweep's sample and
+            # its newest one); otherwise it waits at zero speed.
             'route_evidence_max_odom_age_sec': 0.2,
             'route_plan_timeout_sec': 60.0,
             'route_max_depth': 2,
@@ -1542,7 +1553,6 @@ class AutomaticLocalizationManager(Node):
         current_pose = (pose.position.x, pose.position.y, yaw)
         self._last_odom_stamp_ns = (message.header.stamp.sec * 10**9
                                     + message.header.stamp.nanosec)
-        self._last_odom_receipt = now
         if self._last_odom_pose is not None:
             distance = math.hypot(
                 current_pose[0] - self._last_odom_pose[0],
@@ -3118,16 +3128,13 @@ class AutomaticLocalizationManager(Node):
 
     def _publish_route_evidence(self):
         """Re-check the remaining path under every candidate; send evidence."""
-        stamp = getattr(self, '_last_odom_stamp_ns', 0)
-        if self._last_odom_pose is None or stamp <= 0:
-            return
+        latest = self._evidence_odom
         # Without a fresh sample the guard waits (zero speed) for the next
         # tick; a sweep from an old sample would fault it.
-        received = getattr(self, '_last_odom_receipt', None)
-        if (received is None or time.monotonic() - received
+        if (latest is None or time.monotonic() - latest[2]
                 > float(self._parameter('route_evidence_max_odom_age_sec'))):
             return
-        odom = SE2(*self._last_odom_pose)
+        stamp, odom = latest[0], SE2(*latest[1])
         delta = self._translation_start.inverse().compose(odom)
         # The guard needs evidence covering ITS remaining distance, measured
         # from its own start pose.  At rest the two progress estimates differ
@@ -3159,9 +3166,24 @@ class AutomaticLocalizationManager(Node):
                           self._linear_stop_extension, clear, reason,
                           self._map_hash, digest))))
 
+    def _on_evidence_odom(self, message):
+        """Keep the newest odometry for the route evidence (evidence group)."""
+        stamp = message.header.stamp.sec * 10**9 + message.header.stamp.nanosec
+        latest = self._evidence_odom
+        if latest is not None and stamp <= latest[0]:
+            return
+        pose = message.pose.pose
+        self._evidence_odom = (stamp, (pose.position.x, pose.position.y,
+                                       quaternion_yaw(pose.orientation)),
+                               time.monotonic())
+
+    def _evidence_tick(self):
+        """Send route evidence while a translation runs (evidence group)."""
+        if self._state == State.EXECUTE_TRANSLATION:
+            self._publish_route_evidence()
+
     def _tick_execute_translation(self, now, state_age):
-        """Feed map evidence and follow the guard's translation status."""
-        self._publish_route_evidence()
+        """Follow the guard's translation status (evidence: _evidence_tick)."""
         status = self._fresh_translation_status(now)
         if status is None:
             if state_age > self._parameter('translation_status_freshness_sec') * 3:
@@ -3522,8 +3544,11 @@ def main(args=None):
     """Run the automatic localization manager until shutdown."""
     rclpy.init(args=args)
     node = AutomaticLocalizationManager()
+    # Two threads: the main callback group, and the route evidence group.
+    executor = MultiThreadedExecutor(num_threads=2)
+    executor.add_node(node)
     try:
-        rclpy.spin(node)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:
