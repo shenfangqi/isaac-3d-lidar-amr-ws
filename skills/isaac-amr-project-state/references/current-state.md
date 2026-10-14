@@ -1,5 +1,14 @@
 # Current authoritative project state
 
+## Issue #53 robot session: 2026-10-14 evening
+
+- The Jetson runs `c72fada` (#76–#80), `--check` IN_SYNC. Evidence: `docs/evidence/issue53_robot_2026-10-14.md`.
+- At (2.75, 2.78) the static decide-mode localization reached CANDIDATE_READY (2D alone); offline the 3D fit on its bag is 0.815 with the height limit (0.641 without).
+- Forced translation: two refusals before moving (`SWEEP_STALE`, the manager's single thread lagged on odometry), then one success (about 24 cm, CANDIDATE_READY, guard RELEASED). #80 moves route evidence into its own executor thread and /odom subscription; it is unit- and co-simulation-tested but has NOT driven the robot yet.
+- When recording during a translation, never subscribe to `/cmd_vel_command` (preflight requires the compensator as its only subscriber).
+- Moving-cloud bag 03: stitching holds; the multi-stop 3D decision passes offline at 0.81 with 1/4/7 stops (0.62 without the height limit). The online multi-stop decision has not been triggered on the robot (2D was unambiguous after both translations).
+- Next robot session: a forced translation on #80; then #54 controlled changes once its runtime design is confirmed.
+
 ## Issue #53 3D fit only below the map top: 2026-10-14 (offline)
 
 - The low fit at (2.75, 2.78) was the map's height limit, not the scene: the mesh stops at 2.31 m (99%) and 26–38% of the scored points there were wall tops and ceiling. The operator confirmed the added objects in RViz (balcony through the back door, chairs, an open door leaf, a plant top); ignoring them gained only 0.01–0.02.
