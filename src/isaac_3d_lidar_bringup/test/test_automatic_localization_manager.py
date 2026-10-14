@@ -2163,6 +2163,7 @@ def translated(segmented, tmp_path):
     manager._latest_grid = grid
     manager._map_hash = localization_hypotheses.map_hash(grid)
     manager._last_odom_stamp_ns = 25 * 10**9
+    manager._last_odom_receipt = time.monotonic()
     return manager
 
 
@@ -2386,9 +2387,26 @@ def test_route_evidence_covers_the_guards_remaining_distance_despite_jitter(
     assert evidence.stop_extension_m == pytest.approx(guard.stop_extension_m)
 
 
+def test_route_evidence_waits_for_fresh_odometry(translated):
+    # 2026-10-14 on the robot: after a 1.2 s route check the first sweep
+    # named a 1.2 s old odometry sample and the guard faulted (SWEEP_STALE).
+    manager = translated
+    _forced_translation_session(manager)
+    _linear(manager, 'MOVING')
+    sent = len(manager.evidence)
+    manager._last_odom_receipt = time.monotonic() - 1.2
+    manager._tick()
+    assert len(manager.evidence) == sent
+    assert manager._state == manager.State.EXECUTE_TRANSLATION
+    manager._last_odom_receipt = time.monotonic()
+    manager._tick()
+    assert len(manager.evidence) == sent + 1
+
+
+@pytest.mark.parametrize('blocked', [False, True])
 @pytest.mark.parametrize('seed', range(16))
 def test_manager_and_guard_complete_a_translation_under_jitter_and_reordering(
-        translated, seed):
+        translated, seed, blocked):
     # 2026-10-13 on the robot the first two forced translations were refused
     # before moving: odometry jitter (SWEEP_TOO_SHORT), then a sweep naming
     # an odometry sample the guard had not received yet, or no sweep yet
@@ -2398,6 +2416,11 @@ def test_manager_and_guard_complete_a_translation_under_jitter_and_reordering(
     # after a random 0-60 ms; the manager ticks at 20 Hz out of phase with
     # the odometry, the guard at 50 Hz; the guard's command drives the robot
     # at 79% tracking.
+    #
+    # ``blocked``: 2026-10-14 the forced route check held the manager for
+    # 1.2 s before MOVE, and its timer ran before the queued odometry, so the
+    # first sweep named a 1.2 s old sample (SWEEP_STALE).  Here the manager
+    # receives no odometry for 1.3 s up to one tick after the MOVE is sent.
     from dataclasses import replace
     import random
     rng = random.Random(seed)
@@ -2411,6 +2434,7 @@ def test_manager_and_guard_complete_a_translation_under_jitter_and_reordering(
     travelled, speed = 0.0, 0.0
     queue = []                        # (arrival, kind, payload)
     sent_requests, sent_evidence = 0, 0
+    manager_odom_t, move_t = 0.0, None
     guard.on_emergency(False, 0.0)
 
     def send(now, kind, payload):
@@ -2433,8 +2457,11 @@ def test_manager_and_guard_complete_a_translation_under_jitter_and_reordering(
                 guard.on_odom(replace(payload, receipt_mono=t))
                 guard.on_chassis(True, False, t)
             elif kind == 'odom_manager':
+                if blocked and 0.2 <= t and (move_t is None or t < move_t + 0.05):
+                    continue
                 manager._last_odom_pose = (payload.x, payload.y, payload.yaw)
                 manager._last_odom_stamp_ns = payload.stamp_ns
+                manager_odom_t = t
             elif kind == 'request':
                 guard.request(payload.operation, payload.session, payload.sequence, t,
                               distance_m=payload.distance_m, speed_mps=payload.speed_mps,
@@ -2445,6 +2472,7 @@ def test_manager_and_guard_complete_a_translation_under_jitter_and_reordering(
             manager._translation_status = (
                 localization_translation_contracts.translation_status(guard),
                 time.monotonic())
+            manager._last_odom_receipt = time.monotonic() - (t - manager_odom_t)
             manager._tick()
             # The STOP handshake for 1.5 s while the robot is still, then
             # the MOVE; its first sweep follows on the next manager tick.
@@ -2453,6 +2481,8 @@ def test_manager_and_guard_complete_a_translation_under_jitter_and_reordering(
                     break
                 send(t, 'request', request)
                 sent_requests += 1
+                if request.operation == 'MOVE' and move_t is None:
+                    move_t = t
             if sent_requests and any(r.operation == 'MOVE' for r in
                                      manager.translation_requests[:sent_requests - 1]):
                 for evidence in manager.evidence[sent_evidence:]:
