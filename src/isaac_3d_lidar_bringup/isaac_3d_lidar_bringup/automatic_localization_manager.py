@@ -654,6 +654,12 @@ class AutomaticLocalizationManager(Node):
             'route_max_driven_m': 0.40,
             # Extra forward path the route evidence covers beyond the remainder.
             'route_evidence_margin_m': 0.02,
+            # Route evidence is only sent from odometry received this
+            # recently.  2026-10-14: a 1.2 s route check before MOVE left the
+            # first evidence on a 1.2 s old sample (the timer runs before the
+            # queued odometry) and the guard refused it as SWEEP_STALE; it
+            # allows 0.3 s between the sweep's sample and its newest one.
+            'route_evidence_max_odom_age_sec': 0.2,
             'route_plan_timeout_sec': 60.0,
             'route_max_depth': 2,
             'route_min_difference': 0.15,
@@ -1536,6 +1542,7 @@ class AutomaticLocalizationManager(Node):
         current_pose = (pose.position.x, pose.position.y, yaw)
         self._last_odom_stamp_ns = (message.header.stamp.sec * 10**9
                                     + message.header.stamp.nanosec)
+        self._last_odom_receipt = now
         if self._last_odom_pose is not None:
             distance = math.hypot(
                 current_pose[0] - self._last_odom_pose[0],
@@ -3113,6 +3120,12 @@ class AutomaticLocalizationManager(Node):
         """Re-check the remaining path under every candidate; send evidence."""
         stamp = getattr(self, '_last_odom_stamp_ns', 0)
         if self._last_odom_pose is None or stamp <= 0:
+            return
+        # Without a fresh sample the guard waits (zero speed) for the next
+        # tick; a sweep from an old sample would fault it.
+        received = getattr(self, '_last_odom_receipt', None)
+        if (received is None or time.monotonic() - received
+                > float(self._parameter('route_evidence_max_odom_age_sec'))):
             return
         odom = SE2(*self._last_odom_pose)
         delta = self._translation_start.inverse().compose(odom)
