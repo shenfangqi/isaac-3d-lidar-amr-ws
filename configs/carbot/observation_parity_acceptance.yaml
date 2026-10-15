@@ -1,0 +1,55 @@
+schema_version: 1
+# The operator confirmed the proposed values on 2026-10-15;
+# scripts/analyze_observation_parity.py reports this status next to its verdict.
+status: CONFIRMED
+confirmed: 2026-10-15
+gate: hardware_calibration_backlog.yaml#observation_parity (and the 30-minute
+  drift capture still open in #imu_extrinsics_and_time)
+procedure: >-
+  Robot stationary and powered, Jetson Wi-Fi power save off, navigation stack
+  not required. Record with scripts/record_observation_parity.sh (on the
+  Jetson, best-effort QoS, no point clouds, never /cmd_vel_command), then run
+  scripts/analyze_observation_parity.py on the bag.
+wheel_topic: /wheel_ticks
+minimum_duration_s: 1800
+streams:
+  /wheel_ticks:
+    nominal_rate_hz: 50
+    rate_tolerance_fraction: 0.02
+    # 2026-09-18 baseline peaked at 345 ms (12 gaps > 300 ms). The firmware
+    # watchdog stops the tracks 0.5 s after the last command, so a receive gap
+    # must stay clearly below that.
+    receive_gap_max_ms: 400
+    receive_gap_p999_ms: 100
+    # Receive minus header, per-minute median. The fixed-offset firmware
+    # drifted 1.98 -> 19.01 ms within 30 min (and 64.84 ms in another
+    # session); periodic resync must hold it in a narrow band.
+    latency_minute_median_ms: [-5.0, 20.0]
+    latency_minute_median_spread_ms: 5.0
+    sequence:
+      # 2026-09-18 baseline 0.022 %.
+      skip_fraction_max: 0.001
+      # The ESP32 must keep sampling: device-time gaps, not receive gaps.
+      device_gap_max_ms: 100
+      # Firmware ce613ed limits one resync correction to 2 ms.
+      clock_correction_max_abs_ms: 2.0
+  /mid360/imu/data_raw:
+    nominal_rate_hz: 200
+    rate_tolerance_fraction: 0.02
+    # Wired MID-360 under PTP: steady latency 0.97 ms median, 1.34 ms p95
+    # (2026-09-18); the adapter then subtracts 9.78 ms from the stamp.
+    receive_gap_max_ms: 100
+    receive_gap_p999_ms: 20
+    latency_minute_median_ms: [0.0, 20.0]
+    latency_minute_median_spread_ms: 2.0
+chassis_status:
+  topic: /carbot/status
+  # The motion guard rejects chassis status older than 1.5 s (2 Hz stream).
+  receive_gap_max_ms: 1000
+  # Periodic resync every 60 s: about 30 corrections in 30 minutes. Zero means
+  # the flashed firmware still applies one fixed offset.
+  clock_offset_changes_min: 20
+  clock_offset_step_max_abs_ms: 2.0
+# The evidence profile stores rounded values (e.g. 0.00022, 0.345 s); a
+# measured value within this relative margin counts as covered.
+evidence_profile_rounding_tolerance: 0.05
