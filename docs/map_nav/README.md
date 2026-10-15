@@ -202,6 +202,15 @@ ros2 launch \
   nav2_params_file:=/workspace/ros-humble/isaac_3d_lidar_amr_ws/configs/nav2_params_sim_real_parity.yaml
 ```
 
+也可以用一键启动脚本选择同一份配置（不设置 `NAV2_PARAMS_FILE` 时仍使用默认快速配置）：
+
+```bash
+NAV2_PARAMS_FILE=/workspace/ros-humble/isaac_3d_lidar_amr_ws/configs/nav2_params_sim_real_parity.yaml \
+./start_nav_all.sh
+```
+
+2026-10-15 的实际运行结果见 `docs/evidence/issue5_isaac_parity_run_2026-10-15.md`。
+
 默认的 `configs/nav2_params_sim.yaml` 保持原有快速、保守的 warehouse 回归；
 `nav2_params_sim_real_parity.yaml` 由 `scripts/build_sim_real_parity_nav2.py`
 从真机实际加载的
