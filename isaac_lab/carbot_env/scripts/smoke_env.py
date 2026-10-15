@@ -10,6 +10,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--steps", type=int, default=20)
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
+args.enable_cameras = True
 app_launcher = AppLauncher(args)
 simulation_app = app_launcher.app
 
@@ -44,14 +45,10 @@ def main():
         observations, _, _, _, _ = env.step(actions)
     policy = observations["policy"]
     spec = load_environment_spec()
-    height_grid = spec["observations"]["height_scan"]["grid_size"]
-    expected_observation_dim = (
-        4
-        + 2
-        + 3
-        + spec["observations"]["lidar"]["ray_count"]
-        + height_grid[0] * height_grid[1]
-        + 2
+    expected_observation_dim = 11 + 2 * (
+        spec["observations"]["lidar"]["ray_count"] * spec["observations"]["lidar"]["channels"]
+        + spec["observations"]["tof"]["sensor_count"] * 64
+        + spec["observations"]["d455"]["width"] * spec["observations"]["d455"]["height"]
     )
     if policy.shape != (env.num_envs, expected_observation_dim):
         raise RuntimeError(f"Unexpected policy observation shape: {policy.shape}")
@@ -67,5 +64,9 @@ def main():
 
 try:
     main()
+except Exception:
+    import traceback
+    traceback.print_exc()
+    raise
 finally:
     simulation_app.close()

@@ -83,9 +83,11 @@ def main():
     # This motion gate does not consume scanner observations. Removing them
     # keeps the real-time control cadence independent of unused sensor work.
     cfg.observations.policy.lidar_ranges = None
-    cfg.observations.policy.height_scan = None
+    for term in ("lidar_valid", "tof_ranges", "tof_valid", "d455_depth", "d455_valid"):
+        setattr(cfg.observations.policy, term, None)
     cfg.scene.lidar = None
-    cfg.scene.height_scanner = None
+    cfg.scene.tof = None
+    cfg.scene.d455 = None
     cfg.terminations.goal_reached = None
     cfg.sim.render_interval = args.render_stride
 

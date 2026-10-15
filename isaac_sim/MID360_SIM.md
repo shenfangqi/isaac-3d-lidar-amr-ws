@@ -129,3 +129,13 @@ being silently truncated.
 
 For the real Mid-360, measure the maximum points per ROS frame produced by the
 chosen `livox_ros_driver2` transfer format before reusing these dimensions.
+
+## Isaac Lab training observations
+
+The Lab environment has a separate geometric MID-360 proxy with eight elevation
+samples across the manufacturer's vertical field and 72 azimuth samples. It uses
+the canonical optical origin and full mounting rotation, and returns metres plus
+validity masks directly to the policy. It does not subscribe to the RTX ROS
+publisher above or reproduce its scan sequence. See
+[`isaac_lab/carbot_env/README.md`](../isaac_lab/carbot_env/README.md) for joint
+MID-360, D455 and VL53L5CX observation integration and validation.
