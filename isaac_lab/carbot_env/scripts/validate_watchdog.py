@@ -97,9 +97,11 @@ def main():
     # both scanners; this one-off visual gate removes their observation terms
     # so a long control step never waits for an unused sensor update.
     cfg.observations.policy.lidar_ranges = None
-    cfg.observations.policy.height_scan = None
+    for term in ("lidar_valid", "tof_ranges", "tof_valid", "d455_depth", "d455_valid"):
+        setattr(cfg.observations.policy, term, None)
     cfg.scene.lidar = None
-    cfg.scene.height_scanner = None
+    cfg.scene.tof = None
+    cfg.scene.d455 = None
     # Goal completion is unrelated to this action-safety gate and can cause a
     # random episode reset before the zero-hold measurement finishes.
     cfg.terminations.goal_reached = None

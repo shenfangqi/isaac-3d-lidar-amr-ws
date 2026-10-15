@@ -11,11 +11,11 @@ from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors import RayCasterCfg, patterns
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 
 from . import mdp
+from .sensors_cfg import ray_sensor, mid360_rays, tof_rays, d455_camera
 from .spec import PROJECT_ROOT, load_environment_spec, load_robot_parameters
 from .tasks.goal_navigation import CommandsCfg, RewardsCfg, TerminationsCfg
 
@@ -27,13 +27,9 @@ LIMITS = ACTION["limits"]
 KINEMATICS = ACTION["kinematics"]
 SIMULATION = SPEC["simulation"]
 LIDAR = SPEC["observations"]["lidar"]
-HEIGHT_SCAN = SPEC["observations"]["height_scan"]
+TOF = SPEC["observations"]["tof"]
+D455 = SPEC["observations"]["d455"]
 ROBOT_USD = PROJECT_ROOT / Path(SIMULATION["robot_usd"])
-LIDAR_Z_FROM_BASE_LINK_M = (
-    ROBOT["sensors"]["mid360"]["housing_top_height_from_ground_m"]
-    - ROBOT["sensors"]["mid360"]["housing_height_m"]
-    - ROBOT["geometry"]["base_link_height_m"]
-)
 
 
 @configclass
@@ -82,49 +78,9 @@ class CarbotSceneCfg(InteractiveSceneCfg):
             )
         },
     )
-    lidar = RayCasterCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/base_link",
-        offset=RayCasterCfg.OffsetCfg(
-            pos=(
-                ROBOT["sensors"]["mid360"][
-                    "mount_translation_xy_from_base_link_m"
-                ][0],
-                ROBOT["sensors"]["mid360"][
-                    "mount_translation_xy_from_base_link_m"
-                ][1],
-                LIDAR_Z_FROM_BASE_LINK_M,
-            )
-        ),
-        ray_alignment="yaw",
-        pattern_cfg=patterns.LidarPatternCfg(
-            channels=1,
-            vertical_fov_range=(0.0, 0.0),
-            horizontal_fov_range=tuple(LIDAR["horizontal_fov_deg"]),
-            # Isaac Lab samples both 360-degree endpoints and removes the
-            # duplicate, so request N+1 samples to retain exactly N rays.
-            horizontal_res=360.0 / (LIDAR["ray_count"] + 1),
-        ),
-        max_distance=LIDAR["maximum_range_m"],
-        mesh_prim_paths=["/World/ground"],
-        debug_vis=False,
-    )
-    height_scanner = RayCasterCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/base_link",
-        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 0.5)),
-        ray_alignment="yaw",
-        pattern_cfg=patterns.GridPatternCfg(
-            resolution=HEIGHT_SCAN["resolution_m"],
-            size=(
-                (HEIGHT_SCAN["grid_size"][0] - 1)
-                * HEIGHT_SCAN["resolution_m"],
-                (HEIGHT_SCAN["grid_size"][1] - 1)
-                * HEIGHT_SCAN["resolution_m"],
-            ),
-        ),
-        max_distance=2.0,
-        mesh_prim_paths=["/World/ground"],
-        debug_vis=False,
-    )
+    lidar = ray_sensor(mid360_rays, LIDAR)
+    tof = ray_sensor(tof_rays, TOF)
+    d455 = d455_camera()
     dome_light = AssetBaseCfg(
         prim_path="/World/DomeLight",
         spawn=sim_utils.DomeLightCfg(intensity=750.0),
@@ -185,19 +141,29 @@ class ObservationsCfg:
         )
         planar_velocity = ObsTerm(func=mdp.planar_velocity)
         projected_gravity = ObsTerm(func=mdp.projected_gravity)
-        lidar_ranges = ObsTerm(
-            func=mdp.lidar_ranges,
-            params={
-                "sensor_cfg": SceneEntityCfg("lidar"),
-                "maximum_range_m": LIDAR["maximum_range_m"],
-            },
-            clip=(0.0, LIDAR["maximum_range_m"]),
-        )
-        height_scan = ObsTerm(
-            func=mdp.height_scan,
-            params={"sensor_cfg": SceneEntityCfg("height_scanner")},
-            clip=(-1.0, 1.0),
-        )
+        lidar_ranges = ObsTerm(func=mdp.ray_measurements, params={
+            "sensor_cfg": SceneEntityCfg("lidar"),
+            "minimum_range_m": LIDAR["minimum_range_m"], "maximum_range_m": LIDAR["maximum_range_m"],
+        })
+        lidar_valid = ObsTerm(func=mdp.ray_measurements, params={
+            "sensor_cfg": SceneEntityCfg("lidar"), "validity": True,
+            "minimum_range_m": LIDAR["minimum_range_m"], "maximum_range_m": LIDAR["maximum_range_m"],
+        })
+        tof_ranges = ObsTerm(func=mdp.ray_measurements, params={
+            "sensor_cfg": SceneEntityCfg("tof"),
+            "minimum_range_m": TOF["minimum_range_m"], "maximum_range_m": TOF["maximum_range_m"],
+        })
+        tof_valid = ObsTerm(func=mdp.ray_measurements, params={
+            "sensor_cfg": SceneEntityCfg("tof"), "validity": True,
+            "minimum_range_m": TOF["minimum_range_m"], "maximum_range_m": TOF["maximum_range_m"],
+        })
+        d455_depth = ObsTerm(func=mdp.camera_depth, params={
+            "minimum_range_m": D455["minimum_range_m"], "maximum_range_m": D455["maximum_range_m"],
+        })
+        d455_valid = ObsTerm(func=mdp.camera_depth, params={
+            "validity": True,
+            "minimum_range_m": D455["minimum_range_m"], "maximum_range_m": D455["maximum_range_m"],
+        })
         previous_action = ObsTerm(func=mdp.last_action)
 
         def __post_init__(self):
@@ -260,8 +226,6 @@ class CarbotEnvCfg(ManagerBasedRLEnvCfg):
         self.episode_length_s = SIMULATION["episode_length_s"]
         self.sim.dt = SIMULATION["physics_dt_s"]
         self.sim.render_interval = self.decimation
-        self.scene.lidar.update_period = self.decimation * self.sim.dt
-        self.scene.height_scanner.update_period = self.decimation * self.sim.dt
         self.viewer.eye = (4.0, 4.0, 3.0)
 
 

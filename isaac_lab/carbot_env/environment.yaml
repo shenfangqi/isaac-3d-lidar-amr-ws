@@ -22,17 +22,36 @@ observations:
     - planar_velocity
     - projected_gravity
     - lidar_ranges
-    - height_scan
+    - lidar_valid
+    - tof_ranges
+    - tof_valid
+    - d455_depth
+    - d455_valid
     - previous_action
   goal_pose_body_fields: [x_m, y_m, z_m, heading_error_rad]
   planar_velocity_fields: [linear_x_mps, angular_z_rad_s]
   lidar:
     ray_count: 72
+    channels: 8
+    minimum_range_m: 0.1
+    update_period_s: 0.1
     maximum_range_m: 20.0
     horizontal_fov_deg: [-180.0, 180.0]
-  height_scan:
-    grid_size: [5, 5]
-    resolution_m: 0.10
+  tof:
+    grid_size: [8, 8]
+    sensor_count: 8
+    minimum_range_m: 0.02
+    maximum_range_m: 4.0
+    update_period_s: 0.06666666666666667
+  d455:
+    width: 32
+    height: 24
+    horizontal_fov_deg: 87.0
+    vertical_fov_deg: 58.0
+    # Conservative software operating window, not a claim of hardware Min-Z.
+    minimum_range_m: 0.6
+    maximum_range_m: 6.0
+    update_period_s: 0.03333333333333333
   forbidden_policy_observations:
     - isaac_ground_truth_pose
     - privileged_contact_force
@@ -43,7 +62,7 @@ simulation:
   control_decimation: 2
   episode_length_s: 20.0
   num_envs: 64
-  env_spacing_m: 4.0
+  env_spacing_m: 16.0
   robot_usd: isaac_sim/usd/carbot.usd
   dynamics_status: TEMP_ESTIMATE_NOT_CALIBRATED
 

@@ -77,3 +77,10 @@ corners of each front, rear, left, and right edge. Each has a distinct
 22.5° toward their adjacent corners. Their breakout-board dimensions are provisional;
 the VL53L5CX chip size and detection FoV come from the ST datasheet. No range
 data publisher is enabled yet.
+
+Isaac Lab now attaches rendered D455 depth and geometric VL53L5CX measurements
+to these mounts through `isaac_lab/carbot_env/sensors_cfg.py`. The Lab policy
+also receives a three-dimensional MID-360 coverage proxy. See
+[`isaac_lab/carbot_env/README.md`](../isaac_lab/carbot_env/README.md) for the
+observation layout, validation command and current modelling limits. These
+training tensors do not add ROS publishers to the standalone WebRTC launcher.

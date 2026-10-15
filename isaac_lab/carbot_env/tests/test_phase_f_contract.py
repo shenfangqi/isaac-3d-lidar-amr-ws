@@ -84,11 +84,15 @@ def test_policy_observations_do_not_depend_on_isaac_ground_truth(spec):
         "planar_velocity",
         "projected_gravity",
         "lidar_ranges",
-        "height_scan",
+        "lidar_valid",
+        "tof_ranges",
+        "tof_valid",
+        "d455_depth",
+        "d455_valid",
         "previous_action",
     ]
     assert observations["lidar"]["ray_count"] == 72
-    assert observations["height_scan"]["grid_size"] == [5, 5]
+    assert observations["tof"]["grid_size"] == [8, 8]
     assert "isaac_ground_truth_pose" in observations[
         "forbidden_policy_observations"
     ]
