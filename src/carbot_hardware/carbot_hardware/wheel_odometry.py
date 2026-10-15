@@ -9,8 +9,10 @@ import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
+from rclpy.time import Time
 from tf2_ros import TransformBroadcaster
 
+from .device_clock import DeviceClockMapper, resolve_stamp_mode
 from .odometry_math import Pose2D, integrate_tick_delta
 
 
@@ -49,6 +51,8 @@ class WheelOdometry(Node):
         self.declare_parameter("publish_tf", True)
         self.declare_parameter("require_time_synchronized", True)
         self.declare_parameter("stamp_with_arrival_time", False)
+        # esp32_header, arrival or device_clock; empty keeps the flag above.
+        self.declare_parameter("stamp_mode", "")
         self.declare_parameter("pose_x_variance", 0.0025)
         self.declare_parameter("pose_y_variance", 0.01)
         self.declare_parameter("pose_yaw_variance", 0.01)
@@ -82,9 +86,11 @@ class WheelOdometry(Node):
         self._require_time_synchronized = bool(
             self.get_parameter("require_time_synchronized").value
         )
-        self._stamp_with_arrival_time = bool(
-            self.get_parameter("stamp_with_arrival_time").value
+        self._stamp_mode = resolve_stamp_mode(
+            str(self.get_parameter("stamp_mode").value),
+            bool(self.get_parameter("stamp_with_arrival_time").value),
         )
+        self._device_clock = DeviceClockMapper()
 
         self._pose_covariance = _covariance(
             float(self.get_parameter("pose_x_variance").value),
@@ -122,8 +128,8 @@ class WheelOdometry(Node):
             qos_profile_sensor_data,
         )
         self.get_logger().info(
-            "wheel odometry ready: %.9f m/tick, track %.3f m"
-            % (self._meters_per_tick, self._track_separation_m)
+            "wheel odometry ready: %.9f m/tick, track %.3f m, stamps: %s"
+            % (self._meters_per_tick, self._track_separation_m, self._stamp_mode)
         )
 
     def _status_callback(self, msg):
@@ -140,13 +146,31 @@ class WheelOdometry(Node):
                 "ESP32 time synchronized; resetting the tick delta baseline"
             )
 
+    def _stamp(self, msg):
+        """Return the odometry stamp for one tick sample."""
+        if self._stamp_mode == "esp32_header":
+            return msg.header.stamp
+        now = self.get_clock().now()
+        if self._stamp_mode == "arrival":
+            return now.to_msg()
+        resets = self._device_clock.resets
+        stamp_ns = self._device_clock.update(
+            msg.boot_id, msg.device_stamp_us, now.nanoseconds)
+        if self._device_clock.resets != resets:
+            self.get_logger().warning(
+                "device clock mapping restarted: %s"
+                % self._device_clock.last_reset_reason
+            )
+        return Time(nanoseconds=stamp_ns).to_msg()
+
     def _ticks_callback(self, msg):
         if not self._time_synchronized:
             return
 
+        stamp = self._stamp(msg)
         if self._previous_ticks is None:
             self._previous_ticks = msg
-            self._publish(msg, 0.0, 0.0)
+            self._publish(stamp, 0.0, 0.0)
             return
 
         previous = self._previous_ticks
@@ -155,7 +179,7 @@ class WheelOdometry(Node):
             self.get_logger().warning(
                 "ESP32 boot_id changed; preserving pose and resetting tick baseline"
             )
-            self._publish(msg, 0.0, 0.0)
+            self._publish(stamp, 0.0, 0.0)
             return
 
         if msg.sequence <= previous.sequence or msg.device_stamp_us <= previous.device_stamp_us:
@@ -191,22 +215,16 @@ class WheelOdometry(Node):
         )
         self._pose = motion.pose
         self._previous_ticks = msg
-        self._publish(msg, motion.distance_m / dt_s, motion.yaw_rad / dt_s)
+        self._publish(stamp, motion.distance_m / dt_s, motion.yaw_rad / dt_s)
 
-    def _publish(self, ticks, linear_mps, angular_rps):
+    def _publish(self, stamp, linear_mps, angular_rps):
         quaternion = _yaw_quaternion(self._pose.yaw)
         odom = Odometry()
-        # The ESP32 clock can remain synchronized to the Jetson's pre-NTP
-        # epoch when the Jetson wall clock steps after boot.  Tick deltas and
-        # device_stamp_us are still valid, but mixing that old ROS stamp with
-        # freshly stamped MID-360 IMU data makes robot_localization fuse two
-        # different time axes.  For the on-Jetson estimator, arrival time is a
-        # bounded and monotonic approximation of the encoder sample time.
-        odom.header.stamp = (
-            self.get_clock().now().to_msg()
-            if self._stamp_with_arrival_time
-            else ticks.header.stamp
-        )
+        # The ESP32 header can stay on the Jetson's pre-NTP epoch when the
+        # Jetson clock steps after boot (#95).  device_clock maps the precise
+        # device_stamp_us onto the Jetson clock (#97); arrival adds transport
+        # latency and jitter; esp32_header passes the firmware stamp through.
+        odom.header.stamp = stamp
         odom.header.frame_id = self._odom_frame
         odom.child_frame_id = self._base_frame
         odom.pose.pose.position.x = self._pose.x

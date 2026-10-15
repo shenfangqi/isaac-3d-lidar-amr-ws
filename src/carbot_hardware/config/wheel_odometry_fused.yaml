@@ -14,9 +14,11 @@ carbot_wheel_odometry:
     tick_rate_margin: 1.25
     publish_tf: false
     require_time_synchronized: true
-    # ESP32 can keep the pre-NTP Jetson epoch after a late wall-clock step.
-    # Use the local receipt time so wheel odometry and MID-360 IMU share the
-    # same Jetson ROS time axis; device_stamp_us still supplies delta time.
+    # ESP32 can keep the pre-NTP Jetson epoch after a late wall-clock step
+    # (#95). Map device_stamp_us onto the Jetson clock (#97) so wheel odometry
+    # and the MID-360 IMU share one time axis without arrival-time jitter.
+    # The legacy flag stays as the fallback if stamp_mode is removed.
+    stamp_mode: device_clock
     stamp_with_arrival_time: true
     pose_x_variance: 0.0025
     pose_y_variance: 0.01
