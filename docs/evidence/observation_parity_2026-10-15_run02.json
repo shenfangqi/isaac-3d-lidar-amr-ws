@@ -1,0 +1,366 @@
+{
+  "acceptance_status": "CONFIRMED",
+  "bag": "/workspace/ros-humble/isaac_3d_lidar_amr_ws/calibration_data/2026-10-15_observation_parity_02",
+  "checks": [
+    {
+      "limit": ">= 1800",
+      "name": "/wheel_ticks duration_s",
+      "pass": true,
+      "value": 1858.843876314
+    },
+    {
+      "limit": "50 +/- 2%",
+      "name": "/wheel_ticks rate_hz",
+      "pass": true,
+      "value": 49.99989573320144
+    },
+    {
+      "limit": "<= 400",
+      "name": "/wheel_ticks receive_gap_max_ms",
+      "pass": true,
+      "value": 25.896706
+    },
+    {
+      "limit": "<= 100",
+      "name": "/wheel_ticks receive_gap_p999_ms",
+      "pass": true,
+      "value": 21.560512
+    },
+    {
+      "limit": "== 0",
+      "name": "/wheel_ticks header_backwards",
+      "pass": true,
+      "value": 0
+    },
+    {
+      "limit": "within [-5.0, 20.0]",
+      "name": "/wheel_ticks latency_minute_median_ms",
+      "pass": true,
+      "value": [
+        12.088242,
+        13.078632
+      ]
+    },
+    {
+      "limit": "<= 5.0",
+      "name": "/wheel_ticks latency_minute_median_spread_ms",
+      "pass": true,
+      "value": 0.9903900000000014
+    },
+    {
+      "limit": "== 0",
+      "name": "/wheel_ticks reorders",
+      "pass": true,
+      "value": 0
+    },
+    {
+      "limit": "== 0",
+      "name": "/wheel_ticks boot_changes",
+      "pass": true,
+      "value": 0
+    },
+    {
+      "limit": "<= 0.001",
+      "name": "/wheel_ticks skip_fraction",
+      "pass": true,
+      "value": 0.0
+    },
+    {
+      "limit": "<= 100",
+      "name": "/wheel_ticks device_gap_max_ms",
+      "pass": true,
+      "value": 20.024
+    },
+    {
+      "limit": "<= 2.0",
+      "name": "/wheel_ticks clock_correction_max_abs_ms",
+      "pass": true,
+      "value": 0.020024
+    },
+    {
+      "limit": "== 0",
+      "name": "/wheel_ticks consumer drops exactly duplicates+reorders",
+      "pass": true,
+      "value": 0
+    },
+    {
+      "limit": ">= 1800",
+      "name": "/mid360/imu/data_raw duration_s",
+      "pass": true,
+      "value": 1858.963856609
+    },
+    {
+      "limit": "200 +/- 2%",
+      "name": "/mid360/imu/data_raw rate_hz",
+      "pass": true,
+      "value": 199.99850921157497
+    },
+    {
+      "limit": "<= 100",
+      "name": "/mid360/imu/data_raw receive_gap_max_ms",
+      "pass": true,
+      "value": 24.009528
+    },
+    {
+      "limit": "<= 20",
+      "name": "/mid360/imu/data_raw receive_gap_p999_ms",
+      "pass": true,
+      "value": 7.610372
+    },
+    {
+      "limit": "== 0",
+      "name": "/mid360/imu/data_raw header_backwards",
+      "pass": true,
+      "value": 0
+    },
+    {
+      "limit": "within [0.0, 20.0]",
+      "name": "/mid360/imu/data_raw latency_minute_median_ms",
+      "pass": true,
+      "value": [
+        11.705564,
+        11.832276
+      ]
+    },
+    {
+      "limit": "<= 2.0",
+      "name": "/mid360/imu/data_raw latency_minute_median_spread_ms",
+      "pass": true,
+      "value": 0.1267119999999995
+    },
+    {
+      "limit": "1 id",
+      "name": "status single boot_id",
+      "pass": true,
+      "value": [
+        3698288053
+      ]
+    },
+    {
+      "limit": "always",
+      "name": "status agent_connected",
+      "pass": true,
+      "value": true
+    },
+    {
+      "limit": "always",
+      "name": "status time_synchronized",
+      "pass": true,
+      "value": true
+    },
+    {
+      "limit": "== 0",
+      "name": "status reconnect_count_delta",
+      "pass": true,
+      "value": 0
+    },
+    {
+      "limit": "== 0",
+      "name": "status ping_failures_max",
+      "pass": true,
+      "value": 0
+    },
+    {
+      "limit": "true",
+      "name": "status session_uptime_monotonic",
+      "pass": true,
+      "value": true
+    },
+    {
+      "limit": "<= 1000",
+      "name": "status receive_gap_max_ms",
+      "pass": true,
+      "value": 503.927197
+    },
+    {
+      "limit": ">= 20",
+      "name": "status clock_offset_changes (periodic resync active)",
+      "pass": true,
+      "value": 42
+    },
+    {
+      "limit": "<= 2.0",
+      "name": "status clock_offset_step_max_abs_ms",
+      "pass": true,
+      "value": 0.5
+    }
+  ],
+  "consumer_filter": {
+    "/wheel_ticks": {
+      "accepted": 92943,
+      "dropped": 0
+    }
+  },
+  "evidence_profile_coverage": [
+    {
+      "limit": "<= modeled 0.00022",
+      "name": "encoder drop_fraction",
+      "pass": true,
+      "value": 0.0
+    },
+    {
+      "limit": "<= modeled 6.7e-05",
+      "name": "encoder duplicate_fraction",
+      "pass": true,
+      "value": 0.0
+    },
+    {
+      "limit": "<= modeled 345",
+      "name": "encoder receive_gap_max_ms",
+      "pass": true,
+      "value": 25.896706
+    }
+  ],
+  "motion_commanded": false,
+  "passed": true,
+  "schema_version": 1,
+  "status": {
+    "agent_connected_always": true,
+    "boot_ids": [
+      3698288053
+    ],
+    "clock_offset_change_interval_median_s": 59.999500758,
+    "clock_offset_changes": 42,
+    "clock_offset_range_ms": 7.273265,
+    "clock_offset_step_max_abs_ms": 0.5,
+    "count": 3718,
+    "ping_failures_max": 0,
+    "receive_gap_max_ms": 503.927197,
+    "reconnect_count_delta": 0,
+    "session_uptime_monotonic": true,
+    "time_synchronized_always": true
+  },
+  "streams": {
+    "/mid360/imu/data_raw": {
+      "count": 371791,
+      "duration_s": 1858.963856609,
+      "header_backwards": 0,
+      "header_gap_max_ms": 6.15213,
+      "latency_minute_median_ms": [
+        11.745693,
+        11.751633,
+        11.808142,
+        11.769954,
+        11.788595,
+        11.832276,
+        11.805613,
+        11.780305,
+        11.772183,
+        11.706921,
+        11.783614,
+        11.705564,
+        11.785035,
+        11.809578,
+        11.77048,
+        11.733431,
+        11.713902,
+        11.769369,
+        11.783212,
+        11.771142,
+        11.787532,
+        11.730485,
+        11.752963,
+        11.733282,
+        11.768455,
+        11.748805,
+        11.753571,
+        11.748933,
+        11.764905,
+        11.755424,
+        11.816945
+      ],
+      "latency_minute_median_spread_ms": 0.1267119999999995,
+      "latency_ms": {
+        "max": 34.296063,
+        "min": 10.861368,
+        "p50": 11.764497,
+        "p95": 12.340019
+      },
+      "rate_hz": 199.99850921157497,
+      "receive_gap_ms": {
+        "max": 24.009528,
+        "p50": 4.966795,
+        "p95": 6.160169,
+        "p99": 6.830054,
+        "p999": 7.610372
+      },
+      "receive_gaps_over_ms": {
+        "100": 0,
+        "200": 0,
+        "300": 0,
+        "400": 0
+      }
+    },
+    "/wheel_ticks": {
+      "boot_changes": 0,
+      "clock_correction_max_abs_ms": 0.020024,
+      "clock_corrections": 628,
+      "count": 92943,
+      "device_gap_max_ms": 20.024,
+      "device_gap_min_ms": 19.975,
+      "duplicate_fraction": 0.0,
+      "duplicates": 0,
+      "duration_s": 1858.843876314,
+      "header_backwards": 0,
+      "header_gap_max_ms": 20.044024,
+      "latency_minute_median_ms": [
+        13.078632,
+        13.032315,
+        12.902008,
+        12.764009,
+        12.755555,
+        12.726267,
+        12.645384,
+        12.553434,
+        12.461442,
+        12.424301,
+        12.386771,
+        12.429117,
+        12.428546,
+        12.354733,
+        12.321296,
+        12.330277,
+        12.260948,
+        12.203011,
+        12.138895,
+        12.251644,
+        12.316388,
+        12.295317,
+        12.274825,
+        12.247362,
+        12.339463,
+        12.35686,
+        12.24934,
+        12.175638,
+        12.088242,
+        12.147673,
+        12.945131
+      ],
+      "latency_minute_median_spread_ms": 0.9903900000000014,
+      "latency_ms": {
+        "max": 19.086078,
+        "min": 11.585497,
+        "p50": 12.438173,
+        "p95": 13.241173
+      },
+      "max_sequence_step": 1,
+      "rate_hz": 49.99989573320144,
+      "receive_gap_ms": {
+        "max": 25.896706,
+        "p50": 19.998883,
+        "p95": 20.184992,
+        "p99": 20.793691,
+        "p999": 21.560512
+      },
+      "receive_gaps_over_ms": {
+        "100": 0,
+        "200": 0,
+        "300": 0,
+        "400": 0
+      },
+      "reorders": 0,
+      "skip_fraction": 0.0,
+      "skipped_samples": 0
+    }
+  }
+}
