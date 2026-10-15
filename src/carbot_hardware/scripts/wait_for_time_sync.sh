@@ -32,10 +32,19 @@ synchronized() {
   [[ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null || true)" == "yes" ]]
 }
 
-start_seconds=${SECONDS}
+# Count with the monotonic boot clock: bash SECONDS follows the wall clock,
+# which NTP steps forward exactly while we wait (2026-10-15: a 27 s wait was
+# logged as 86 s; after a long power-off it would read hours).
+uptime_seconds() {
+  local up _
+  read -r up _ < /proc/uptime
+  echo "${up%.*}"
+}
+
+start_seconds=$(uptime_seconds)
 last_notice_seconds=-10
 until synchronized; do
-  waited=$((SECONDS - start_seconds))
+  waited=$(($(uptime_seconds) - start_seconds))
   if ((waited >= timeout_seconds)); then
     echo "WARNING: NTP not synchronized after ${timeout_seconds} s; ESP32" \
       "timestamps will follow the restored clock until the agent restarts" \
@@ -49,4 +58,4 @@ until synchronized; do
   fi
   sleep 1
 done
-echo "Clock synchronized after $((SECONDS - start_seconds)) s"
+echo "Clock synchronized after $(($(uptime_seconds) - start_seconds)) s"

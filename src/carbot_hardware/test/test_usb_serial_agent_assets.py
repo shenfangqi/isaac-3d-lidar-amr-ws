@@ -145,3 +145,10 @@ def test_launcher_waits_for_time_sync_before_the_esp32_session():
     assert wait_call < launcher.index("exec ros2 run micro_ros_agent")
     assert os.access(WAIT_SCRIPT, os.X_OK)
     assert "cmd_vel" not in WAIT_SCRIPT.read_text(encoding="utf-8")
+
+
+def test_time_sync_wait_counts_with_the_monotonic_boot_clock():
+    # NTP steps the wall clock during the wait; SECONDS would follow it.
+    source = WAIT_SCRIPT.read_text(encoding="utf-8")
+    assert "/proc/uptime" in source
+    assert not re.search(r"\$\{SECONDS\}|\$\(\(\s*SECONDS", source)
