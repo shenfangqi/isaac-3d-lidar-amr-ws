@@ -4,8 +4,10 @@ use_sim_time: false
 clock_source: system
 odom_source: fast_lio_base_adapter
 pointcloud_message_type: livox_ros_driver2/msg/CustomMsg
-localization_default: manual_map_localizer
-initial_pose_default: rviz_manual
+# start_auto_nav.sh: the automatic localization manager seeds AMCL; an RViz
+# /initialpose stays available as the operator fallback.
+localization_default: automatic_amcl
+initial_pose_default: automatic_startup_localization
 allow_ground_truth_map_to_odom: false
 allow_chassis_odom_relay: false
 required_external_interfaces:
@@ -15,8 +17,10 @@ required_external_interfaces:
   - /odom
   - /scan
   - odom->base_footprint
-nav2_params_file: /workspace/ros-humble/isaac_3d_lidar_amr_ws/configs/nav2_params_real.yaml
-map_to_odom_owner: manual_map_localizer
+# The files the Jetson navigation launch (carbot_navigation_real.launch.py) loads.
+nav2_params_file: /workspace/ros-humble/isaac_3d_lidar_amr_ws/src/isaac_3d_lidar_bringup/config/nav2/carbot_navigation_real.yaml
+amcl_params_file: /workspace/ros-humble/isaac_3d_lidar_amr_ws/src/isaac_3d_lidar_bringup/config/nav2/carbot_amcl_real.yaml
+map_to_odom_owner: amcl
 velocity_limits:
   linear_mps: 0.10
   angular_rad_s: 0.50

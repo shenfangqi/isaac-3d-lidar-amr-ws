@@ -193,7 +193,7 @@ AMCL_INITIAL_POSE_MODE=odom_identity \
 
 需要复现真机桌腿窄通道的规划、碰撞预测和控制策略时，显式选择
 真机策略对齐配置；它仍使用 Isaac `/clock` 和 ground-truth odom，不会启动
-FAST-LIO 或真机手动定位器：
+FAST-LIO、AMCL 或真机自动定位：
 
 ```bash
 ros2 launch \
@@ -203,9 +203,21 @@ ros2 launch \
 ```
 
 默认的 `configs/nav2_params_sim.yaml` 保持原有快速、保守的 warehouse 回归；
-`nav2_params_sim_real_parity.yaml` 用于比较相同 footprint、Smac 路径、两秒
-碰撞预测、入口对正、padding、inflation 和真机速度/加速度策略。两者用途
-不同，不能用策略对齐结果宣称 Isaac 接触动力学已经成为真车数字孪生。
+`nav2_params_sim_real_parity.yaml` 由 `scripts/build_sim_real_parity_nav2.py`
+从真机实际加载的
+`src/isaac_3d_lidar_bringup/config/nav2/carbot_navigation_real.yaml` 自动生成，
+除 `use_sim_time` 外与真机 Nav2 参数完全相同（footprint、Smac 路径、RPP
+碰撞预测与减速、inflation、行为树、速度/加速度包络）。修改真机 Nav2 参数后
+必须重新生成：
+
+```bash
+python3 scripts/build_sim_real_parity_nav2.py          # 重新生成
+python3 scripts/build_sim_real_parity_nav2.py --check  # 只检查是否过期
+```
+
+`test_carbot_phase_e.py` 会在两者不一致时失败。两者用途不同，不能用策略对齐
+结果宣称 Isaac 接触动力学已经成为真车数字孪生；定位链路（FAST-LIO、AMCL、
+自动定位）也不在 parity 范围内，仿真仍使用 Isaac 真值。
 
 使用测量好的固定地图坐标：
 
@@ -652,7 +664,7 @@ desired_linear_vel:                     0.3 m/s
 
 ```text
 configs/nav2_params_sim.yaml
-configs/nav2_params_real.yaml
+src/isaac_3d_lidar_bringup/config/nav2/carbot_navigation_real.yaml
 ```
 
 修改 `behavior_server.max_rotational_vel` 后必须重启 Navigation。该 Spin 插件在 lifecycle configure 时缓存参数，仅在运行时 `ros2 param set` 可能显示成功，但实际动作仍使用旧速度。
@@ -1022,7 +1034,8 @@ launch/nvblox_with_map.launch.py
 launch/carbot_sim.launch.py
 launch/carbot_real.launch.py
 configs/nav2_params_sim.yaml
-configs/nav2_params_real.yaml
+configs/nav2_params_sim_real_parity.yaml
+src/isaac_3d_lidar_bringup/config/nav2/carbot_navigation_real.yaml
 configs/laser_filters_global_sim.yaml
 configs/behavior_trees/navigate_to_pose_replan_after_controller_failure.xml
 configs/amcl_params_sim.yaml

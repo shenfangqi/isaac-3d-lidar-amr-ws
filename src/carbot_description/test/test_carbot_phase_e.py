@@ -9,6 +9,12 @@ DESCRIPTION_ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE = DESCRIPTION_ROOT.parents[1]
 CONFIG_ROOT = WORKSPACE / "configs"
 LAUNCH_ROOT = WORKSPACE / "launch"
+# The Nav2 file the Jetson navigation launch actually loads.
+REAL_NAV2 = (
+    "src/isaac_3d_lidar_bringup/config/nav2/carbot_navigation_real.yaml"
+)
+REAL_AMCL = "src/isaac_3d_lidar_bringup/config/nav2/carbot_amcl_real.yaml"
+CONTAINER_WORKSPACE = "/workspace/ros-humble/isaac_3d_lidar_amr_ws/"
 
 
 def load_overhead_obstacle_module():
@@ -28,7 +34,19 @@ def load_yaml(relative_path):
 
 
 def nav_parameters(runtime):
+    if runtime == "real":
+        return load_yaml(REAL_NAV2)
     return load_yaml(f"configs/nav2_params_{runtime}.yaml")
+
+
+def load_parity_builder():
+    path = WORKSPACE / "scripts/build_sim_real_parity_nav2.py"
+    spec = importlib.util.spec_from_file_location(
+        "build_sim_real_parity_nav2", path
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_runtime_profiles_separate_simulation_from_real_hardware():
@@ -44,11 +62,41 @@ def test_runtime_profiles_separate_simulation_from_real_hardware():
     assert real["odom_source"] == "fast_lio_base_adapter"
     assert real["allow_chassis_odom_relay"] is False
     assert real["allow_ground_truth_map_to_odom"] is False
-    assert real["localization_default"] == "manual_map_localizer"
-    assert real["initial_pose_default"] == "rviz_manual"
-    assert real["map_to_odom_owner"] == "manual_map_localizer"
+    assert real["localization_default"] == "automatic_amcl"
+    assert real["initial_pose_default"] == "automatic_startup_localization"
+    assert real["map_to_odom_owner"] == "amcl"
     assert "/livox/lidar" in real["required_external_interfaces"]
     assert "/mid360/imu/data_raw" in real["required_external_interfaces"]
+
+    # The profile names the files the robot runs, not a stale copy.
+    assert real["nav2_params_file"] == CONTAINER_WORKSPACE + REAL_NAV2
+    assert real["amcl_params_file"] == CONTAINER_WORKSPACE + REAL_AMCL
+    assert load_yaml(REAL_AMCL)["amcl"]["ros__parameters"][
+        "tf_broadcast"
+    ] is True
+    launch_source = (
+        WORKSPACE / "src/isaac_3d_lidar_bringup/launch/"
+        "carbot_navigation_real.launch.py"
+    ).read_text(encoding="utf-8")
+    assert "'carbot_navigation_real.yaml'" in launch_source
+    assert "'carbot_amcl_real.yaml'" in launch_source
+    legacy = (CONFIG_ROOT / "nav2_params_real.yaml").read_text(
+        encoding="utf-8")
+    assert legacy.startswith("# LEGACY: not loaded by the real robot.")
+
+
+def test_real_deployment_envelope_matches_the_real_velocity_smoother():
+    # Isaac Lab policies read this envelope; it must be what Nav2 enforces.
+    real = load_yaml("configs/carbot/real.yaml")
+    smoother = nav_parameters("real")["velocity_smoother"]["ros__parameters"]
+    assert smoother["max_velocity"] == [
+        real["velocity_limits"]["linear_mps"], 0.0,
+        real["velocity_limits"]["angular_rad_s"],
+    ]
+    assert smoother["max_accel"] == [
+        real["acceleration_limits"]["linear_mps2"], 0.0,
+        real["acceleration_limits"]["angular_rad_s2"],
+    ]
 
 
 def test_nav2_footprints_match_the_canonical_carbot_polygon():
@@ -65,20 +113,6 @@ def test_nav2_footprints_match_the_canonical_carbot_polygon():
             assert yaml.safe_load(node["footprint"]) == canonical
             if runtime == "sim":
                 assert node["inflation_layer"]["inflation_radius"] == 0.45
-
-    real = nav_parameters("real")
-    assert real["local_costmap"]["local_costmap"]["ros__parameters"][
-        "footprint_padding"
-    ] == 0.01
-    assert real["global_costmap"]["global_costmap"]["ros__parameters"][
-        "footprint_padding"
-    ] == 0.03
-    assert real["local_costmap"]["local_costmap"]["ros__parameters"][
-        "inflation_layer"
-    ]["inflation_radius"] == 0.25
-    assert real["global_costmap"]["global_costmap"]["ros__parameters"][
-        "inflation_layer"
-    ]["inflation_radius"] == 0.30
 
 
 def test_nav2_time_and_velocity_limits_are_runtime_specific():
@@ -123,70 +157,37 @@ def test_sim_real_parity_profile_matches_physical_navigation_policy():
         "FollowPath"
     ]["desired_linear_vel"] == 0.30
 
-    for node_name in (
-        "controller_server",
-        "planner_server",
-        "bt_navigator",
-        "behavior_server",
-        "waypoint_follower",
-        "velocity_smoother",
-        "lifecycle_manager_navigation",
-    ):
-        assert parity[node_name]["ros__parameters"]["use_sim_time"] is True
-
-    parity_controller = parity["controller_server"]["ros__parameters"]
-    real_controller = real["controller_server"]["ros__parameters"]
-    assert parity_controller["controller_frequency"] == (
-        real_controller["controller_frequency"]
-    )
-    for key in (
-        "desired_linear_vel",
-        "lookahead_dist",
-        "min_lookahead_dist",
-        "max_lookahead_dist",
-        "max_allowed_time_to_collision_up_to_carrot",
-        "rotate_to_heading_min_angle",
-        "rotate_to_heading_angular_vel",
-        "max_angular_accel",
-    ):
-        assert parity_controller["FollowPath"][key] == (
-            real_controller["FollowPath"][key]
-        )
-
-    for costmap in ("local_costmap", "global_costmap"):
-        parity_costmap = parity[costmap][costmap]["ros__parameters"]
-        real_costmap = real[costmap][costmap]["ros__parameters"]
-        assert parity_costmap["use_sim_time"] is True
-        assert parity_costmap["global_frame"] == real_costmap["global_frame"]
-        assert parity_costmap["footprint"] == real_costmap["footprint"]
-        assert parity_costmap["footprint_padding"] == (
-            real_costmap["footprint_padding"]
-        )
-        assert parity_costmap["inflation_layer"]["inflation_radius"] == (
-            real_costmap["inflation_layer"]["inflation_radius"]
-        )
-    assert parity["global_costmap"]["global_costmap"]["ros__parameters"][
-        "obstacle_layer"
-    ]["enabled"] is False
-
-    assert parity["planner_server"]["ros__parameters"]["GridBased"] == (
-        real["planner_server"]["ros__parameters"]["GridBased"]
-    )
-    assert parity["bt_navigator"]["ros__parameters"][
-        "default_nav_to_pose_bt_xml"
-    ] == real["bt_navigator"]["ros__parameters"][
-        "default_nav_to_pose_bt_xml"
-    ]
-    for key in ("max_velocity", "min_velocity", "max_accel", "max_decel"):
-        assert parity["velocity_smoother"]["ros__parameters"][key] == (
-            real["velocity_smoother"]["ros__parameters"][key]
-        )
-
-    parity_source = (
+    # The stored profile is exactly what the generator makes from the real
+    # file, so tuning the robot without regenerating fails here.
+    builder = load_parity_builder()
+    stored = (
         WORKSPACE / "configs/nav2_params_sim_real_parity.yaml"
     ).read_text(encoding="utf-8")
-    assert "fast_lio" not in parity_source.lower()
-    assert "manual_map_localizer" not in parity_source
+    assert stored == builder.render(real), (
+        "run python3 scripts/build_sim_real_parity_nav2.py"
+    )
+
+    # The only differences from the robot are the simulation clock and the
+    # lifecycle block that nav2_bringup reads from the parameter file.
+    def without_clock(node):
+        if isinstance(node, dict):
+            return {
+                key: without_clock(value) for key, value in node.items()
+                if key != "use_sim_time"
+            }
+        return node
+
+    lifecycle = parity.pop("lifecycle_manager_navigation")["ros__parameters"]
+    assert lifecycle["use_sim_time"] is True
+    assert without_clock(parity) == without_clock(real)
+    for node_name, node in parity.items():
+        parameters = node.get("ros__parameters") or node[node_name][
+            "ros__parameters"
+        ]
+        assert parameters["use_sim_time"] is True, node_name
+
+    assert "fast_lio" not in stored.lower()
+    assert "manual_map_localizer" not in stored
 
 
 def test_sim_launch_can_select_real_navigation_parity_profile():

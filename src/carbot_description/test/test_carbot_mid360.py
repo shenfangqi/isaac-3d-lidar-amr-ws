@@ -19,6 +19,10 @@ DRIVER_LAUNCH_PATH = HARDWARE_ROOT / "launch" / "mid360_stack.launch.py"
 NVBLOX_CONFIG_ROOT = (
     WORKSPACE / "src" / "isaac_3d_lidar_bringup" / "config" / "nvblox"
 )
+FAST_LIO_CONFIG_PATH = (
+    WORKSPACE / "src" / "isaac_3d_lidar_bringup" / "config"
+    / "state_estimation" / "fast_lio_mid360.yaml"
+)
 
 spec = importlib.util.spec_from_file_location("carbot_mid360", MID360_PATH)
 carbot_mid360 = importlib.util.module_from_spec(spec)
@@ -59,6 +63,22 @@ def test_runtime_profiles_separate_real_and_sim_pointcloud_contracts():
     assert sim_profile["pointcloud_message_type"] == (
         "sensor_msgs/msg/PointCloud2"
     )
+
+    # One topic, two message contracts. The canonical (hashed) section names
+    # the Isaac RTX type; the real side is what the driver and FAST-LIO use.
+    lidar = _parameters()["sensors"]["mid360"]
+    assert lidar["pointcloud_type"] == sim_profile["pointcloud_message_type"]
+    assert carbot_mid360.mid360_runtime_config(_parameters())[
+        "pointcloud_type"
+    ] == sim_profile["pointcloud_message_type"]
+    fast_lio = yaml.safe_load(FAST_LIO_CONFIG_PATH.read_text(
+        encoding="utf-8"))["/**"]["ros__parameters"]
+    assert fast_lio["common"]["lid_topic"] == lidar["pointcloud_topic"]
+    # FAST-LIO lidar_type 1 (AVIA) subscribes to livox_ros_driver2 CustomMsg,
+    # and the driver's xfer_format 1 publishes it.
+    assert fast_lio["preprocess"]["lidar_type"] == 1
+    assert '"xfer_format": 1' in DRIVER_LAUNCH_PATH.read_text(
+        encoding="utf-8")
 
 
 def _parameters():

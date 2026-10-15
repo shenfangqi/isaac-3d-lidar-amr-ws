@@ -150,6 +150,11 @@ sensors:
     housing_height_m: 0.060
     rotation_rpy_rad: [-0.006135404, -0.004857536, 0.019559477]
     pointcloud_topic: /livox/lidar
+    # Isaac RTX message type. The real Livox driver publishes
+    # livox_ros_driver2/msg/CustomMsg on the same topic (FAST-LIO2 needs its
+    # per-point offset_time); configs/carbot/{real,sim}.yaml hold the two
+    # runtime contracts. Keys in this section must not change: the accepted
+    # motion profiles are bound to its hash (extrinsics_hash).
     pointcloud_type: sensor_msgs/msg/PointCloud2
     pointcloud_rate_hz: 10
     full_pointcloud_fields: [x, y, z, intensity, tag, line, timestamp]
@@ -322,7 +327,7 @@ provenance:
     category: observed_value
     status: confirmed_baseline
     scope: [sensors.mid360.pointcloud_topic, sensors.mid360.pointcloud_type, sensors.mid360.pointcloud_rate_hz, sensors.mid360.imu_rate_hz, sensors.mid360.observed_points_per_frame]
-    note: Topics, rates, and observed real-sensor points-per-frame range.
+    note: Topics, rates, and observed real-sensor points-per-frame range. The real /livox/lidar message type was confirmed as livox_ros_driver2/msg/CustomMsg on 2026-09-26 (FAST-LIO2 subscribes to it with lidar_type 1); sensors.mid360.pointcloud_type (PointCloud2) describes only the Isaac RTX publisher; configs/carbot/real.yaml records the real contract.
   SOURCE_CODE_VALUE_MID360_IMU_ADAPTER_2026_09_18:
     category: source_code_value
     status: implemented_design
