@@ -28,6 +28,10 @@ if [[ "${wait_seconds}" == "0" ]]; then
   exit 64
 fi
 
+# The ESP32 synchronizes its clock once when the session starts; start it only
+# after NTP has corrected the Jetson clock (issue #95).
+"$(dirname -- "${BASH_SOURCE[0]}")/wait_for_time_sync.sh"
+
 set +u
 source /opt/ros/humble/setup.bash
 if [[ ! -r "${agent_setup}" ]]; then
