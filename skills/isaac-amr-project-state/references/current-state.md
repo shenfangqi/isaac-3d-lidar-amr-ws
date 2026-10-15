@@ -1,5 +1,13 @@
 # Current authoritative project state
 
+## observation_parity 30-minute capture and cold-boot clock defect: 2026-10-15 evening
+
+- The Jetson deployment is unchanged from the 2026-10-14 session (#84/#85; #91-#94 changed nothing under `src/`, so no redeploy). The only Jetson change was a `micro-ros-agent` restart at 21:37 (ESP32 not rebooted, `boot_id` 3698288053). The stack was not started; web teleop stayed disarmed.
+- Run 02 of `scripts/record_observation_parity.sh` (1858.8 s, stationary) passed every check in `configs/carbot/observation_parity_acceptance.yaml`. Wheel receive gaps were at most 25.9 ms (345 ms on 2026-09-18), with zero skips, duplicates, reorders and reconnects. The wheel latency spread was 0.99 ms over 30 minutes (17.0 ms with the old fixed-offset firmware), from 42 clock-offset updates of at most 0.5 ms. The MID-360 IMU ran at 200 Hz with latency 11.7-11.8 ms. Evidence: `docs/evidence/observation_parity_2026-10-15.md` (+ `_run01.json`, `_run02.json`). The backlog keeps both `observation_parity` and `imu_extrinsics_and_time` blocking with updated states.
+- Cold-boot defect (#95): the Jetson has no RTC backup, so timesyncd restores the last shutdown time. `micro-ros-agent` starts and the ESP32 synchronizes to that stale clock before NTP steps it forward (about 21.4 h on 2026-10-15). The slew-limited firmware resync (about 1 ms/s) never catches up, so the ESP32 `/wheel_ticks` and `/carbot/status` stamps stay hours off (run 01). Navigation does not use them. **Until #95 ships: after every cold boot, once `timedatectl` reports synchronized, run `systemctl --user restart micro-ros-agent` on the Jetson** (robot still, no stack running), then check that a `/wheel_ticks` header matches `date +%s`.
+- Also observed: user lingering is now `yes` on the Jetson (`loginctl show-user shenfq -p Linger`); jetson-target.md's older "no" note is stale.
+- Next: implement #95; the firmware step on large offsets; compare observation units/normalization with training; record FAST-LIO `/odom` transport with the stack running.
+
 ## Issue #53 robot session: 2026-10-14 evening
 
 - The Jetson runs main with #84 (verification counts only fresh passing time; late data pauses it) and #85 (startup waits once, by time, for the manager and the motion guard via `scripts/jetson_localization_ready.py`, `CARBOT_READY_TIMEOUT` 180 s; preflight retries readiness-only failures for 60 s; the navigation container has no restart policy). #85 started first time 4/4 on the Jetson, including 1 min after a cold boot. Evidence: `docs/evidence/issue53_robot_2026-10-14.md`.
