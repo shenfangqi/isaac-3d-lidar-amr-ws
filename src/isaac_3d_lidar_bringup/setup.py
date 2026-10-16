@@ -39,6 +39,10 @@ setup(
             glob('config/nav2/*.yaml')
         ),
         (
+            os.path.join('share', package_name, 'behavior_trees'),
+            glob('behavior_trees/*.xml')
+        ),
+        (
             os.path.join('share', package_name, 'config/localization'),
             glob('config/localization/*.yaml') + glob('config/localization/*.npz')
         ),
