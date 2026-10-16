@@ -167,7 +167,8 @@ def test_real_navigation_launch_is_inactive_and_has_one_final_velocity_path():
     assert "default_value='false'" in launch_source
     # Two mutually exclusive controller/behavior variants use the same chain.
     assert launch_source.count("('cmd_vel', 'cmd_vel_nav')") == 5
-    assert launch_source.count('condition=UnlessCondition(recovery_enabled)') == 3
+    # bt_navigator is also replaced by the issue #1 obstacle-replan variant.
+    assert launch_source.count('condition=UnlessCondition(recovery_enabled)') == 2
     assert "if recovery_enabled.perform(context) != 'true':" in launch_source
     assert launch_source.count(
         "('cmd_vel_smoothed', cmd_vel_output)") == 1
