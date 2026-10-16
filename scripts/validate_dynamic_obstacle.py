@@ -9,11 +9,17 @@ import time
 import rclpy
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped, Twist
+from map_msgs.msg import OccupancyGridUpdate
 from nav2_msgs.action import NavigateToPose
-from nav_msgs.msg import Odometry, Path
+from nav_msgs.msg import OccupancyGrid, Odometry, Path
 from rclpy.action import ActionClient
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import (
+    DurabilityPolicy,
+    QoSProfile,
+    ReliabilityPolicy,
+    qos_profile_sensor_data,
+)
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Float64MultiArray
 
@@ -21,7 +27,9 @@ from std_msgs.msg import Float64MultiArray
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument(
     "--scenario",
-    choices=("temporary", "detour", "blocked"),
+    # persistent: the detour placement for a tree without a detour (issue #1
+    # obstacle_wait_retry); the goal must abort safely after one path.
+    choices=("temporary", "detour", "persistent", "blocked"),
     required=True,
 )
 parser.add_argument("--goal-x", type=float, default=4.34064)
@@ -29,7 +37,52 @@ parser.add_argument("--goal-y", type=float, default=2.39164)
 parser.add_argument("--goal-yaw", type=float, default=0.0)
 parser.add_argument("--obstacle-distance", type=float, default=1.20)
 parser.add_argument("--timeout", type=float, default=210.0)
+parser.add_argument(
+    "--trace-output",
+    help="write plans, obstacle and the odometry trace to this JSON file",
+)
 args, ros_args = parser.parse_known_args()
+
+# Carbot measured footprint in base_footprint (x forward, y left).
+FOOTPRINT = ((0.155, 0.133), (0.155, -0.133), (-0.130, -0.133), (-0.130, 0.133))
+# OccupancyGrid value of Nav2's LETHAL_OBSTACLE (cost 254).
+LETHAL_OCCUPANCY = 100
+
+
+def footprint_perimeter(step=0.01):
+    """Return points along the footprint edges in base_footprint."""
+    points = []
+    for first, second in zip(FOOTPRINT, FOOTPRINT[1:] + FOOTPRINT[:1]):
+        length = math.hypot(second[0] - first[0], second[1] - first[1])
+        count = max(1, int(math.ceil(length / step)))
+        for index in range(count):
+            ratio = index / count
+            points.append((
+                first[0] + ratio * (second[0] - first[0]),
+                first[1] + ratio * (second[1] - first[1]),
+            ))
+    return points
+
+
+def obstacle_boxes(command):
+    """Yield (x, y, size_x, size_y, yaw) for each enabled command group."""
+    for index in range(0, len(command) - 6, 7):
+        x, y, _, size_x, size_y, _, yaw = command[index:index + 7]
+        if size_x > 0.0 and size_y > 0.0:
+            yield x, y, size_x, size_y, yaw
+
+
+def distance_to_box(point, box):
+    """Return the planar distance from a point to a box (0 inside)."""
+    x, y, size_x, size_y, yaw = box
+    relative_x = point[0] - x
+    relative_y = point[1] - y
+    local_x = math.cos(-yaw) * relative_x - math.sin(-yaw) * relative_y
+    local_y = math.sin(-yaw) * relative_x + math.cos(-yaw) * relative_y
+    return math.hypot(
+        max(abs(local_x) - size_x / 2.0, 0.0),
+        max(abs(local_y) - size_y / 2.0, 0.0),
+    )
 
 
 def quaternion_from_yaw(yaw):
@@ -83,6 +136,34 @@ class DynamicObstacleValidation(Node):
             Float64MultiArray, "/isaac_sim/dynamic_obstacle", 10
         )
         self.create_subscription(Path, "/plan", self.path_callback, 10)
+        self.create_subscription(
+            OccupancyGrid,
+            "/global_costmap/costmap",
+            self.global_costmap_callback,
+            QoSProfile(
+                depth=1,
+                reliability=ReliabilityPolicy.RELIABLE,
+                durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            ),
+        )
+        self.create_subscription(
+            OccupancyGrid,
+            "/map",
+            self.static_map_callback,
+            QoSProfile(
+                depth=1,
+                reliability=ReliabilityPolicy.RELIABLE,
+                durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            ),
+        )
+        # Nav2 sends the full grid only on start or resize; later changes
+        # arrive as updates and must be applied to the latched grid.
+        self.create_subscription(
+            OccupancyGridUpdate,
+            "/global_costmap/costmap_updates",
+            self.global_costmap_update_callback,
+            10,
+        )
         self.create_subscription(Odometry, "/odom", self.odom_callback, 10)
         self.create_subscription(Twist, "/cmd_vel", self.cmd_callback, 10)
         self.create_subscription(
@@ -98,6 +179,9 @@ class DynamicObstacleValidation(Node):
         self.latest_cmd = None
         self.cmd_history = []
         self.obstacle_command = None
+        self.obstacle_command_placed = None
+        self.global_costmap_data = []
+        self.static_map = None
         self.obstacle_enabled = False
         self.obstacle_placed_at = None
         self.obstacle_removed_at = None
@@ -108,21 +192,168 @@ class DynamicObstacleValidation(Node):
         self.stop_observed = False
         self.maximum_stop_duration = 0.0
         self.feedback_recoveries = 0
+        self.latest_global_costmap = None
+        self.global_obstacle_cells_at_replan = None
+        self.replan_path_clearance = None
+        self.minimum_clearance = math.inf
+        self.perimeter = footprint_perimeter()
+        self.plans = []
+        self.odom_trace = []
 
     def path_callback(self, message):
         if not self.goal_started:
             return
         self.plan_count += 1
+        self.plans.append([
+            [round(pose.pose.position.x, 3), round(pose.pose.position.y, 3)]
+            for pose in message.poses
+        ])
         if self.initial_path is None:
             self.initial_path = message
+        elif (
+            self.global_obstacle_cells_at_replan is None
+            and self.obstacle_enabled
+        ):
+            # Issue #1: a detour is only meaningful if the global costmap
+            # still holds the obstacle the robot stopped in front of.
+            self.global_obstacle_cells_at_replan = (
+                self.lethal_cells_in_obstacle()
+            )
+            self.replan_path_clearance = min(
+                distance_to_box(
+                    (pose.pose.position.x, pose.pose.position.y), box)
+                for pose in message.poses
+                for box in obstacle_boxes(self.obstacle_command)
+            )
+            print(
+                "[DYNAMIC][GLOBAL] lethal cells inside obstacle at replan: "
+                f"{self.global_obstacle_cells_at_replan}, detour centre-line "
+                f"clearance {self.replan_path_clearance:.3f} m",
+                flush=True,
+            )
         print(
             f"[DYNAMIC][PLAN] count={self.plan_count}, "
             f"poses={len(message.poses)}",
             flush=True,
         )
 
+    def global_costmap_callback(self, message):
+        self.latest_global_costmap = message
+        # rclpy converts message.data back to an array on assignment; keep
+        # the patched cells in a separate buffer.
+        self.global_costmap_data = list(message.data)
+
+    def static_map_callback(self, message):
+        self.static_map = message
+
+    def ghost_cells(self, margin=0.30):
+        """Count lethal global cells on free static cells away from cubes."""
+        grid = self.latest_global_costmap
+        static = self.static_map
+        if grid is None or static is None:
+            return None
+        info = grid.info
+        # The current cube is hidden by the time the result is reported.
+        boxes = list(obstacle_boxes(self.obstacle_command_placed or []))
+        count = 0
+        for index, value in enumerate(self.global_costmap_data):
+            if value < LETHAL_OCCUPANCY:
+                continue
+            x = info.origin.position.x + (
+                index % info.width + 0.5) * info.resolution
+            y = info.origin.position.y + (
+                index // info.width + 0.5) * info.resolution
+            column = int((x - static.info.origin.position.x)
+                         / static.info.resolution)
+            row = int((y - static.info.origin.position.y)
+                      / static.info.resolution)
+            if not (0 <= column < static.info.width
+                    and 0 <= row < static.info.height):
+                continue
+            if static.data[row * static.info.width + column] != 0:
+                continue
+            if any(distance_to_box((x, y), box) <= margin for box in boxes):
+                continue
+            count += 1
+        return count
+
+    def global_costmap_update_callback(self, message):
+        grid = self.latest_global_costmap
+        if grid is None:
+            return
+        for row in range(message.height):
+            start = (message.y + row) * grid.info.width + message.x
+            self.global_costmap_data[start:start + message.width] = (
+                message.data[row * message.width:(row + 1) * message.width])
+
+    def lethal_cells_in_obstacle(self):
+        grid = self.latest_global_costmap
+        if grid is None or self.obstacle_command is None:
+            return 0
+        info = grid.info
+        count = 0
+        for box in obstacle_boxes(self.obstacle_command):
+            radius = math.hypot(box[2], box[3]) / 2.0
+            first_column = int((box[0] - radius - info.origin.position.x)
+                               / info.resolution)
+            last_column = int((box[0] + radius - info.origin.position.x)
+                              / info.resolution)
+            first_row = int((box[1] - radius - info.origin.position.y)
+                            / info.resolution)
+            last_row = int((box[1] + radius - info.origin.position.y)
+                           / info.resolution)
+            for row in range(max(first_row, 0),
+                             min(last_row, info.height - 1) + 1):
+                for column in range(max(first_column, 0),
+                                    min(last_column, info.width - 1) + 1):
+                    centre = (
+                        info.origin.position.x
+                        + (column + 0.5) * info.resolution,
+                        info.origin.position.y
+                        + (row + 0.5) * info.resolution,
+                    )
+                    if (
+                        distance_to_box(centre, box) == 0.0
+                        and self.global_costmap_data[row * info.width + column]
+                        >= LETHAL_OCCUPANCY
+                    ):
+                        count += 1
+        return count
+
+    def update_clearance(self):
+        if not self.obstacle_enabled or self.latest_odom is None:
+            return
+        pose = self.latest_odom.pose.pose
+        orientation = pose.orientation
+        yaw = math.atan2(
+            2.0 * (orientation.w * orientation.z
+                   + orientation.x * orientation.y),
+            1.0 - 2.0 * (orientation.y**2 + orientation.z**2),
+        )
+        cosine = math.cos(yaw)
+        sine = math.sin(yaw)
+        for box in obstacle_boxes(self.obstacle_command):
+            for local_x, local_y in self.perimeter:
+                point = (
+                    pose.position.x + cosine * local_x - sine * local_y,
+                    pose.position.y + sine * local_x + cosine * local_y,
+                )
+                self.minimum_clearance = min(
+                    self.minimum_clearance, distance_to_box(point, box)
+                )
+
     def odom_callback(self, message):
         self.latest_odom = message
+        self.update_clearance()
+        if self.goal_started:
+            pose = message.pose.pose
+            self.odom_trace.append([
+                round(time.monotonic(), 2),
+                round(pose.position.x, 3),
+                round(pose.position.y, 3),
+                round(2.0 * math.atan2(pose.orientation.z,
+                                       pose.orientation.w), 3),
+            ])
 
     def cmd_callback(self, message):
         self.latest_cmd = message
@@ -201,9 +432,12 @@ class DynamicObstacleValidation(Node):
             self.initial_path, args.obstacle_distance
         )
         if args.scenario == "blocked":
-            # Four physical cubes form a closed ring around the initial robot
-            # pose. All walls are inside LiDAR range, so neither local control
-            # nor global planning can exploit an unseen end of a finite wall.
+            # Four physical cubes form a closed ring around the robot's pose
+            # when the obstacle is placed (cube commands share the map/odom
+            # frame of the plan). All walls are inside LiDAR range, so neither
+            # local control nor global planning can exploit an unseen end of
+            # a finite wall.
+            centre = self.latest_odom.pose.pose.position
             wall_distance = 1.0
             wall_length = 4.0
             wall_thickness = 0.8
@@ -215,16 +449,18 @@ class DynamicObstacleValidation(Node):
             )
             self.obstacle_command = []
             for wall_x, wall_y, size_x, size_y in walls:
-                self.obstacle_command.extend(
-                    [wall_x, wall_y, 0.5, size_x, size_y, 1.0, 0.0]
-                )
+                self.obstacle_command.extend([
+                    centre.x + wall_x, centre.y + wall_y, 0.5,
+                    size_x, size_y, 1.0, 0.0,
+                ])
             dimensions = (wall_thickness, wall_length, 1.0)
-            x, y, yaw = walls[0][0], walls[0][1], 0.0
+            x, y, yaw = centre.x + walls[0][0], centre.y + walls[0][1], 0.0
         else:
             dimensions = (0.65, 0.65, 1.0)
             yaw = 0.0
             self.obstacle_command = [x, y, 0.5, *dimensions, yaw]
         self.publish_obstacle(self.obstacle_command)
+        self.obstacle_command_placed = list(self.obstacle_command)
         self.obstacle_enabled = True
         self.obstacle_seen_in_scan = False
         self.obstacle_scan_hits_max = 0
@@ -353,6 +589,9 @@ def main():
         node.hide_obstacle()
 
         final_status = status_name(result.status)
+        # Issue #1: the global costmap is never cleared after the robot has
+        # moved, so lethal cells left by earlier obstacles must not persist.
+        ghost_cells = node.ghost_cells()
         recent_cmd_speeds = [
             speed
             for received_at, speed in node.cmd_history
@@ -378,8 +617,27 @@ def main():
                     recent_cmd_speed, 4
                 ),
                 "post_result_odom_speed": round(final_odom_speed, 4),
+                "global_obstacle_cells_at_replan": (
+                    node.global_obstacle_cells_at_replan
+                ),
+                "global_ghost_cells": ghost_cells,
+                "replan_path_clearance_m": (
+                    None if node.replan_path_clearance is None
+                    else round(node.replan_path_clearance, 3)
+                ),
+                "minimum_footprint_clearance_m": round(
+                    node.minimum_clearance, 3
+                ),
             }
         )
+        if args.trace_output:
+            with open(args.trace_output, "w", encoding="utf-8") as stream:
+                json.dump({
+                    "summary": result_summary,
+                    "obstacle_command": node.obstacle_command_placed,
+                    "plans": node.plans,
+                    "odom": node.odom_trace,
+                }, stream)
         print(
             f"[DYNAMIC][RESULT] "
             f"{json.dumps(result_summary, sort_keys=True)}"
@@ -389,6 +647,8 @@ def main():
             raise RuntimeError("dynamic obstacle was not observed in /scan")
         if not node.stop_observed:
             raise RuntimeError("local obstacle stop was not observed")
+        if node.minimum_clearance <= 0.0:
+            raise RuntimeError("footprint touched the obstacle")
         if recent_cmd_speed > 0.01 or final_odom_speed > 0.01:
             raise RuntimeError(
                 "non-zero velocity persisted after action result"
@@ -398,10 +658,16 @@ def main():
                 result.status == GoalStatus.STATUS_SUCCEEDED
                 and node.plan_count == 1
             )
+        elif args.scenario == "persistent":
+            passed = (
+                result.status == GoalStatus.STATUS_ABORTED
+                and node.plan_count == 1
+            )
         elif args.scenario == "detour":
             passed = (
                 result.status == GoalStatus.STATUS_SUCCEEDED
                 and node.plan_count == 2
+                and (node.global_obstacle_cells_at_replan or 0) > 0
             )
         else:
             passed = (

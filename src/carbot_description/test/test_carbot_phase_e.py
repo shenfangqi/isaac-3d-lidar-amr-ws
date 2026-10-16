@@ -190,6 +190,28 @@ def test_sim_real_parity_profile_matches_physical_navigation_policy():
     assert "manual_map_localizer" not in stored
 
 
+def test_wait_retry_parity_profile_matches_the_real_launch_variant():
+    builder = load_parity_builder()
+    real = nav_parameters("real")
+    path = "configs/nav2_params_sim_real_parity_wait_retry.yaml"
+    stored = (WORKSPACE / path).read_text(encoding="utf-8")
+    assert stored == builder.render(real, wait_retry=True), (
+        "run python3 scripts/build_sim_real_parity_nav2.py --wait-retry"
+    )
+
+    # Only the behavior tree separates it from the parity profile.
+    variant = load_yaml(path)
+    parity = load_yaml("configs/nav2_params_sim_real_parity.yaml")
+    bt = variant["bt_navigator"]["ros__parameters"]
+    tree = bt["default_nav_to_pose_bt_xml"]
+    assert tree.startswith(CONTAINER_WORKSPACE)
+    assert (WORKSPACE / tree[len(CONTAINER_WORKSPACE):]).is_file()
+    assert tree.endswith("navigate_to_pose_wait_and_retry_real.xml")
+    bt["default_nav_to_pose_bt_xml"] = parity["bt_navigator"][
+        "ros__parameters"]["default_nav_to_pose_bt_xml"]
+    assert variant == parity
+
+
 def test_sim_launch_can_select_real_navigation_parity_profile():
     launch_source = (LAUNCH_ROOT / "carbot_sim.launch.py").read_text(
         encoding="utf-8"
