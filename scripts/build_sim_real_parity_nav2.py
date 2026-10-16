@@ -21,6 +21,14 @@ REAL = (
     / "src/isaac_3d_lidar_bringup/config/nav2/carbot_navigation_real.yaml"
 )
 OUTPUT = ROOT / "configs/nav2_params_sim_real_parity.yaml"
+# Issue #1: the real launch file's obstacle_wait_retry:=true variant, which
+# replaces only the behavior tree.  Isaac's launch runs from the source
+# workspace, so the tree is referenced at its container source path.
+WAIT_RETRY_OUTPUT = ROOT / "configs/nav2_params_sim_real_parity_wait_retry.yaml"
+WAIT_RETRY_TREE = (
+    "/workspace/ros-humble/isaac_3d_lidar_amr_ws/src/isaac_3d_lidar_bringup/"
+    "behavior_trees/navigate_to_pose_wait_and_retry_real.xml"
+)
 
 # nav2_bringup/navigation_launch.py reads this block; the real launch file
 # defines its lifecycle manager inline instead of in the YAML.
@@ -60,9 +68,19 @@ def _enable_sim_time(node):
                 _enable_sim_time(value)
 
 
-def build_profile(real):
+WAIT_RETRY_HEADER = """\
+# Variant: obstacle_wait_retry:=true (issue #1); bt_navigator uses
+# src/isaac_3d_lidar_bringup/behavior_trees/navigate_to_pose_wait_and_retry_real.xml.
+#   python3 scripts/build_sim_real_parity_nav2.py --wait-retry
+"""
+
+
+def build_profile(real, wait_retry=False):
     """Return the parity profile for one loaded real Nav2 document."""
     profile = copy.deepcopy(real)
+    if wait_retry:
+        profile["bt_navigator"]["ros__parameters"][
+            "default_nav_to_pose_bt_xml"] = WAIT_RETRY_TREE
     _enable_sim_time(profile)
     profile["lifecycle_manager_navigation"] = copy.deepcopy(LIFECYCLE_MANAGER)
     return profile
@@ -78,22 +96,27 @@ _Dumper.add_representer(
         "tag:yaml.org,2002:seq", value, flow_style=True))
 
 
-def render(real):
+def render(real, wait_retry=False):
     """Return the parity profile text exactly as it is stored."""
     body = yaml.dump(
-        build_profile(real), Dumper=_Dumper, sort_keys=False,
+        build_profile(real, wait_retry), Dumper=_Dumper, sort_keys=False,
         default_flow_style=False, width=120)
-    return HEADER + body
+    return HEADER + (WAIT_RETRY_HEADER if wait_retry else "") + body
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--real", type=Path, default=REAL)
-    parser.add_argument("--output", type=Path, default=OUTPUT)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--wait-retry", action="store_true",
+        help="build the obstacle_wait_retry:=true variant (issue #1)")
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     real = yaml.safe_load(args.real.read_text(encoding="utf-8"))
-    rendered = render(real)
+    if args.output is None:
+        args.output = WAIT_RETRY_OUTPUT if args.wait_retry else OUTPUT
+    rendered = render(real, args.wait_retry)
     if args.check:
         if not args.output.is_file() or args.output.read_text(
                 encoding="utf-8") != rendered:

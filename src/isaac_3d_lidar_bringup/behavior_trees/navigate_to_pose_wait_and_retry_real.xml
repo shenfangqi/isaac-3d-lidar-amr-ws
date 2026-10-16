@@ -1,0 +1,34 @@
+<!--
+  Issue #1, real robot: compute one global path against the saved map and
+  keep it.  Raw /scan in the local costmap still stops the robot.  If
+  FollowPath fails, wait for a transient obstacle (for example a person) to
+  leave and follow the unchanged path once more; if it fails again, the goal
+  aborts with the robot stopped.
+
+  There is deliberately no global detour.  Isaac Sim acceptance with the
+  real parameters (docs/evidence/issue1_obstacle_wait_retry_sim_2026-10-16.md)
+  showed that a detour is not safe with the MID-360: RPP stops 1-8 cm from
+  the obstacle, so the turn a detour needs is refused, and the global
+  costmap sees only an obstacle's near face, so a detour path cuts through
+  its unseen depth, which stays inside the 0.5 m blind zone while passing.
+
+  No costmap is cleared: a cleared cell inside the blind zone could never be
+  marked again.  IsPathValid, PipelineSequence/RateController and
+  Spin/BackUp are intentionally absent.
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <!-- A memory Sequence does not tick ComputePathToPose again while
+         FollowPath is RUNNING. -->
+    <Sequence name="NavigateWithTransientObstacleRetry">
+      <ComputePathToPose
+        goal="{goal}"
+        path="{path}"
+        planner_id="GridBased"/>
+      <RecoveryNode number_of_retries="1" name="FollowAfterTransientPause">
+        <FollowPath path="{path}" controller_id="FollowPath"/>
+        <Wait wait_duration="2"/>
+      </RecoveryNode>
+    </Sequence>
+  </BehaviorTree>
+</root>

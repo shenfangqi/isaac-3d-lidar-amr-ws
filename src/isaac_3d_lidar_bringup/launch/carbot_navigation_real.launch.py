@@ -24,11 +24,8 @@ def generate_launch_description():
         bringup_dir, 'config', 'nav2', 'carbot_amcl_real.yaml')
     navigation_config = os.path.join(
         bringup_dir, 'config', 'nav2', 'carbot_navigation_real.yaml')
-    obstacle_replan_config = os.path.join(
-        bringup_dir, 'config', 'nav2', 'carbot_obstacle_replan_real.yaml')
-    obstacle_replan_tree = os.path.join(
-        bringup_dir, 'behavior_trees',
-        'navigate_to_pose_replan_after_controller_failure_real.xml')
+    obstacle_wait_retry_tree = os.path.join(
+        bringup_dir, 'behavior_trees', 'navigate_to_pose_wait_and_retry_real.xml')
     auto_localization_config = os.path.join(
         bringup_dir, 'config', 'nav2',
         'carbot_auto_localization_real.yaml')
@@ -44,7 +41,7 @@ def generate_launch_description():
     localization_strategy = LaunchConfiguration('localization_strategy')
     recovery_enabled = LaunchConfiguration('bounded_recovery_enabled')
     acceptance_profile = LaunchConfiguration('recovery_acceptance_profile')
-    obstacle_replan = LaunchConfiguration('obstacle_replan')
+    obstacle_wait_retry = LaunchConfiguration('obstacle_wait_retry')
     recovery_validation_preview = LaunchConfiguration(
         'recovery_validation_preview')
     complex_route_validation = LaunchConfiguration(
@@ -216,7 +213,6 @@ def generate_launch_description():
         executable='planner_server',
         name='planner_server',
         parameters=[navigation_config],
-        condition=UnlessCondition(obstacle_replan),
         output='screen',
     )
     behaviors = Node(
@@ -235,7 +231,7 @@ def generate_launch_description():
         parameters=[navigation_config],
         condition=IfCondition(PythonExpression([
             "'", recovery_enabled, "' == 'false' and '",
-            obstacle_replan, "' == 'false'"])),
+            obstacle_wait_retry, "' == 'false'"])),
         output='screen',
     )
     waypoint_follower = Node(
@@ -425,36 +421,22 @@ def generate_launch_description():
                  parameters=[{'acceptance_profile': profile}], output='screen'),
         ]
 
-    # Issue #1: failure-triggered global detour.  The planner gets the
-    # filtered global obstacle layer and bt_navigator the real replan tree;
-    # the controller, local costmap and velocity chain are unchanged.
-    def configure_obstacle_replan(context):
-        if obstacle_replan.perform(context) != 'true':
+    # Issue #1: wait for a transient obstacle and retry the unchanged path
+    # once.  Only the behavior tree changes; the planner, controller, both
+    # costmaps and the velocity chain are the reviewed real configuration.
+    def configure_obstacle_wait_retry(context):
+        if obstacle_wait_retry.perform(context) != 'true':
             return []
         if recovery_enabled.perform(context) == 'true':
             raise RuntimeError(
-                'obstacle_replan and bounded_recovery_enabled both replace '
+                'obstacle_wait_retry and bounded_recovery_enabled both replace '
                 'the navigation behavior tree; enable only one')
         return [
-            Node(package='isaac_3d_lidar_bringup',
-                 executable='static_map_scan_filter',
-                 name='static_map_scan_filter',
-                 parameters=[obstacle_replan_config], output='screen'),
-            Node(package='laser_filters',
-                 executable='scan_to_scan_filter_chain',
-                 name='global_scan_filter',
-                 remappings=[('scan', '/scan_global_static_filtered'),
-                             ('scan_filtered', '/scan_global_filtered')],
-                 parameters=[obstacle_replan_config], output='screen'),
-            Node(package='nav2_planner', executable='planner_server',
-                 name='planner_server',
-                 parameters=[navigation_config, obstacle_replan_config],
-                 output='screen'),
             Node(package='nav2_bt_navigator', executable='bt_navigator',
                  name='bt_navigator',
                  parameters=[navigation_config,
                              {'default_nav_to_pose_bt_xml':
-                              obstacle_replan_tree}],
+                              obstacle_wait_retry_tree}],
                  output='screen'),
         ]
 
@@ -463,12 +445,12 @@ def generate_launch_description():
                               choices=['true', 'false']),
         DeclareLaunchArgument('recovery_acceptance_profile', default_value=''),
         DeclareLaunchArgument(
-            'obstacle_replan',
+            'obstacle_wait_retry',
             default_value='false',
             choices=['true', 'false'],
             description=(
-                'Issue #1: after a persistent FollowPath failure, compute one '
-                'global detour against a filtered global obstacle layer. '
+                'Issue #1: after a FollowPath failure, wait 2 s and follow the '
+                'unchanged path once more before aborting. No global detour. '
                 'Mutually exclusive with bounded_recovery_enabled.'
             ),
         ),
@@ -650,7 +632,7 @@ def generate_launch_description():
             ),
         ),
         OpaqueFunction(function=configure_recovery),
-        OpaqueFunction(function=configure_obstacle_replan),
+        OpaqueFunction(function=configure_obstacle_wait_retry),
         lio_odometry,
         scan_projection,
         localization_scan_projection,
