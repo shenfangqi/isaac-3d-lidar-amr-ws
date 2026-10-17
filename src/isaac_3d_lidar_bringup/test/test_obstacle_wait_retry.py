@@ -93,8 +93,12 @@ def test_launch_keeps_obstacle_wait_retry_opt_in_and_exclusive():
     assert 'OpaqueFunction(function=configure_obstacle_wait_retry)' in source
     assert "'default_nav_to_pose_bt_xml':\n" in source
     assert 'obstacle_wait_retry_tree}' in source
-    # Only the tree changes: no global obstacle chain is started.
-    assert 'static_map_scan_filter' not in source
+    # Only the tree changes: wait-and-retry starts no global obstacle chain.
+    # (The keep-off chain exists only behind novel_obstacle_keepoff_preview.)
+    wait_retry = source.split('def configure_obstacle_wait_retry', 1)[1]
+    wait_retry = wait_retry.split('return LaunchDescription', 1)[0]
+    assert 'static_map_scan_filter' not in wait_retry
+    assert 'novel_obstacle_keepoff' not in wait_retry
     assert 'scan_to_scan_filter_chain' not in source
     assert "glob('behavior_trees/*.xml')" in setup
 

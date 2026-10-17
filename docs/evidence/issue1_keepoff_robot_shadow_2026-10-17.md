@@ -56,3 +56,10 @@
 ## 6. 数据
 
 `output/issue1_robot/`（未提交）：节点日志、`still_*.json` 禁区快照和渲染图、`after_box_removed.json`。
+
+## 7. 后续：接入实车 launch（观察用，默认关闭）
+
+- `carbot_navigation_real.launch.py` 新增 `novel_obstacle_keepoff_preview`（默认 `false`）。打开后启动 `static_map_scan_filter`、`scan_temporal_median`（节点名 `global_scan_filter`）和 `novel_obstacle_keepoff`。实车 Nav2 配置不读 `/novel_obstacle_keepoff`，规划、控制和速度都不变。
+- 用法：`./start_real_nav.sh ... --keepoff-preview`（或 `./start_auto_nav.sh --keepoff-preview`）。启动脚本把它作为第 18 个参数传给 `jetson_nvblox_container.sh`。
+- `scan_temporal_median` 代替镜像里没有的 `laser_filters`。在仿真里与 `laser_filters` 吃同一路输入，逐帧比对 293 帧（包括车在行驶的时候），输出完全相同。
+- 还没有部署到 Jetson：下次实车会话先用 `scripts/deploy_bringup_to_jetson.sh` 部署，再用 `--keepoff-preview` 验证。
