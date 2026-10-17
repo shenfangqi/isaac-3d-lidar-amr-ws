@@ -144,7 +144,7 @@ def import_robot():
             raise RuntimeError("Generated Carbot USD has no D455 camera")
         tof_paths = create_vl53l5cx_mounts(
             stage, str(robot.GetPath()),
-            parameters["geometry"]["body_visual_base_plate"],
+            parameters["geometry"],
             parameters["sensors"]["vl53l5cx_sim_mount"],
         )
         if len(tof_paths) != 8 or not all(

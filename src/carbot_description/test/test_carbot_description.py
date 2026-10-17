@@ -113,8 +113,13 @@ def test_body_visual_and_base_plate_are_visual_only(description, parameters):
     plate_size = [float(v) for v in plate.find("geometry/box").attrib["size"].split()]
     blue_z = float(blue.find("origin").attrib["xyz"].split()[2])
     plate_z = float(plate.find("origin").attrib["xyz"].split()[2])
+    blue_x = float(blue.find("origin").attrib["xyz"].split()[0])
+    plate_x = float(plate.find("origin").attrib["xyz"].split()[0])
     assert blue_size == pytest.approx([0.11, 0.15, 0.0589])
-    assert plate_size == pytest.approx([0.22, 0.17, 0.01])
+    assert plate_size == pytest.approx([0.225, 0.213, 0.01])
+    assert plate_x + plate_size[0] / 2 - (
+        blue_x + blue_size[0] / 2
+    ) == pytest.approx(0.059)
     assert plate_z + plate_size[2] / 2 == pytest.approx(blue_z - blue_size[2] / 2)
     geometry = parameters["geometry"]
     front_idler = geometry["wheel_groups"]["front_idler"]
@@ -183,21 +188,43 @@ def test_lidar_housing_top_matches_measured_height(description, parameters):
         link for link in description.findall("link")
         if link.attrib["name"] == "lidar_link"
     )
-    housing = next(
-        visual for visual in lidar_link.findall("visual")
-        if visual.attrib["name"] == "mid360_proxy_visual"
+    visuals = {
+        visual.attrib["name"]: visual for visual in lidar_link.findall("visual")
+    }
+    assert set(visuals) == {
+        "mid360_mount_visual",
+        "mid360_body_visual",
+        "mid360_scan_window_visual",
+    }
+    proxy = lidar["visual_proxy"]
+    mount_size = [
+        float(value) for value in
+        visuals["mid360_mount_visual"].find("geometry/box").attrib["size"].split()
+    ]
+    body_size = [
+        float(value) for value in
+        visuals["mid360_body_visual"].find("geometry/box").attrib["size"].split()
+    ]
+    scan = visuals["mid360_scan_window_visual"].find("geometry/cylinder")
+    scan_height = float(scan.attrib["length"])
+    scan_radius = float(scan.attrib["radius"])
+    assert mount_size == pytest.approx(proxy["mount_size_m"])
+    assert body_size == pytest.approx(proxy["body_size_m"])
+    assert scan_height == pytest.approx(proxy["scan_window_height_m"])
+    assert scan_radius == pytest.approx(proxy["scan_window_radius_m"])
+    assert mount_size[2] + body_size[2] + scan_height == pytest.approx(
+        lidar["housing_height_m"]
     )
-    housing_height = float(
-        housing.find("geometry/cylinder").attrib["length"]
+
+    housing_center_z = float(
+        visuals["mid360_scan_window_visual"]
+        .find("origin").attrib["xyz"].split()[2]
     )
-    housing_center_z = float(housing.find("origin").attrib["xyz"].split()[2])
-    assert housing_height == pytest.approx(0.060)
-    assert housing_center_z == pytest.approx(housing_height / 2.0)
     modeled_top_height = (
         geometry["base_link_height_m"]
         + joint_xyz[2]
         + housing_center_z
-        + housing_height / 2.0
+        + scan_height / 2.0
     )
     assert modeled_top_height == pytest.approx(0.222)
 
@@ -221,6 +248,11 @@ def test_lidar_housing_top_matches_measured_height(description, parameters):
         geometry["base_link_height_m"] + expected_mount_z + expected_origin_z
     )
     assert livox_height_from_ground == pytest.approx(0.209)
+    plate = parameters["geometry"]["body_visual_base_plate"]
+    plate_front_x = plate["position_from_base_link_m"][0] + plate["size_m"][0] / 2
+    assert plate_front_x - lidar["mount_translation_xy_from_base_link_m"][0] == pytest.approx(
+        0.110
+    )
 
 
 def test_wheel_centers_use_physical_geometry(description, parameters):

@@ -29,6 +29,17 @@ existing robot-free warehouse and places `/World/Carbot` at the former Carter
 origin.
 Control and RTX LiDAR ROS graphs are added in later implementation stages.
 
+The top LiDAR uses a visual-only MID-360-style proxy: a 65 mm square dark
+housing, a lower mounting plate and a circular upper scan window. Its overall
+65 x 65 x 60 mm envelope follows the manufacturer specification. The proxy
+does not change the calibrated LiDAR/IMU frames, mounting transform, collision,
+mass or inertia.
+
+The measured MID-360 centre is 110 mm behind the green plate's front edge,
+and the blue body starts 59 mm behind that edge. The plate and body visual
+origins encode these measurements while the accepted MID-360 calibration stays
+fixed relative to `base_link`.
+
 ## Differential-control runtime
 
 Run the stage-C controller inside the Isaac Sim container:
@@ -71,10 +82,11 @@ measured. The nested `d455_depth_camera` USD Camera prim follows both axes,
 but no D455 RGB/depth ROS publisher or collision/inertia is enabled yet.
 Its center starts 5 cm above the green plate with a 15° upward tilt.
 
-The green plate also has eight upright VL53L5CX visual mounts: two near the
-corners of each front, rear, left, and right edge. Each has a distinct
-`sensor_origin`; the front pair angles 12.5° outward and the other six angle
-22.5° toward their adjacent corners. Their breakout-board dimensions are provisional;
+Eight upright VL53L5CX visual mounts sit on low L-brackets around the measured
+vehicle footprint, with their optical centres nominally 7.5 cm above ground
+and 2 mm inside the footprint. Each has a distinct `sensor_origin`; the front
+pair angles 12.5° outward and the other six angle 22.5° toward their adjacent
+corners. Their breakout-board and bracket dimensions are provisional;
 the VL53L5CX chip size and detection FoV come from the ST datasheet. No range
 data publisher is enabled yet.
 
