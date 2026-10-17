@@ -26,6 +26,8 @@ def generate_launch_description():
         bringup_dir, 'config', 'nav2', 'carbot_navigation_real.yaml')
     obstacle_wait_retry_tree = os.path.join(
         bringup_dir, 'behavior_trees', 'navigate_to_pose_wait_and_retry_real.xml')
+    detour_tree = os.path.join(
+        bringup_dir, 'behavior_trees', 'navigate_to_pose_detour_real.xml')
     keepoff_config = os.path.join(
         bringup_dir, 'config', 'nav2', 'carbot_obstacle_detour_real.yaml')
     auto_localization_config = os.path.join(
@@ -45,6 +47,10 @@ def generate_launch_description():
     acceptance_profile = LaunchConfiguration('recovery_acceptance_profile')
     obstacle_wait_retry = LaunchConfiguration('obstacle_wait_retry')
     keepoff_preview = LaunchConfiguration('novel_obstacle_keepoff_preview')
+    obstacle_detour = LaunchConfiguration('novel_obstacle_detour')
+    keepoff_chain = IfCondition(PythonExpression([
+        "'", keepoff_preview, "' == 'true' or '",
+        obstacle_detour, "' == 'true'"]))
     recovery_validation_preview = LaunchConfiguration(
         'recovery_validation_preview')
     complex_route_validation = LaunchConfiguration(
@@ -216,6 +222,7 @@ def generate_launch_description():
         executable='planner_server',
         name='planner_server',
         parameters=[navigation_config],
+        condition=UnlessCondition(obstacle_detour),
         output='screen',
     )
     behaviors = Node(
@@ -234,7 +241,8 @@ def generate_launch_description():
         parameters=[navigation_config],
         condition=IfCondition(PythonExpression([
             "'", recovery_enabled, "' == 'false' and '",
-            obstacle_wait_retry, "' == 'false'"])),
+            obstacle_wait_retry, "' == 'false' and '",
+            obstacle_detour, "' == 'false'"])),
         output='screen',
     )
     waypoint_follower = Node(
@@ -442,7 +450,7 @@ def generate_launch_description():
                 'static_margin_m': 0.12,
                 'occupied_threshold': 65,
             }],
-            condition=IfCondition(keepoff_preview),
+            condition=keepoff_chain,
             output='screen',
         ),
         Node(
@@ -455,7 +463,7 @@ def generate_launch_description():
                 'output_topic': '/scan_global_filtered',
                 'window': 5,
             }],
-            condition=IfCondition(keepoff_preview),
+            condition=keepoff_chain,
             output='screen',
         ),
         Node(
@@ -463,10 +471,36 @@ def generate_launch_description():
             executable='novel_obstacle_keepoff',
             name='novel_obstacle_keepoff',
             parameters=[keepoff_config, {'use_sim_time': False}],
-            condition=IfCondition(keepoff_preview),
+            condition=keepoff_chain,
             output='screen',
         ),
     ]
+
+    # Issue #1 detour (operator-supervised tests only): the bounded detour
+    # tree replaces bt_navigator and the planner's global costmap adds the
+    # keep-off grid as a second StaticLayer (carbot_obstacle_detour_real.yaml).
+    # The controller, local costmap, velocity chain and stop margin are the
+    # reviewed real configuration.
+    def configure_obstacle_detour(context):
+        if obstacle_detour.perform(context) != 'true':
+            return []
+        if (recovery_enabled.perform(context) == 'true'
+                or obstacle_wait_retry.perform(context) == 'true'):
+            raise RuntimeError(
+                'novel_obstacle_detour, obstacle_wait_retry and '
+                'bounded_recovery_enabled all replace the navigation behavior '
+                'tree; enable only one')
+        return [
+            Node(package='nav2_planner', executable='planner_server',
+                 name='planner_server',
+                 parameters=[navigation_config, keepoff_config],
+                 output='screen'),
+            Node(package='nav2_bt_navigator', executable='bt_navigator',
+                 name='bt_navigator',
+                 parameters=[navigation_config,
+                             {'default_nav_to_pose_bt_xml': detour_tree}],
+                 output='screen'),
+        ]
 
     # Issue #1: wait for a transient obstacle and retry the unchanged path
     # once.  Only the behavior tree changes; the planner, controller, both
@@ -509,6 +543,17 @@ def generate_launch_description():
                 'Issue #1: publish /novel_obstacle_keepoff from the robot '
                 'scan for observation. Nav2 does not read it; planning, '
                 'control and velocity are unchanged.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'novel_obstacle_detour',
+            default_value='false',
+            choices=['true', 'false'],
+            description=(
+                'Issue #1 supervised test: plan bounded detours around the '
+                'keep-off grid (starts the keep-off chain). The controller '
+                'and stop margin are unchanged. Mutually exclusive with '
+                'obstacle_wait_retry and bounded_recovery_enabled.'
             ),
         ),
         DeclareLaunchArgument(
@@ -690,6 +735,7 @@ def generate_launch_description():
         ),
         OpaqueFunction(function=configure_recovery),
         OpaqueFunction(function=configure_obstacle_wait_retry),
+        OpaqueFunction(function=configure_obstacle_detour),
         lio_odometry,
         scan_projection,
         localization_scan_projection,

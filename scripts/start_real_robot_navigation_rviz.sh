@@ -27,7 +27,7 @@ automatic_localization=true
 automatic_activation=true
 stationary_validation=false
 complex_route_validation=false
-keepoff_preview=false
+keepoff_mode=none
 localization_strategy=legacy_full_rotation
 localization_motion=forbid
 motion_profile=""
@@ -43,7 +43,7 @@ map_argument_seen=false
 
 usage() {
   cat <<EOF
-Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [--complex-route-validation] [--keepoff-preview] [--localization-strategy STRATEGY] [--localization-motion forbid|guarded --motion-profile JSON [--operator-rotation-clear] --operator-present] [--robot-not-moved] [--surface-recheck off|record|decide] [--localization-translation forbid|guarded --linear-profile JSON [--force-translation-once]] [MAP_YAML]
+Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [--complex-route-validation] [--keepoff-preview|--keepoff-detour] [--localization-strategy STRATEGY] [--localization-motion forbid|guarded --motion-profile JSON [--operator-rotation-clear] --operator-present] [--robot-not-moved] [--surface-recheck off|record|decide] [--localization-translation forbid|guarded --linear-profile JSON [--force-translation-once]] [MAP_YAML]
 
 Start saved-map navigation for the physical Carbot and open RViz.
 
@@ -57,6 +57,8 @@ Options:
   --complex-route-validation  Start the read-only Issue #12 advisory and evidence topics.
   --keepoff-preview  Publish the Issue #1 novel-obstacle keep-off grid for
                   observation. Nav2 does not read it.
+  --keepoff-detour  Issue #1 supervised test: Nav2 plans bounded detours
+                  around the keep-off grid. The stop margin is unchanged.
   --localization-strategy STRATEGY
                   legacy_full_rotation (default), stationary_only or
                   segmented_rotation; use it with --automatic or --automatic-activate.
@@ -134,7 +136,10 @@ while (( $# > 0 )); do
       complex_route_validation=true
       ;;
     --keepoff-preview)
-      keepoff_preview=true
+      keepoff_mode=keepoff-preview
+      ;;
+    --keepoff-detour)
+      keepoff_mode=keepoff-detour
       ;;
     --localization-strategy)
       if (( $# < 2 )); then
@@ -922,7 +927,11 @@ if [[ "${robot_not_moved}" == "true" ]]; then
   echo "Attestation robot_not_moved: the saved pose may choose among near-equal candidates."
 fi
 echo "Complex-route advisor: $(if [[ "${complex_route_validation}" == "true" ]]; then echo validation-only; else echo disabled; fi)"
-echo "Keep-off preview: $(if [[ "${keepoff_preview}" == "true" ]]; then echo "observation only (/novel_obstacle_keepoff)"; else echo disabled; fi)"
+case "${keepoff_mode}" in
+  keepoff-preview) echo "Keep-off: preview, observation only (/novel_obstacle_keepoff)" ;;
+  keepoff-detour) echo "Keep-off: DETOUR TEST, Nav2 plans bounded detours around novel obstacles" ;;
+  *) echo "Keep-off: disabled" ;;
+esac
 remote test -f "${map_yaml}"
 
 echo "[1/8] Disabling the conflicting web teleop publisher..."
@@ -986,7 +995,7 @@ remote "${jetson_workspace}/scripts/jetson_nvblox_container.sh" \
   "${robot_not_moved}" "${surface_recheck}" \
   "${localization_translation}" "${remote_linear_profile}" \
   "$([[ "${force_translation_once}" == "true" ]] && echo force-translation-once)" \
-  "$([[ "${keepoff_preview}" == "true" ]] && echo keepoff-preview)" >/dev/null
+  "$([[ "${keepoff_mode}" != "none" ]] && echo "${keepoff_mode}")" >/dev/null
 
 echo "[4/8] Running the non-motion hardware preflight..."
 run_preflight_with_readiness_retry

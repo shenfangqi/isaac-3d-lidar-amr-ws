@@ -11,7 +11,7 @@ time_gate="${workspace}/scripts/wait_for_mapping_time_sync.py"
 
 usage() {
   echo "Usage: $0 {start|recreate|stop|status|logs} [compact|full|mapping]" >&2
-  echo "       $0 {start|recreate} navigation-safe MAP_YAML [manual|auto|auto-activate] [none|complex-route-validation] [legacy_full_rotation|stationary_only|segmented_rotation] [forbid|guarded PROFILE_JSON EXTRINSICS_HASH CONTROL_CHAIN_HASH true|false [force-probe-once]] [ROBOT_NOT_MOVED true|false] [SURFACE_RECHECK off|record|decide] [TRANSLATION forbid|guarded LINEAR_PROFILE_JSON [force-translation-once]] [keepoff-preview]" >&2
+  echo "       $0 {start|recreate} navigation-safe MAP_YAML [manual|auto|auto-activate] [none|complex-route-validation] [legacy_full_rotation|stationary_only|segmented_rotation] [forbid|guarded PROFILE_JSON EXTRINSICS_HASH CONTROL_CHAIN_HASH true|false [force-probe-once]] [ROBOT_NOT_MOVED true|false] [SURFACE_RECHECK off|record|decide] [TRANSLATION forbid|guarded LINEAR_PROFILE_JSON [force-translation-once]] [keepoff-preview|keepoff-detour]" >&2
   echo "       $0 {start|recreate} navigation-diagnostic MAP_YAML" >&2
   echo "       Append 'auto' for validation or 'auto-activate' for guarded Nav2 activation." >&2
 }
@@ -147,14 +147,17 @@ case "${mode}" in
     fi
     # Issue #1: observation-only keep-off chain; Nav2 does not read it.
     keepoff_launch_argument=""
+    # Issue #1 keepoff-detour: supervised detour tests; Nav2 plans around it.
+    if [[ -n "${18:-}" && "${mode}" != "navigation-safe" ]]; then
+      echo "${18} requires navigation-safe mode." >&2
+      exit 2
+    fi
     if [[ "${18:-}" == "keepoff-preview" ]]; then
-      if [[ "${mode}" != "navigation-safe" ]]; then
-        echo "keepoff-preview requires navigation-safe mode." >&2
-        exit 2
-      fi
       keepoff_launch_argument=" novel_obstacle_keepoff_preview:=true"
+    elif [[ "${18:-}" == "keepoff-detour" ]]; then
+      keepoff_launch_argument=" novel_obstacle_detour:=true"
     elif [[ -n "${18:-}" ]]; then
-      echo "The 18th argument must be empty or 'keepoff-preview'." >&2
+      echo "The 18th argument must be empty, 'keepoff-preview' or 'keepoff-detour'." >&2
       exit 2
     fi
     if [[ "${motion_policy}" != "forbid" && "${motion_policy}" != "guarded" ]]; then
