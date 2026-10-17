@@ -15,9 +15,10 @@ overwrites the master grid:
   lethal, so a detour keeps the obstacle outside the blind zone or fails;
 * a disk of ``robot_clear_radius_m`` around the robot stays free (outside the
   evidence itself) so the stopped robot can plan its way out of the ring;
-* the raw /scan clears evidence its beams pass through.  Returns inside the
-  minimum range are inf and clear nothing, so an obstacle the robot stopped
-  at stays marked;
+* the raw /scan clears evidence its beams pass through, and the space
+  between two neighbouring beams up to the nearer of their returns.  Returns
+  inside the minimum range are inf and clear nothing, so an obstacle the
+  robot stopped at stays marked;
 * scans are used only while the robot is not turning: an in-place turn
   smears a 0.1 s scan by several degrees, and the five-frame median keeps
   those frames for another half second, so wall returns land beyond the
@@ -50,6 +51,56 @@ def disk_offsets(radius_cells):
     rows, columns = np.meshgrid(span, span, indexing='ij')
     inside = rows * rows + columns * columns <= radius_cells * radius_cells
     return list(zip(rows[inside].tolist(), columns[inside].tolist()))
+
+
+def densify_beams(angles, ranges, max_spacing_m, max_range_m, max_gap=1):
+    """
+    Add beams between finite returns, at the nearer of the two ranges.
+
+    At 1 deg per beam, neighbouring beams are 5.4 cm apart at 3 m, wider than
+    a 5 cm cell, and pointcloud_to_laserscan leaves an inf in an azimuth bin
+    that received no point in its height band.  A stopped robot sees the
+    same pattern scan after scan, so some cells are never passed by a beam
+    and can never be cleared.  Between two finite returns at most
+    ``max_gap`` inf beams apart the space is taken as free up to the nearer
+    range; extra beams there keep the spacing at ``max_range_m`` within
+    ``max_spacing_m``.  An object narrower than that span which no beam hits
+    can be cleared: the raw beams cannot see it either.
+    """
+    angles = np.asarray(angles, dtype=float)
+    ranges = np.asarray(ranges, dtype=float)
+    finite = np.nonzero(np.isfinite(ranges))[0]
+    if angles.size < 2 or finite.size < 2:
+        return angles, ranges
+    increment = float(np.median(np.diff(angles)))
+    first, second = finite[:-1], finite[1:]
+    steps = second - first
+    span = angles[second] - angles[first]
+    # A full-circle scan also has neighbours across the seam, whose gap
+    # (here 361 beams of 0.0174 rad: 1.1 deg) need not equal the increment.
+    seam = angles[0] + 2.0 * math.pi - angles[-1]
+    if 0.0 < seam <= 1.5 * abs(increment):
+        first = np.append(first, finite[-1])
+        second = np.append(second, finite[0])
+        steps = np.append(steps, finite[0] + angles.size - finite[-1])
+        span = np.append(span, angles[finite[0]] + 2.0 * math.pi
+                         - angles[finite[-1]])
+    keep = steps <= max_gap + 1
+    first, second, span = first[keep], second[keep], span[keep]
+    counts = np.ceil(np.abs(span) * max_range_m / max_spacing_m).astype(int)
+    new_angles, new_ranges = [], []
+    for count in np.unique(counts[counts > 1]):
+        pair = counts == count
+        fraction = np.arange(1, count) / float(count)
+        new_angles.append((angles[first[pair]][:, None]
+                           + span[pair][:, None] * fraction[None, :]).ravel())
+        new_ranges.append(np.repeat(
+            np.minimum(ranges[first[pair]], ranges[second[pair]]),
+            count - 1))
+    if not new_angles:
+        return angles, ranges
+    return (np.concatenate([angles, *new_angles]),
+            np.concatenate([ranges, *new_ranges]))
 
 
 def dilate(mask, offsets):
@@ -91,6 +142,8 @@ class KeepoffGrid:
         self.keepoff_offsets = disk_offsets(
             int(math.ceil(keepoff_radius_m / resolution)))
         self.robot_clear_cells = robot_clear_radius_m / resolution
+        # Widest gap between clearing beams at max_range_m.
+        self.clear_spacing_m = resolution / 2.0
 
     def _cells(self, xs, ys):
         columns = np.floor((xs - self.origin_x) / self.resolution).astype(int)
@@ -123,8 +176,9 @@ class KeepoffGrid:
         self.direction[rows, columns, 1] = sin[valid][first_index]
 
     def clear(self, origin, yaw, angles, ranges):
-        """Clear evidence that finite raw beams pass through."""
-        ranges = np.asarray(ranges, dtype=float)
+        """Clear evidence that finite raw beams, or the space between, pass."""
+        angles, ranges = densify_beams(
+            angles, ranges, self.clear_spacing_m, self.max_range_m)
         finite = np.isfinite(ranges)
         if not finite.any():
             return
