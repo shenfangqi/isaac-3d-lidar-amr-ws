@@ -30,12 +30,13 @@ import math
 import numpy as np
 from nav_msgs.msg import OccupancyGrid, Odometry
 import rclpy
-from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from sensor_msgs.msg import LaserScan
 from tf2_ros import Buffer, TransformException, TransformListener
+
+from isaac_3d_lidar_bringup.tf_wait_queue import TfWaitQueue
 
 
 def _yaw(quaternion):
@@ -281,7 +282,7 @@ class NovelObstacleKeepoff(Node):
         self.declare_parameter('mark_max_range_m', 4.0)
         self.declare_parameter('max_range_m', 10.0)
         self.declare_parameter('publish_rate_hz', 2.0)
-        self.declare_parameter('transform_timeout_sec', 0.2)
+        self.declare_parameter('transform_wait_sec', 0.5)
         self.declare_parameter('odom_topic', '/odom')
         self.declare_parameter('max_yaw_rate_rad_s', 0.1)
         self.declare_parameter('turn_settle_s', 0.6)
@@ -295,6 +296,10 @@ class NovelObstacleKeepoff(Node):
         self._map_info = None
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, self)
+        # Marking and clearing scans share one queue to keep their order.
+        self._waiting = TfWaitQueue(
+            max_wait_s=self.get_parameter('transform_wait_sec').value)
+        self._reported_drops = 0
         self._map_frame = self.get_parameter('map_frame').value
         self._base_frame = self.get_parameter('base_frame').value
 
@@ -326,6 +331,8 @@ class NovelObstacleKeepoff(Node):
             self._odom_callback, 10)
         self.create_timer(
             1.0 / self.get_parameter('publish_rate_hz').value, self._publish)
+        # Scans waiting for TF are also retried between scan arrivals.
+        self.create_timer(0.05, self._process_waiting)
 
     def _odom_callback(self, message):
         self._odom_seen = True
@@ -356,23 +363,35 @@ class NovelObstacleKeepoff(Node):
 
     def _lookup(self, frame, stamp):
         return self._tf_buffer.lookup_transform(
-            self._map_frame, frame, stamp,
-            timeout=Duration(seconds=self.get_parameter(
-                'transform_timeout_sec').value)).transform
+            self._map_frame, frame, stamp).transform
+
+    def _lookup_at(self, frame, stamp_s):
+        return self._lookup(frame, Time(
+            nanoseconds=int(round(stamp_s * 1e9)),
+            clock_type=self.get_clock().clock_type))
 
     def _scan_callback(self, message, mark):
         if self._grid is None or not self._odom_seen:
             return
+        self._waiting.push(
+            Time.from_msg(message.header.stamp).nanoseconds * 1e-9,
+            message.header.frame_id, (message, mark))
+        self._process_waiting()
+
+    def _process_waiting(self):
+        now_s = self.get_clock().now().nanoseconds * 1e-9
+        for (message, mark), transform in self._waiting.pop_ready(
+                self._lookup_at, now_s):
+            self._apply(message, mark, transform)
+        if self._waiting.dropped != self._reported_drops:
+            self.get_logger().warning(
+                f'Dropped {self._waiting.dropped} keep-off scans whose TF '
+                'never arrived', throttle_duration_sec=2.0)
+            self._reported_drops = self._waiting.dropped
+
+    def _apply(self, message, mark, transform):
         if not self._turn_gate.accepts(
                 Time.from_msg(message.header.stamp).nanoseconds * 1e-9):
-            return
-        try:
-            transform = self._lookup(
-                message.header.frame_id, Time.from_msg(message.header.stamp))
-        except TransformException as exc:
-            self.get_logger().warning(
-                f'Keep-off scan dropped without TF: {exc}',
-                throttle_duration_sec=2.0)
             return
         angles = (message.angle_min
                   + np.arange(len(message.ranges)) * message.angle_increment)

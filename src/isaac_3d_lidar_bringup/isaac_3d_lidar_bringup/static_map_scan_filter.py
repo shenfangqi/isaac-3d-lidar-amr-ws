@@ -3,12 +3,13 @@ import math
 
 from nav_msgs.msg import OccupancyGrid
 import rclpy
-from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from sensor_msgs.msg import LaserScan
-from tf2_ros import Buffer, TransformException, TransformListener
+from tf2_ros import Buffer, TransformListener
+
+from isaac_3d_lidar_bringup.tf_wait_queue import TfWaitQueue
 
 
 def _yaw(quaternion):
@@ -107,7 +108,7 @@ class StaticMapScanFilter(Node):
         self.declare_parameter('map_frame', 'map')
         self.declare_parameter('static_margin_m', 0.12)
         self.declare_parameter('occupied_threshold', 65)
-        self.declare_parameter('transform_timeout_sec', 0.05)
+        self.declare_parameter('transform_wait_sec', 0.5)
 
         self._map_frame = self.get_parameter('map_frame').value
         self._margin = self.get_parameter('static_margin_m').value
@@ -121,6 +122,9 @@ class StaticMapScanFilter(Node):
         self._static_mask = None
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, self)
+        self._waiting = TfWaitQueue(
+            max_wait_s=self.get_parameter('transform_wait_sec').value)
+        self._reported_drops = 0
 
         scan_qos = QoSProfile(
             depth=5,
@@ -145,6 +149,8 @@ class StaticMapScanFilter(Node):
             LaserScan, input_topic, self._scan_callback, scan_qos
         )
         self._logged_first_scan = False
+        # Scans waiting for TF are also retried between scan arrivals.
+        self.create_timer(0.05, self._process_waiting)
         self.get_logger().info(
             f'Filtering static-map returns from {input_topic} onto '
             f'{output_topic} with margin {self._margin:.2f} m'
@@ -164,24 +170,29 @@ class StaticMapScanFilter(Node):
     def _scan_callback(self, message):
         if self._map is None or self._static_mask is None:
             return
-        try:
-            transform = self._tf_buffer.lookup_transform(
-                self._map_frame,
-                message.header.frame_id,
-                Time.from_msg(message.header.stamp),
-                timeout=Duration(
-                    seconds=self.get_parameter(
-                        'transform_timeout_sec'
-                    ).value
-                ),
-            ).transform
-        except TransformException as exc:
-            self.get_logger().warning(
-                f'Cannot filter global scan without TF: {exc}',
-                throttle_duration_sec=2.0,
-            )
-            return
+        self._waiting.push(
+            Time.from_msg(message.header.stamp).nanoseconds * 1e-9,
+            message.header.frame_id, message)
+        self._process_waiting()
 
+    def _lookup(self, frame_id, stamp_s):
+        return self._tf_buffer.lookup_transform(
+            self._map_frame, frame_id,
+            Time(nanoseconds=int(round(stamp_s * 1e9)),
+                 clock_type=self.get_clock().clock_type)).transform
+
+    def _process_waiting(self):
+        now_s = self.get_clock().now().nanoseconds * 1e-9
+        for message, transform in self._waiting.pop_ready(
+                self._lookup, now_s):
+            self._filter(message, transform)
+        if self._waiting.dropped != self._reported_drops:
+            self.get_logger().warning(
+                f'Dropped {self._waiting.dropped} global scans whose TF '
+                'never arrived', throttle_duration_sec=2.0)
+            self._reported_drops = self._waiting.dropped
+
+    def _filter(self, message, transform):
         output, filtered = filter_static_returns(
             message, self._map, self._static_mask, transform
         )
