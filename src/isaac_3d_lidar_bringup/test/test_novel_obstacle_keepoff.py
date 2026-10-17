@@ -4,6 +4,7 @@ import math
 
 import numpy as np
 
+from isaac_3d_lidar_bringup.novel_obstacle_keepoff import densify_beams
 from isaac_3d_lidar_bringup.novel_obstacle_keepoff import dilate
 from isaac_3d_lidar_bringup.novel_obstacle_keepoff import disk_offsets
 from isaac_3d_lidar_bringup.novel_obstacle_keepoff import KeepoffGrid
@@ -178,3 +179,86 @@ def test_far_novel_returns_are_not_marked():
         x = -2.9 + 0.02 * step
         grid.mark((x, 0.0), 0.0, angles, np.array([5.8 - x]))
     assert not grid.evidence().any()
+
+
+def _ring_left_after_clearing(grid):
+    """Mark every cell 2.9-3.3 m from a stopped robot, then clear once."""
+    rows, columns = np.mgrid[0:grid.height, 0:grid.width]
+    x = grid.origin_x + (columns + 0.5) * grid.resolution
+    y = grid.origin_y + (rows + 0.5) * grid.resolution
+    ring = (np.hypot(x, y) > 2.9) & (np.hypot(x, y) < 3.3)
+    grid.hits[ring] = grid.confirm_hits
+    # 1 deg beams, every one returning from a wall far beyond the ring.
+    angles = np.radians(np.arange(-180.0, 180.0, 1.0))
+    grid.clear((0.0, 0.0), 0.0, angles, np.full(angles.shape, 8.8))
+    return int(grid.confirmed().sum())
+
+
+def test_raw_1_degree_beams_alone_miss_cells_3_m_away():
+    grid = _grid()
+    grid.clear_spacing_m = INF
+    assert _ring_left_after_clearing(grid) > 0
+
+
+def test_space_between_neighbouring_beams_is_cleared():
+    assert _ring_left_after_clearing(_grid()) == 0
+
+
+def test_densified_beams_use_the_nearer_neighbour_range():
+    angles = np.radians([0.0, 1.0, 2.0])
+    ranges = np.array([2.0, 3.0, INF])
+    new_angles, new_ranges = densify_beams(angles, ranges, 0.025, 10.0)
+    extra = new_angles[3:]
+    # Only the finite pair (0, 1 deg) is filled in, at the nearer 2.0 m.
+    assert extra.size > 0
+    assert (extra > 0.0).all() and (extra < np.radians(1.0)).all()
+    assert (new_ranges[3:] == 2.0).all()
+    spacing = np.diff(np.sort(np.append(extra, angles[:2])))
+    assert spacing.max() * 10.0 <= 0.025 + 1e-9
+
+
+def test_full_circle_scans_are_filled_across_the_seam():
+    angles = np.radians(np.arange(-180.0, 180.0, 1.0))
+    ranges = np.full(angles.shape, INF)
+    ranges[0] = ranges[-1] = 2.0
+    new_angles, _ = densify_beams(angles, ranges, 0.025, 10.0)
+    assert new_angles.size > angles.size
+    assert (new_angles[angles.size:] > angles[-1]).all()
+
+
+def test_a_single_inf_beam_between_returns_is_bridged():
+    angles = np.radians([0.0, 1.0, 2.0, 3.0, 4.0, 5.0])
+    ranges = np.array([3.0, INF, 4.0, INF, INF, 5.0])
+    new_angles, new_ranges = densify_beams(angles, ranges, 0.025, 10.0)
+    extra = new_angles[6:]
+    # 0-2 deg is bridged at the nearer 3.0 m; two infs (2-5 deg) are not.
+    assert (extra < np.radians(2.0)).all()
+    assert (extra > np.radians(0.9)).any() and (extra < np.radians(1.1)).any()
+    assert (new_ranges[6:] == 3.0).all()
+
+
+def test_an_inf_bin_over_a_cell_no_longer_protects_it():
+    grid = _grid()
+    angles = np.radians(np.arange(-180.0, 180.0, 1.0))
+    ranges = np.full(angles.shape, 8.8)
+    target = int(np.argmin(np.abs(angles)))
+    ranges[target] = INF
+    # Cell (2.95-3.0, 0.0-0.05): only the inf beam at 0 deg passes it; the
+    # 1 deg neighbours are 5.2 cm to either side there.
+    grid.hits[60, 119] = grid.confirm_hits
+    grid.clear((0.0, 0.0), 0.0, angles, ranges)
+    assert not grid.confirmed().any()
+
+
+def test_the_seam_of_a_scan_one_beam_short_of_a_circle_is_filled():
+    # pointcloud_to_laserscan -3.14..3.14 at 0.0174 rad: 361 beams, and the
+    # last-to-first gap is 0.0192 rad, not one increment.
+    angles = -3.14 + np.arange(361) * 0.0174
+    ranges = np.full(angles.shape, INF)
+    ranges[0] = ranges[-1] = 2.0
+    new_angles, new_ranges = densify_beams(angles, ranges, 0.025, 10.0)
+    extra = new_angles[angles.size:]
+    assert extra.size > 0
+    assert (extra > angles[-1]).all()
+    assert (extra < angles[0] + 2.0 * math.pi).all()
+    assert (new_ranges[angles.size:] == 2.0).all()
