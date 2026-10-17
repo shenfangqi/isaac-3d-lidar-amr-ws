@@ -1,5 +1,6 @@
 """Adapt FAST-LIO2's full IMU pose and fail safe if it diverges."""
 
+import collections
 import math
 import time
 
@@ -81,7 +82,19 @@ def quaternion_rpy(quaternion):
 
 
 class PosePlausibilityGuard:
-    """Latch when a ground robot's LIO state becomes physically impossible."""
+    """
+    Latch when a ground robot's LIO state becomes physically impossible.
+
+    Speeds are measured from the pose over ``speed_window`` seconds, not
+    from FAST-LIO's filter velocity or a single frame.  Near a close obstacle
+    while turning, FAST-LIO repeats a pose for a few frames and then catches
+    up in one step (robot 2026-10-17: single-frame steps of 0.46-0.73 m/s and
+    a 0.64 m/s vertical filter velocity at 0.1 m/s commanded, with a steady
+    pose afterwards), which tripped the old per-frame and velocity checks.
+    A real divergence still moves the pose: a 0.5 m/s drift trips within
+    about one window, and a single jump above ``max_frame_jump`` trips at
+    once.  Height, tilt and timestamp checks are unchanged.
+    """
 
     def __init__(
         self,
@@ -90,22 +103,28 @@ class PosePlausibilityGuard:
         max_vertical_speed=0.50,
         max_tilt=math.radians(15.0),
         max_height_change=0.20,
-        max_step_speed=0.50,
+        max_frame_jump=0.15,
+        speed_window=0.5,
         violations_to_trip=2,
+        history_s=5.0,
     ):
         self.grace_period = grace_period
         self.max_planar_speed = max_planar_speed
         self.max_vertical_speed = max_vertical_speed
         self.max_tilt = max_tilt
         self.max_height_change = max_height_change
-        self.max_step_speed = max_step_speed
+        self.max_frame_jump = max_frame_jump
+        self.speed_window = speed_window
         self.violations_to_trip = violations_to_trip
+        self.history_s = history_s
         self.first_stamp = None
         self.previous_stamp = None
-        self.previous_position = None
         self.reference_height = None
         self.violation_count = 0
         self.fault_reason = None
+        # (stamp, x, y, z, roll, pitch, filter speed) for diagnostics and
+        # the windowed speeds.
+        self.history = collections.deque()
 
     @property
     def armed(self):
@@ -113,6 +132,21 @@ class PosePlausibilityGuard:
             self.first_stamp is not None
             and self.previous_stamp - self.first_stamp >= self.grace_period
         )
+
+    def _window_speeds(self, stamp, position):
+        """Return planar and vertical speed over the last speed_window."""
+        oldest = None
+        for sample in self.history:
+            if stamp - sample[0] <= self.speed_window:
+                oldest = sample
+                break
+        if oldest is None or stamp - oldest[0] < 0.8 * self.speed_window:
+            return None, None
+        elapsed = stamp - oldest[0]
+        planar = math.hypot(
+            position[0] - oldest[1], position[1] - oldest[2]) / elapsed
+        vertical = abs(position[2] - oldest[3]) / elapsed
+        return planar, vertical
 
     def evaluate(self, stamp, position, orientation, linear_velocity):
         """Return a latched fault reason, or None while the pose is safe."""
@@ -135,33 +169,33 @@ class PosePlausibilityGuard:
         elapsed = stamp - self.first_stamp
         reasons = []
         if elapsed >= self.grace_period:
-            planar_speed = math.hypot(linear_velocity[0], linear_velocity[1])
-            if planar_speed > self.max_planar_speed:
-                reasons.append(f'planar speed {planar_speed:.3f} m/s')
-            if abs(linear_velocity[2]) > self.max_vertical_speed:
-                reasons.append(
-                    f'vertical speed {abs(linear_velocity[2]):.3f} m/s'
-                )
+            if self.history:
+                last = self.history[-1]
+                jump = math.hypot(position[0] - last[1], position[1] - last[2])
+                if jump > self.max_frame_jump:
+                    self._remember(stamp, position, roll, pitch,
+                                   linear_velocity)
+                    return self._trip(f'pose jump {jump:.3f} m in one frame')
+            planar_speed, vertical_speed = self._window_speeds(
+                stamp, position)
+            if planar_speed is not None:
+                if planar_speed > self.max_planar_speed:
+                    reasons.append(
+                        f'planar speed {planar_speed:.3f} m/s over '
+                        f'{self.speed_window:.1f} s')
+                if vertical_speed > self.max_vertical_speed:
+                    reasons.append(
+                        f'vertical speed {vertical_speed:.3f} m/s over '
+                        f'{self.speed_window:.1f} s')
             tilt = max(abs(roll), abs(pitch))
             if tilt > self.max_tilt:
                 reasons.append(f'tilt {math.degrees(tilt):.1f} deg')
             height_change = abs(position[2] - self.reference_height)
             if height_change > self.max_height_change:
                 reasons.append(f'height change {height_change:.3f} m')
-            if (
-                self.previous_stamp is not None
-                and self.previous_position is not None
-            ):
-                delta_time = stamp - self.previous_stamp
-                step_speed = math.hypot(
-                    position[0] - self.previous_position[0],
-                    position[1] - self.previous_position[1],
-                ) / delta_time
-                if step_speed > self.max_step_speed:
-                    reasons.append(f'pose step {step_speed:.3f} m/s')
 
         self.previous_stamp = stamp
-        self.previous_position = position
+        self._remember(stamp, position, roll, pitch, linear_velocity)
         if reasons:
             self.violation_count += 1
             if self.violation_count >= self.violations_to_trip:
@@ -169,6 +203,24 @@ class PosePlausibilityGuard:
         else:
             self.violation_count = 0
         return None
+
+    def _remember(self, stamp, position, roll, pitch, linear_velocity):
+        self.history.append((
+            stamp, position[0], position[1], position[2], roll, pitch,
+            math.sqrt(sum(value * value for value in linear_velocity))))
+        while self.history and stamp - self.history[0][0] > self.history_s:
+            self.history.popleft()
+
+    def history_text(self):
+        """Return the recent pose history, newest last, for a fault log."""
+        if not self.history:
+            return 'no FAST-LIO history'
+        end = self.history[-1][0]
+        return '\n'.join(
+            f'{stamp - end:+6.2f} s  xyz ({x:.3f}, {y:.3f}, {z:.3f}) '
+            f'roll {math.degrees(roll):+.1f} pitch {math.degrees(pitch):+.1f} '
+            f'deg  filter speed {speed:.3f} m/s'
+            for stamp, x, y, z, roll, pitch, speed in self.history)
 
     def _trip(self, reason):
         self.fault_reason = reason
@@ -206,7 +258,8 @@ class FastLioBaseAdapter(Node):
         self.declare_parameter('max_vertical_speed', 0.50)
         self.declare_parameter('max_tilt_degrees', 15.0)
         self.declare_parameter('max_height_change', 0.20)
-        self.declare_parameter('max_step_speed', 0.50)
+        self.declare_parameter('max_frame_jump', 0.15)
+        self.declare_parameter('speed_window', 0.5)
         # Nav2 activation can briefly contend for CPU on the Jetson. A single
         # observed startup pause slightly exceeded 0.5 s while healthy LIO
         # immediately returned to 10 Hz. Sustained two-second silence remains
@@ -266,8 +319,11 @@ class FastLioBaseAdapter(Node):
             max_height_change=float(
                 self.get_parameter('max_height_change').value
             ),
-            max_step_speed=float(
-                self.get_parameter('max_step_speed').value
+            max_frame_jump=float(
+                self.get_parameter('max_frame_jump').value
+            ),
+            speed_window=float(
+                self.get_parameter('speed_window').value
             ),
         )
         self._max_output_silence = float(
@@ -450,6 +506,9 @@ class FastLioBaseAdapter(Node):
         self._fault_latched = True
         self.get_logger().fatal(
             f'LOCALIZATION FAULT: {reason}; motion is locked until restart'
+        )
+        self.get_logger().error(
+            'FAST-LIO pose before the fault:\n' + self._guard.history_text()
         )
         self._reason_publisher.publish(String(data=reason))
         self._emergency_publisher.publish(Bool(data=True))
