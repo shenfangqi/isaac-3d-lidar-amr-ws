@@ -141,7 +141,7 @@ async def load_and_control():
     from isaacsim.core.api import World
     from isaacsim.core.prims import SingleArticulation
     from isaacsim.core.utils.viewports import set_camera_view
-    from pxr import UsdGeom
+    from pxr import Usd, UsdGeom
 
     parameters = yaml.safe_load(PARAMETER_PATH.read_text(encoding="utf-8"))
     d455_config = parameters["sensors"]["d455_sim_mount"]
@@ -284,6 +284,100 @@ async def load_and_control():
         Float64MultiArray,
         "/isaac_sim/d455_gimbal_cmd",
         receive_d455_command,
+        10,
+    )
+
+    def receive_prim_query(message):
+        """Print every prim whose world bounds lie near robot-frame points.
+
+        Debug aid for LiDAR returns without a known source.  The message is
+        [radius_m, bearing_deg, range_m, z_m, ...] relative to the robot's
+        base footprint; bounds include render, proxy and guide geometry,
+        which the RTX LiDAR can hit even without a collider.
+        """
+        values = list(message.data)
+        if values == [-1.0]:
+            # List every boundable prim under the robot with its local size;
+            # robot transforms may live in Fabric, so world bounds can be
+            # stale while local extents stay valid.
+            cache = UsdGeom.BBoxCache(
+                Usd.TimeCode.Default(),
+                [UsdGeom.Tokens.default_, UsdGeom.Tokens.render,
+                 UsdGeom.Tokens.proxy, UsdGeom.Tokens.guide],
+            )
+            root = stage.GetPrimAtPath(robot_prim_path)
+            for prim in Usd.PrimRange(root, Usd.TraverseInstanceProxies()):
+                if not prim.IsA(UsdGeom.Boundable):
+                    continue
+                box = cache.ComputeLocalBound(prim).ComputeAlignedRange()
+                if box.IsEmpty():
+                    continue
+                size = box.GetSize()
+                imageable = UsdGeom.Imageable(prim)
+                print(f"[PRIM QUERY] robot part {prim.GetPath()} "
+                      f"{prim.GetTypeName()} purpose="
+                      f"{imageable.ComputePurpose()} size="
+                      f"{tuple(round(v, 3) for v in size)}", flush=True)
+            print("[PRIM QUERY] robot parts done", flush=True)
+            return
+        if len(values) < 4 or (len(values) - 1) % 3:
+            node.get_logger().warning(
+                "prim query needs [radius, bearing_deg, range_m, z_m, ...]")
+            return
+        radius = float(values[0])
+        position, orientation = robot.get_world_pose()
+        yaw = quaternion_yaw_angle(orientation)
+        targets = []
+        for index in range(1, len(values), 3):
+            bearing = math.radians(values[index])
+            distance = values[index + 1]
+            targets.append((
+                float(position[0]) + distance * math.cos(yaw + bearing),
+                float(position[1]) + distance * math.sin(yaw + bearing),
+                float(values[index + 2]),
+            ))
+        cache = UsdGeom.BBoxCache(
+            Usd.TimeCode.Default(),
+            [UsdGeom.Tokens.default_, UsdGeom.Tokens.render,
+             UsdGeom.Tokens.proxy, UsdGeom.Tokens.guide],
+        )
+        print(f"[PRIM QUERY] robot world=({float(position[0]):.3f}, "
+              f"{float(position[1]):.3f}) yaw={math.degrees(yaw):.1f} deg "
+              f"targets={[tuple(round(v, 2) for v in t) for t in targets]}",
+              flush=True)
+        found = 0
+        for prim in Usd.PrimRange(
+                stage.GetPseudoRoot(), Usd.TraverseInstanceProxies()):
+            # Boundable covers Gprims and PointInstancers.
+            if not prim.IsA(UsdGeom.Boundable):
+                continue
+            box = cache.ComputeWorldBound(prim).ComputeAlignedRange()
+            if box.IsEmpty():
+                continue
+            low, high = box.GetMin(), box.GetMax()
+            for target in targets:
+                gap = math.sqrt(sum(
+                    max(low[axis] - target[axis], 0.0,
+                        target[axis] - high[axis]) ** 2
+                    for axis in range(3)))
+                if gap <= radius:
+                    imageable = UsdGeom.Imageable(prim)
+                    print(f"[PRIM QUERY] {prim.GetPath()} "
+                          f"{prim.GetTypeName()} purpose="
+                          f"{imageable.ComputePurpose()} visibility="
+                          f"{imageable.ComputeVisibility()} min="
+                          f"{tuple(round(v, 2) for v in low)} max="
+                          f"{tuple(round(v, 2) for v in high)} "
+                          f"target={tuple(round(v, 2) for v in target)}",
+                          flush=True)
+                    found += 1
+                    break
+        print(f"[PRIM QUERY] done: {found} prims", flush=True)
+
+    node.create_subscription(
+        Float64MultiArray,
+        "/isaac_sim/debug_prim_query",
+        receive_prim_query,
         10,
     )
     applied_obstacle_sequence = 0

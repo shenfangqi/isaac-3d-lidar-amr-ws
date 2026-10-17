@@ -25,6 +25,16 @@ OUTPUT = ROOT / "configs/nav2_params_sim_real_parity.yaml"
 # replaces only the behavior tree.  Isaac's launch runs from the source
 # workspace, so the tree is referenced at its container source path.
 WAIT_RETRY_OUTPUT = ROOT / "configs/nav2_params_sim_real_parity_wait_retry.yaml"
+# Issue #1 detour (simulation development): the keep-off overlay's
+# global_costmap section and the bounded-detour tree.
+DETOUR_OVERLAY = (
+    ROOT / "src/isaac_3d_lidar_bringup/config/nav2/carbot_obstacle_detour_real.yaml"
+)
+DETOUR_OUTPUT = ROOT / "configs/nav2_params_sim_real_parity_detour.yaml"
+DETOUR_TREE = (
+    "/workspace/ros-humble/isaac_3d_lidar_amr_ws/src/isaac_3d_lidar_bringup/"
+    "behavior_trees/navigate_to_pose_detour_real.xml"
+)
 WAIT_RETRY_TREE = (
     "/workspace/ros-humble/isaac_3d_lidar_amr_ws/src/isaac_3d_lidar_bringup/"
     "behavior_trees/navigate_to_pose_wait_and_retry_real.xml"
@@ -75,12 +85,33 @@ WAIT_RETRY_HEADER = """\
 """
 
 
-def build_profile(real, wait_retry=False):
+DETOUR_HEADER = """\
+# Variant: issue #1 detour (simulation development). The global_costmap
+# section of src/isaac_3d_lidar_bringup/config/nav2/carbot_obstacle_detour_real.yaml
+# is merged and bt_navigator uses navigate_to_pose_detour_real.xml. Start the
+# novel_obstacle_keepoff node separately with use_sim_time:=true.
+#   python3 scripts/build_sim_real_parity_nav2.py --detour
+"""
+
+
+def _merge(base, overlay):
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            _merge(base[key], value)
+        else:
+            base[key] = copy.deepcopy(value)
+
+
+def build_profile(real, wait_retry=False, detour_overlay=None):
     """Return the parity profile for one loaded real Nav2 document."""
     profile = copy.deepcopy(real)
     if wait_retry:
         profile["bt_navigator"]["ros__parameters"][
             "default_nav_to_pose_bt_xml"] = WAIT_RETRY_TREE
+    if detour_overlay is not None:
+        _merge(profile, {"global_costmap": detour_overlay["global_costmap"]})
+        profile["bt_navigator"]["ros__parameters"][
+            "default_nav_to_pose_bt_xml"] = DETOUR_TREE
     _enable_sim_time(profile)
     profile["lifecycle_manager_navigation"] = copy.deepcopy(LIFECYCLE_MANAGER)
     return profile
@@ -96,12 +127,17 @@ _Dumper.add_representer(
         "tag:yaml.org,2002:seq", value, flow_style=True))
 
 
-def render(real, wait_retry=False):
+def render(real, wait_retry=False, detour_overlay=None):
     """Return the parity profile text exactly as it is stored."""
     body = yaml.dump(
-        build_profile(real, wait_retry), Dumper=_Dumper, sort_keys=False,
-        default_flow_style=False, width=120)
-    return HEADER + (WAIT_RETRY_HEADER if wait_retry else "") + body
+        build_profile(real, wait_retry, detour_overlay), Dumper=_Dumper,
+        sort_keys=False, default_flow_style=False, width=120)
+    variant = ""
+    if wait_retry:
+        variant = WAIT_RETRY_HEADER
+    elif detour_overlay is not None:
+        variant = DETOUR_HEADER
+    return HEADER + variant + body
 
 
 def main():
@@ -111,12 +147,22 @@ def main():
     parser.add_argument(
         "--wait-retry", action="store_true",
         help="build the obstacle_wait_retry:=true variant (issue #1)")
+    parser.add_argument(
+        "--detour", action="store_true",
+        help="build the issue #1 detour development variant")
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
+    if args.wait_retry and args.detour:
+        parser.error("choose one variant")
     real = yaml.safe_load(args.real.read_text(encoding="utf-8"))
+    detour_overlay = None
+    if args.detour:
+        detour_overlay = yaml.safe_load(
+            DETOUR_OVERLAY.read_text(encoding="utf-8"))
     if args.output is None:
-        args.output = WAIT_RETRY_OUTPUT if args.wait_retry else OUTPUT
-    rendered = render(real, args.wait_retry)
+        args.output = (WAIT_RETRY_OUTPUT if args.wait_retry
+                       else DETOUR_OUTPUT if args.detour else OUTPUT)
+    rendered = render(real, args.wait_retry, detour_overlay)
     if args.check:
         if not args.output.is_file() or args.output.read_text(
                 encoding="utf-8") != rendered:
