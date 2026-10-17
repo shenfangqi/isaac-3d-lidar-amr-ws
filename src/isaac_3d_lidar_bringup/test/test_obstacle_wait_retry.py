@@ -8,11 +8,12 @@ import pytest
 
 PACKAGE_DIR = Path(__file__).resolve().parents[1]
 TREE = PACKAGE_DIR / 'behavior_trees/navigate_to_pose_wait_and_retry_real.xml'
+DETOUR_TREE = PACKAGE_DIR / 'behavior_trees/navigate_to_pose_detour_real.xml'
 LAUNCH = PACKAGE_DIR / 'launch/carbot_navigation_real.launch.py'
 
 
-def _main_tree():
-    root = ElementTree.parse(TREE).getroot()
+def _main_tree(path=TREE):
+    root = ElementTree.parse(path).getroot()
     tree = root.find("BehaviorTree[@ID='MainTree']")
     assert tree is not None
     assert len(tree) == 1
@@ -96,3 +97,31 @@ def test_launch_keeps_obstacle_wait_retry_opt_in_and_exclusive():
     assert 'static_map_scan_filter' not in source
     assert 'scan_to_scan_filter_chain' not in source
     assert "glob('behavior_trees/*.xml')" in setup
+
+
+@pytest.mark.parametrize('follow_results, plans, follows, success', [
+    ([True], 1, 1, True),
+    # Transient obstacle: no detour.
+    ([False, True], 1, 2, True),
+    # Persistent obstacle: one detour.
+    ([False, False, True], 2, 3, True),
+    # Detours are bounded: three, each with one transient-pause retry.
+    ([False] * 8, 4, 8, False),
+])
+def test_detour_tree_bounds_its_replans(follow_results, plans, follows, success):
+    run = _Run(follow_results)
+
+    assert run.tick(_main_tree(DETOUR_TREE)) is success
+    assert run.calls.count('ComputePathToPose') == plans
+    assert run.calls.count('FollowPath') == follows
+    assert run.follow_results == []
+
+
+def test_detour_tree_never_clears_costmaps_or_moves_on_its_own():
+    names = {element.tag for element in _main_tree(DETOUR_TREE).iter()}
+
+    assert names == {'Sequence', 'ComputePathToPose', 'RecoveryNode',
+                     'FollowPath', 'Wait'}
+    budget = _main_tree(DETOUR_TREE).find('RecoveryNode')
+    assert budget.get('name') == 'DetourBudget'
+    assert budget.get('number_of_retries') == '3'

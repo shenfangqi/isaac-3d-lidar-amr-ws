@@ -38,6 +38,20 @@ parser.add_argument("--goal-yaw", type=float, default=0.0)
 parser.add_argument("--obstacle-distance", type=float, default=1.20)
 parser.add_argument("--timeout", type=float, default=210.0)
 parser.add_argument(
+    "--ghost-margin",
+    type=float,
+    default=0.30,
+    help="lethal cells farther than this from the cube count as ghosts; "
+    "use the keep-off radius plus a cell with novel_obstacle_keepoff",
+)
+parser.add_argument(
+    "--stale-check-s",
+    type=float,
+    default=0.0,
+    help="after hiding the cubes, wait this long and count every lethal "
+    "cell on free static map cells (evidence that was not cleared)",
+)
+parser.add_argument(
     "--trace-output",
     help="write plans, obstacle and the odometry trace to this JSON file",
 )
@@ -591,7 +605,16 @@ def main():
         final_status = status_name(result.status)
         # Issue #1: the global costmap is never cleared after the robot has
         # moved, so lethal cells left by earlier obstacles must not persist.
-        ghost_cells = node.ghost_cells()
+        ghost_cells = node.ghost_cells(args.ghost_margin)
+        stale_cells = None
+        if args.stale_check_s > 0.0:
+            stale_until = time.monotonic() + args.stale_check_s
+            while time.monotonic() < stale_until:
+                rclpy.spin_once(node, timeout_sec=0.05)
+            placed = node.obstacle_command_placed
+            node.obstacle_command_placed = None
+            stale_cells = node.ghost_cells(0.0)
+            node.obstacle_command_placed = placed
         recent_cmd_speeds = [
             speed
             for received_at, speed in node.cmd_history
@@ -621,6 +644,7 @@ def main():
                     node.global_obstacle_cells_at_replan
                 ),
                 "global_ghost_cells": ghost_cells,
+                "stale_keepoff_cells": stale_cells,
                 "replan_path_clearance_m": (
                     None if node.replan_path_clearance is None
                     else round(node.replan_path_clearance, 3)

@@ -212,6 +212,42 @@ def test_wait_retry_parity_profile_matches_the_real_launch_variant():
     assert variant == parity
 
 
+def test_detour_parity_profile_matches_the_keepoff_overlay():
+    builder = load_parity_builder()
+    real = nav_parameters("real")
+    overlay = load_yaml(
+        "src/isaac_3d_lidar_bringup/config/nav2/carbot_obstacle_detour_real.yaml"
+    )
+    path = "configs/nav2_params_sim_real_parity_detour.yaml"
+    stored = (WORKSPACE / path).read_text(encoding="utf-8")
+    assert stored == builder.render(real, detour_overlay=overlay), (
+        "run python3 scripts/build_sim_real_parity_nav2.py --detour"
+    )
+
+    variant = load_yaml(path)
+    parity = load_yaml("configs/nav2_params_sim_real_parity.yaml")
+    global_ = variant["global_costmap"]["global_costmap"]["ros__parameters"]
+    layer = global_["novel_keepoff_layer"]
+    assert global_["plugins"][:2] == ["static_layer", "novel_keepoff_layer"]
+    assert layer["plugin"] == "nav2_costmap_2d::StaticLayer"
+    assert layer["map_topic"] == "/novel_obstacle_keepoff"
+    # use_maximum is costmap-wide in Humble and would hide unknown space.
+    assert "use_maximum" not in global_
+    assert global_["obstacle_layer"]["enabled"] is False
+    tree = variant["bt_navigator"]["ros__parameters"][
+        "default_nav_to_pose_bt_xml"]
+    assert tree.endswith("navigate_to_pose_detour_real.xml")
+    assert (WORKSPACE / tree[len(CONTAINER_WORKSPACE):]).is_file()
+
+    del global_["novel_keepoff_layer"]
+    global_["plugins"] = parity["global_costmap"]["global_costmap"][
+        "ros__parameters"]["plugins"]
+    variant["bt_navigator"]["ros__parameters"][
+        "default_nav_to_pose_bt_xml"] = parity["bt_navigator"][
+            "ros__parameters"]["default_nav_to_pose_bt_xml"]
+    assert variant == parity
+
+
 def test_sim_launch_can_select_real_navigation_parity_profile():
     launch_source = (LAUNCH_ROOT / "carbot_sim.launch.py").read_text(
         encoding="utf-8"

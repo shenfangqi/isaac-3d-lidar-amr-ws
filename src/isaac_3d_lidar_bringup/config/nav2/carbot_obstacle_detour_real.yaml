@@ -1,0 +1,39 @@
+# Issue #1 detour (simulation development; not enabled on the robot).
+# Loaded on top of carbot_navigation_real.yaml together with
+# behavior_trees/navigate_to_pose_detour_real.xml and the
+# novel_obstacle_keepoff node.
+#
+# The native global obstacle layer stays disabled.  Novel obstacles reach the
+# planner only through the keep-off grid: the saved map republished with
+# confirmed novel returns, an assumed depth behind them and a 0.5 m lethal
+# keep-off.  The second StaticLayer overwrites the master grid with it (the
+# default).  Humble's use_maximum is costmap-wide: enabling it stops the first
+# StaticLayer from writing the map's unknown cells, which then read as free.
+# Until the node publishes, the second layer has no map, the global costmap is
+# not current and the planner waits indefinitely: start the node with Nav2.
+# The local costmap is unchanged.
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      plugins: [static_layer, novel_keepoff_layer, obstacle_layer, inflation_layer]
+      novel_keepoff_layer:
+        plugin: nav2_costmap_2d::StaticLayer
+        map_topic: /novel_obstacle_keepoff
+        map_subscribe_transient_local: true
+        subscribe_to_updates: false
+
+novel_obstacle_keepoff:
+  ros__parameters:
+    marking_scan_topic: /scan_global_filtered
+    clearing_scan_topic: /scan
+    map_topic: /map
+    output_topic: /novel_obstacle_keepoff
+    assumed_depth_m: 0.4
+    keepoff_radius_m: 0.5
+    robot_clear_radius_m: 0.3
+    confirm_hits: 3
+    min_view_baseline_m: 0.5
+    stationary_confirm_hits: 8
+    ghost_travel_m: 1.0
+    mark_max_range_m: 4.0
+    publish_rate_hz: 2.0

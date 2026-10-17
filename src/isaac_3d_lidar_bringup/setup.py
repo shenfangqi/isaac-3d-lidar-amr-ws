@@ -71,6 +71,8 @@ setup(
             'overhead_clearance_marker_publisher:main',
             'static_map_scan_filter = '
             'isaac_3d_lidar_bringup.static_map_scan_filter:main',
+            'novel_obstacle_keepoff = '
+            'isaac_3d_lidar_bringup.novel_obstacle_keepoff:main',
             'mesh_voxel_relay = '
             'isaac_3d_lidar_bringup.mesh_voxel_relay:main',
             'fast_lio_base_adapter = '

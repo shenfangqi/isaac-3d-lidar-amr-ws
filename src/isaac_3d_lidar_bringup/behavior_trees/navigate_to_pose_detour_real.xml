@@ -1,0 +1,40 @@
+<!--
+  Issue #1 detour (simulation development, not enabled on the robot).
+  Compute one global path and keep it while the controller makes progress.
+  On a FollowPath failure, wait 2 s and retry the unchanged path once (a
+  transient obstacle).  If it fails again, wait 2 s and compute a new path;
+  up to three such detours are allowed, each triggered only by a controller
+  failure, so normal driving still uses a single path.
+
+  Detours are planned against the global costmap's novel-obstacle keep-off
+  layer (novel_obstacle_keepoff): an obstacle absent from the saved map is
+  given an assumed depth and a 0.5 m keep-off, so a detour keeps it outside
+  the MID-360 blind zone or no detour is found and the goal aborts.
+
+  No costmap is cleared, and IsPathValid, PipelineSequence/RateController and
+  Spin/BackUp are intentionally absent.
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <Sequence name="NavigateWithBoundedDetours">
+      <ComputePathToPose
+        goal="{goal}"
+        path="{path}"
+        planner_id="GridBased"/>
+      <RecoveryNode number_of_retries="3" name="DetourBudget">
+        <RecoveryNode number_of_retries="1" name="FollowAfterTransientPause">
+          <FollowPath path="{path}" controller_id="FollowPath"/>
+          <Wait wait_duration="2"/>
+        </RecoveryNode>
+        <Sequence name="Detour">
+          <!-- Let the keep-off evidence settle while stationary. -->
+          <Wait wait_duration="2"/>
+          <ComputePathToPose
+            goal="{goal}"
+            path="{path}"
+            planner_id="GridBased"/>
+        </Sequence>
+      </RecoveryNode>
+    </Sequence>
+  </BehaviorTree>
+</root>
