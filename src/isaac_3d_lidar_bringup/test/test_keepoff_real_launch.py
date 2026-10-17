@@ -17,7 +17,9 @@ def test_keepoff_preview_is_opt_in_and_starts_the_whole_chain():
     source = _read(PACKAGE_DIR / 'launch/carbot_navigation_real.launch.py')
     assert ("'novel_obstacle_keepoff_preview',\n"
             "            default_value='false',") in source
-    assert source.count('condition=IfCondition(keepoff_preview)') == 3
+    assert source.count('condition=keepoff_chain,') == 3
+    assert ("\"'\", keepoff_preview, \"' == 'true' or '\",\n"
+            "        obstacle_detour, \"' == 'true'\"") in source
     for executable in ('static_map_scan_filter', 'scan_temporal_median',
                        'novel_obstacle_keepoff'):
         assert f"executable='{executable}'" in source
@@ -28,6 +30,33 @@ def test_keepoff_preview_is_opt_in_and_starts_the_whole_chain():
     assert keepoff['novel_obstacle_keepoff']['ros__parameters'][
         'marking_scan_topic'] == '/scan_global_filtered'
     assert "'output_topic': '/scan_global_filtered'" in source
+
+
+def test_detour_is_opt_in_exclusive_and_keeps_the_controller():
+    source = _read(PACKAGE_DIR / 'launch/carbot_navigation_real.launch.py')
+    assert ("'novel_obstacle_detour',\n"
+            "            default_value='false',") in source
+    assert 'OpaqueFunction(function=configure_obstacle_detour)' in source
+    detour = source.split('def configure_obstacle_detour', 1)[1]
+    detour = detour.split('# Issue #1: wait for a transient obstacle', 1)[0]
+    assert "if obstacle_detour.perform(context) != 'true':" in detour
+    assert "recovery_enabled.perform(context) == 'true'" in detour
+    assert "obstacle_wait_retry.perform(context) == 'true'" in detour
+    assert 'parameters=[navigation_config, keepoff_config]' in detour
+    assert "{'default_nav_to_pose_bt_xml': detour_tree}" in detour
+    # Only the planner and the tree change for the detour test.
+    assert 'controller_server' not in detour
+    assert 'velocity_smoother' not in detour
+    assert 'condition=UnlessCondition(obstacle_detour),' in source
+    assert "obstacle_detour, \"' == 'false'\"]))," in source
+    keepoff = yaml.safe_load(_read(
+        PACKAGE_DIR / 'config/nav2/carbot_obstacle_detour_real.yaml'))
+    layers = keepoff['global_costmap']['global_costmap']['ros__parameters']
+    assert layers['plugins'] == [
+        'static_layer', 'novel_keepoff_layer', 'obstacle_layer',
+        'inflation_layer']
+    assert 'controller_server' not in keepoff
+    assert 'local_costmap' not in keepoff
 
 
 def test_real_nav2_does_not_read_the_keepoff_grid():
@@ -50,11 +79,15 @@ def test_robot_scripts_forward_the_preview_flag():
     start = _read(
         PROJECT_DIR / 'scripts/start_real_robot_navigation_rviz.sh')
     assert 'if [[ "${18:-}" == "keepoff-preview" ]]; then' in container
-    assert 'keepoff-preview requires navigation-safe mode.' in container
+    assert 'elif [[ "${18:-}" == "keepoff-detour" ]]; then' in container
+    assert ('keepoff_launch_argument=" '
+            'novel_obstacle_detour:=true"') in container
+    assert 'requires navigation-safe mode.' in container
     assert ('keepoff_launch_argument=" '
             'novel_obstacle_keepoff_preview:=true"') in container
     assert '${diagnostic_launch_argument}${keepoff_launch_argument}' in (
         container)
-    assert 'keepoff_preview=false' in start
+    assert 'keepoff_mode=none' in start
     assert '--keepoff-preview)' in start
-    assert 'echo keepoff-preview)' in start
+    assert '--keepoff-detour)' in start
+    assert 'echo "${keepoff_mode}")" >/dev/null' in start

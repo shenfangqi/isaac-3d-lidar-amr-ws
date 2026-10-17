@@ -1,5 +1,6 @@
 <!--
-  Issue #1 detour (simulation development, not enabled on the robot).
+  Issue #1 detour.  Off by default on the robot; the launch argument
+  novel_obstacle_detour:=true enables it for operator-supervised tests.
   Compute one global path and keep it while the controller makes progress.
   On a FollowPath failure, wait 2 s and retry the unchanged path once (a
   transient obstacle).  If it fails again, wait 2 s and compute a new path;

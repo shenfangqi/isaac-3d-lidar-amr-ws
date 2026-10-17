@@ -1,4 +1,5 @@
-# Issue #1 detour (simulation development; not enabled on the robot).
+# Issue #1 detour. Off by default on the robot; novel_obstacle_detour:=true
+# enables it for operator-supervised tests.
 # Loaded on top of carbot_navigation_real.yaml together with
 # behavior_trees/navigate_to_pose_detour_real.xml and the
 # novel_obstacle_keepoff node.
