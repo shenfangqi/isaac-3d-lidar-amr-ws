@@ -29,7 +29,9 @@ parser.add_argument(
     "--scenario",
     # persistent: the detour placement for a tree without a detour (issue #1
     # obstacle_wait_retry); the goal must abort safely after one path.
-    choices=("temporary", "detour", "persistent", "blocked"),
+    # narrow: --obstacle-box leaves only a gap narrower than the robot can
+    # safely use; the goal must abort without forcing the gap.
+    choices=("temporary", "detour", "persistent", "blocked", "narrow"),
     required=True,
 )
 parser.add_argument("--goal-x", type=float, default=4.34064)
@@ -37,6 +39,13 @@ parser.add_argument("--goal-y", type=float, default=2.39164)
 parser.add_argument("--goal-yaw", type=float, default=0.0)
 parser.add_argument("--obstacle-distance", type=float, default=1.20)
 parser.add_argument("--timeout", type=float, default=210.0)
+parser.add_argument(
+    "--obstacle-box",
+    type=float,
+    nargs=4,
+    metavar=("X_MIN", "X_MAX", "Y_MIN", "Y_MAX"),
+    help="narrow: place one 1 m high box at these map-frame bounds",
+)
 parser.add_argument(
     "--ghost-margin",
     type=float,
@@ -56,6 +65,8 @@ parser.add_argument(
     help="write plans, obstacle and the odometry trace to this JSON file",
 )
 args, ros_args = parser.parse_known_args()
+if (args.scenario == "narrow") != (args.obstacle_box is not None):
+    parser.error("--obstacle-box is required by, and only used by, narrow")
 
 # Carbot measured footprint in base_footprint (x forward, y left).
 FOOTPRINT = ((0.155, 0.133), (0.155, -0.133), (-0.130, -0.133), (-0.130, 0.133))
@@ -469,6 +480,11 @@ class DynamicObstacleValidation(Node):
                 ])
             dimensions = (wall_thickness, wall_length, 1.0)
             x, y, yaw = centre.x + walls[0][0], centre.y + walls[0][1], 0.0
+        elif args.scenario == "narrow":
+            x_min, x_max, y_min, y_max = args.obstacle_box
+            x, y, yaw = (x_min + x_max) / 2.0, (y_min + y_max) / 2.0, 0.0
+            dimensions = (x_max - x_min, y_max - y_min, 1.0)
+            self.obstacle_command = [x, y, 0.5, *dimensions, yaw]
         else:
             dimensions = (0.65, 0.65, 1.0)
             yaw = 0.0
@@ -669,7 +685,9 @@ def main():
 
         if not node.obstacle_seen_in_scan:
             raise RuntimeError("dynamic obstacle was not observed in /scan")
-        if not node.stop_observed:
+        # narrow may abort on the replanned path before the controller has
+        # to stop; the abort itself must still leave the robot stopped.
+        if not node.stop_observed and args.scenario != "narrow":
             raise RuntimeError("local obstacle stop was not observed")
         if node.minimum_clearance <= 0.0:
             raise RuntimeError("footprint touched the obstacle")
@@ -692,6 +710,12 @@ def main():
                 result.status == GoalStatus.STATUS_SUCCEEDED
                 and node.plan_count == 2
                 and (node.global_obstacle_cells_at_replan or 0) > 0
+            )
+        elif args.scenario == "narrow":
+            # Initial plan plus at most the detour tree's three replans.
+            passed = (
+                result.status == GoalStatus.STATUS_ABORTED
+                and 1 <= node.plan_count <= 4
             )
         else:
             passed = (
