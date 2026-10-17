@@ -30,6 +30,8 @@ def generate_launch_description():
         bringup_dir, 'behavior_trees', 'navigate_to_pose_detour_real.xml')
     keepoff_config = os.path.join(
         bringup_dir, 'config', 'nav2', 'carbot_obstacle_detour_real.yaml')
+    near_field_config = os.path.join(
+        bringup_dir, 'config', 'nav2', 'carbot_near_field_real.yaml')
     auto_localization_config = os.path.join(
         bringup_dir, 'config', 'nav2',
         'carbot_auto_localization_real.yaml')
@@ -48,6 +50,7 @@ def generate_launch_description():
     obstacle_wait_retry = LaunchConfiguration('obstacle_wait_retry')
     keepoff_preview = LaunchConfiguration('novel_obstacle_keepoff_preview')
     obstacle_detour = LaunchConfiguration('novel_obstacle_detour')
+    near_field = LaunchConfiguration('near_field_scan')
     keepoff_chain = IfCondition(PythonExpression([
         "'", keepoff_preview, "' == 'true' or '",
         obstacle_detour, "' == 'true'"]))
@@ -214,7 +217,10 @@ def generate_launch_description():
         name='controller_server',
         parameters=[navigation_config],
         remappings=[('cmd_vel', 'cmd_vel_nav')],
-        condition=UnlessCondition(recovery_enabled),
+        # configure_recovery or configure_near_field start it otherwise.
+        condition=IfCondition(PythonExpression([
+            "'", recovery_enabled, "' == 'false' and '",
+            near_field, "' == 'false'"])),
         output='screen',
     )
     planner = Node(
@@ -415,9 +421,12 @@ def generate_launch_description():
         plugin_dir = get_package_share_directory('carbot_recovery_plugins')
         overlay = os.path.join(plugin_dir, 'config', 'recovery_overlay.yaml')
         tree = os.path.join(plugin_dir, 'behavior_trees', 'bounded_recovery.xml')
+        near = ([near_field_config]
+                if near_field.perform(context) == 'true' else [])
         return [
             Node(package='nav2_controller', executable='controller_server',
-                 name='controller_server', parameters=[navigation_config, overlay],
+                 name='controller_server',
+                 parameters=[navigation_config, overlay, *near],
                  remappings=[('cmd_vel', 'cmd_vel_nav')], output='screen'),
             Node(package='nav2_behaviors', executable='behavior_server',
                  name='behavior_server', parameters=[navigation_config, overlay],
@@ -430,6 +439,28 @@ def generate_launch_description():
             Node(package='carbot_nav_recovery', executable='recovery_coordinator',
                  name='carbot_recovery_runtime_observer',
                  parameters=[{'acceptance_profile': profile}], output='screen'),
+        ]
+
+    # Near-field channel: /scan_near from the raw MID-360 cloud as a second
+    # local-costmap source (carbot_near_field_real.yaml).  /scan is unchanged.
+    near_field_node = Node(
+        package='isaac_3d_lidar_bringup',
+        executable='near_field_scan',
+        name='near_field_scan',
+        parameters=[near_field_config, {'use_sim_time': False}],
+        condition=IfCondition(near_field),
+        output='screen',
+    )
+
+    def configure_near_field(context):
+        if (near_field.perform(context) != 'true'
+                or recovery_enabled.perform(context) == 'true'):
+            return []
+        return [
+            Node(package='nav2_controller', executable='controller_server',
+                 name='controller_server',
+                 parameters=[navigation_config, near_field_config],
+                 remappings=[('cmd_vel', 'cmd_vel_nav')], output='screen'),
         ]
 
     # Issue #1 preview: the global novel-obstacle chain of the simulation
@@ -543,6 +574,16 @@ def generate_launch_description():
                 'Issue #1: publish /novel_obstacle_keepoff from the robot '
                 'scan for observation. Nav2 does not read it; planning, '
                 'control and velocity are unchanged.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'near_field_scan',
+            default_value='false',
+            choices=['true', 'false'],
+            description=(
+                'Add /scan_near (raw MID-360 returns 0.1-0.6 m around the '
+                'robot) to the local costmap so obstacles inside the 0.5 m '
+                '/scan blind zone stay visible. /scan is unchanged.'
             ),
         ),
         DeclareLaunchArgument(
@@ -736,6 +777,7 @@ def generate_launch_description():
         OpaqueFunction(function=configure_recovery),
         OpaqueFunction(function=configure_obstacle_wait_retry),
         OpaqueFunction(function=configure_obstacle_detour),
+        OpaqueFunction(function=configure_near_field),
         lio_odometry,
         scan_projection,
         localization_scan_projection,
@@ -758,4 +800,5 @@ def generate_launch_description():
         localization_rotation_preview,
         localization_motion_guard,
         *keepoff_nodes,
+        near_field_node,
     ])

@@ -1,0 +1,53 @@
+# Near-field LiDAR channel for the local costmap (off by default; the real
+# launch argument near_field_scan:=true loads this on top of
+# carbot_navigation_real.yaml).
+#
+# /scan comes from FAST-LIO's body cloud (blind 0.5 m) with range_min 0.5 m,
+# so an obstacle closer than 0.5 m leaves the local costmap; on 2026-10-17
+# the robot crept into a handbag the raw MID-360 cloud showed 0.1-0.5 m ahead
+# for 15 s.  /scan is unchanged (the project keeps its range_min); this adds
+# /scan_near from near_field_scan as a second observation source.  In each
+# costmap update Nav2 clears before it marks, so a /scan ray through a near
+# obstacle cannot erase the mark /scan_near sets in the same update.
+#
+# /scan_near only clears along bearings a low beam observed past the near
+# field (near_field_scan.py), and only up to 0.65 m.  Obstacles lower than
+# the MID-360's lowest beam are invisible to it; they are for the planned
+# ToF sensors, which will be another source here.
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      obstacle_layer:
+        observation_sources: scan scan_near
+        scan_near:
+          topic: /scan_near
+          data_type: LaserScan
+          marking: true
+          clearing: true
+          inf_is_valid: false
+          obstacle_min_range: 0.0
+          obstacle_max_range: 0.6
+          raytrace_min_range: 0.0
+          raytrace_max_range: 0.65
+          max_obstacle_height: 2.0
+          observation_persistence: 0.0
+
+near_field_scan:
+  ros__parameters:
+    input_topic: /livox/lidar
+    input_type: livox_custom
+    # Best effort: never back-pressure the driver that also feeds FAST-LIO
+    # (near_field_scan.py).  Measure the delivered rate before changing it.
+    input_reliable: false
+    output_topic: /scan_near
+    base_frame: base_footprint
+    # Must match the Nav2 footprint in carbot_navigation_real.yaml.
+    footprint: "[[0.155, 0.133], [0.155, -0.133], [-0.130, -0.133], [-0.130, 0.133]]"
+    footprint_margin_m: 0.05
+    max_range_m: 0.6
+    # Same height band as /scan (pointcloud_to_laserscan 0.10-0.35 m).
+    min_height_m: 0.10
+    max_height_m: 0.35
+    min_lidar_range_m: 0.1
+    clear_elevation_min_deg: -8.0
+    clear_elevation_max_deg: 13.0
