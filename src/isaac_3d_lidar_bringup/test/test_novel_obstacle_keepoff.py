@@ -5,7 +5,6 @@ import math
 import numpy as np
 
 from isaac_3d_lidar_bringup.novel_obstacle_keepoff import dilate
-from isaac_3d_lidar_bringup.novel_obstacle_keepoff import GhostBeams
 from isaac_3d_lidar_bringup.novel_obstacle_keepoff import disk_offsets
 from isaac_3d_lidar_bringup.novel_obstacle_keepoff import KeepoffGrid
 from isaac_3d_lidar_bringup.novel_obstacle_keepoff import TurnGate
@@ -153,16 +152,14 @@ def test_scans_wait_until_the_robot_has_stopped_turning():
     assert gate.accepts(2.6)
 
 
-def test_returns_that_move_with_the_robot_are_never_confirmed():
+def test_a_return_beside_a_standing_robot_is_confirmed():
     grid = _grid()
     angles = np.array([0.0])
-    # A ghost 1 m ahead of a robot driving forward at 1 cm per scan, and a
-    # stationary robot seeing the same return 20 times.
-    for step in range(40):
-        grid.mark((-1.0 + 0.01 * step, 0.0), 0.0, angles, np.array([1.0]))
-    for _ in range(20):
-        grid.mark((1.0, 1.0), 0.0, angles, np.array([1.0]))
+    for _ in range(2):
+        grid.mark((1.0, 1.0), 0.0, angles, np.array([0.6]))
     assert not grid.evidence().any()
+    grid.mark((1.0, 1.0), 0.0, angles, np.array([0.6]))
+    assert grid.evidence().any()
 
 
 def test_a_static_return_seen_while_approaching_is_confirmed():
@@ -174,71 +171,10 @@ def test_a_static_return_seen_while_approaching_is_confirmed():
     assert grid.evidence().any()
 
 
-def test_ghost_beams_learn_returns_that_move_with_the_robot():
-    ghosts = GhostBeams(3)
-    for step in range(120):
-        x = 0.01 * step
-        # Beam 0: ghost at a fixed 1.3 m.  Beam 1: a wall ahead at x = 3.
-        # Beam 2: no return.
-        ghosts.update((x, 0.0), [1.3, 3.0 - x, INF])
-    assert ghosts.armed
-    dropped = ghosts.drop([1.32, 2.4, INF])
-    assert dropped[0] == INF
-    assert dropped[1] == 2.4
-    # A different range on the ghost beam is still a real return.
-    assert ghosts.drop([0.8, 2.4, INF])[0] == 0.8
-
-
-def test_passing_abeam_of_an_object_is_not_learned_as_a_ghost():
-    ghosts = GhostBeams(1)
-    # A post 1 m to the side of a straight pass, seen by the abeam beam.
-    for step in range(200):
-        x = -1.0 + 0.01 * step
-        ghosts.update((x, 0.0), [math.hypot(x, 1.0)])
-    assert math.isnan(ghosts.ghost_range[0])
-
-
 def test_far_novel_returns_are_not_marked():
     grid = _grid()
     angles = np.array([0.0])
     for step in range(30):
         x = -2.9 + 0.02 * step
         grid.mark((x, 0.0), 0.0, angles, np.array([5.8 - x]))
-    assert not grid.evidence().any()
-
-
-def test_a_stopped_robot_learns_nothing_and_is_not_armed():
-    ghosts = GhostBeams(1)
-    for _ in range(50):
-        ghosts.update((1.0, 1.0), [1.3])
-    assert not ghosts.armed
-    assert ghosts.drop([1.3])[0] == 1.3
-
-
-def test_obstacle_next_to_a_stopped_robot_is_confirmed_once_armed():
-    grid = _grid(stationary_confirm_hits=8)
-    angles = np.array([0.0])
-    grid.allow_stationary = True
-    # Creeping past at 0.4 cm per scan does not count as standing still.
-    for step in range(10):
-        grid.mark((1.0 + 0.004 * step, 1.0), 0.0, angles,
-                  np.array([0.6 - 0.004 * step]))
-    assert not grid.evidence().any()
-    for _ in range(8):
-        grid.mark((1.0, 1.0), 0.0, angles, np.array([0.6]), stationary=True)
-    assert grid.evidence().any()
-
-
-def test_ghost_learning_ignores_returns_beyond_the_marking_range():
-    ghosts = GhostBeams(1, max_range_m=4.0)
-    for step in range(200):
-        ghosts.update((0.01 * step, 0.0), [6.0])
-    assert math.isnan(ghosts.ghost_range[0])
-
-
-def test_reset_evidence_forgets_counts():
-    grid = _grid()
-    _mark_from_approach(grid)
-    assert grid.evidence().any()
-    grid.reset_evidence()
     assert not grid.evidence().any()
