@@ -111,4 +111,4 @@ detour parity 配置，`novel_obstacle_keepoff` 手动启动，`ghost_travel_m:=
 
 - 验收第 4 条（另开 PR）：在无假回波的前提下评估简化 `novel_obstacle_keepoff` 的过滤规则（伪回波学习、静止确认只在学习完成后启用、视角基线），并用 #1 的开阔带场景（绕行、四面封闭、临时障碍）回归。
 - 观察：建图用的旧 Carter 脚本（`auto_play_mid360.py`、`streaming_auto_play.py`，被 bootstrap 哈希锁定）同样用整圈缓冲区，没有改。warehouse_v3 的地图是否受过残留点影响没有核查；重建地图时应加上同一个启动参数。
-- 数据和调试工具（未提交）：`output/issue107_tools/`（`buf_check.py` 残留点检查、`ghost_probe.py`、`rtx_*.py` 原始返回分析、`streaming_carbot_debug.py` 含调试钩子的版本），RTX 原始帧在 worktree 的 `output/issue107/`。
+- 数据和调试工具（未提交）：`output/issue107_tools/`（`buf_check.py` 残留点检查、`ghost_probe.py`、`rtx_*.py` 原始返回分析、`streaming_carbot_debug.py` 含调试钩子的版本），RTX 原始帧在 `output/issue107_tools/rtx_frames/`。
