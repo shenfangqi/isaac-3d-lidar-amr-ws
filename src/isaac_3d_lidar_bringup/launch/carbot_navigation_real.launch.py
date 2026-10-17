@@ -26,6 +26,8 @@ def generate_launch_description():
         bringup_dir, 'config', 'nav2', 'carbot_navigation_real.yaml')
     obstacle_wait_retry_tree = os.path.join(
         bringup_dir, 'behavior_trees', 'navigate_to_pose_wait_and_retry_real.xml')
+    keepoff_config = os.path.join(
+        bringup_dir, 'config', 'nav2', 'carbot_obstacle_detour_real.yaml')
     auto_localization_config = os.path.join(
         bringup_dir, 'config', 'nav2',
         'carbot_auto_localization_real.yaml')
@@ -42,6 +44,7 @@ def generate_launch_description():
     recovery_enabled = LaunchConfiguration('bounded_recovery_enabled')
     acceptance_profile = LaunchConfiguration('recovery_acceptance_profile')
     obstacle_wait_retry = LaunchConfiguration('obstacle_wait_retry')
+    keepoff_preview = LaunchConfiguration('novel_obstacle_keepoff_preview')
     recovery_validation_preview = LaunchConfiguration(
         'recovery_validation_preview')
     complex_route_validation = LaunchConfiguration(
@@ -421,6 +424,50 @@ def generate_launch_description():
                  parameters=[{'acceptance_profile': profile}], output='screen'),
         ]
 
+    # Issue #1 preview: the global novel-obstacle chain of the simulation
+    # (static-map scan filter, 5-scan temporal median, keep-off grid) runs on
+    # the robot for observation only.  Nav2 is not configured to read
+    # /novel_obstacle_keepoff, so planning and velocity are unchanged.
+    keepoff_nodes = [
+        Node(
+            package='isaac_3d_lidar_bringup',
+            executable='static_map_scan_filter',
+            name='static_map_scan_filter',
+            parameters=[{
+                'use_sim_time': False,
+                'input_topic': '/scan',
+                'output_topic': '/scan_global_static_filtered',
+                'map_topic': '/map',
+                'map_frame': 'map',
+                'static_margin_m': 0.12,
+                'occupied_threshold': 65,
+            }],
+            condition=IfCondition(keepoff_preview),
+            output='screen',
+        ),
+        Node(
+            package='isaac_3d_lidar_bringup',
+            executable='scan_temporal_median',
+            name='global_scan_filter',
+            parameters=[{
+                'use_sim_time': False,
+                'input_topic': '/scan_global_static_filtered',
+                'output_topic': '/scan_global_filtered',
+                'window': 5,
+            }],
+            condition=IfCondition(keepoff_preview),
+            output='screen',
+        ),
+        Node(
+            package='isaac_3d_lidar_bringup',
+            executable='novel_obstacle_keepoff',
+            name='novel_obstacle_keepoff',
+            parameters=[keepoff_config, {'use_sim_time': False}],
+            condition=IfCondition(keepoff_preview),
+            output='screen',
+        ),
+    ]
+
     # Issue #1: wait for a transient obstacle and retry the unchanged path
     # once.  Only the behavior tree changes; the planner, controller, both
     # costmaps and the velocity chain are the reviewed real configuration.
@@ -452,6 +499,16 @@ def generate_launch_description():
                 'Issue #1: after a FollowPath failure, wait 2 s and follow the '
                 'unchanged path once more before aborting. No global detour. '
                 'Mutually exclusive with bounded_recovery_enabled.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'novel_obstacle_keepoff_preview',
+            default_value='false',
+            choices=['true', 'false'],
+            description=(
+                'Issue #1: publish /novel_obstacle_keepoff from the robot '
+                'scan for observation. Nav2 does not read it; planning, '
+                'control and velocity are unchanged.'
             ),
         ),
         DeclareLaunchArgument(
@@ -654,4 +711,5 @@ def generate_launch_description():
         complex_route_advisor,
         localization_rotation_preview,
         localization_motion_guard,
+        *keepoff_nodes,
     ])

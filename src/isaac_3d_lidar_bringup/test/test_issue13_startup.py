@@ -221,7 +221,7 @@ def test_forced_translation_is_plumbed_as_a_validation_only_test():
             '--localization-translation guarded and --automatic.') in start
     assert 'force_translation_once was requested but the manager' in start
     assert ('"$([[ "${force_translation_once}" == "true" ]] && echo '
-            'force-translation-once)" >/dev/null') in start
+            'force-translation-once)" \\') in start
     assert 'translation_launch_argument+=" force_translation_once:=true"' in container
     assert 'force-translation-once requires translation guarded.' in container
     block = launch.split("'force_translation_once',", 1)[1]

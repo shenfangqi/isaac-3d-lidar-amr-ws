@@ -73,6 +73,8 @@ setup(
             'isaac_3d_lidar_bringup.static_map_scan_filter:main',
             'novel_obstacle_keepoff = '
             'isaac_3d_lidar_bringup.novel_obstacle_keepoff:main',
+            'scan_temporal_median = '
+            'isaac_3d_lidar_bringup.scan_temporal_median:main',
             'mesh_voxel_relay = '
             'isaac_3d_lidar_bringup.mesh_voxel_relay:main',
             'fast_lio_base_adapter = '
