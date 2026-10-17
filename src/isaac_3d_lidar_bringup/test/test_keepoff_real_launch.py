@@ -90,4 +90,4 @@ def test_robot_scripts_forward_the_preview_flag():
     assert 'keepoff_mode=none' in start
     assert '--keepoff-preview)' in start
     assert '--keepoff-detour)' in start
-    assert 'echo "${keepoff_mode}")" >/dev/null' in start
+    assert 'echo "${keepoff_mode}")" \\' in start
