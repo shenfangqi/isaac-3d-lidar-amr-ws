@@ -15,7 +15,12 @@ from isaacsim.core.utils.extensions import (
 )
 
 
-WORKSPACE = Path("/workspace/ros-humble/isaac_3d_lidar_amr_ws")
+# start_nav_all.sh may point Isaac at a git worktree mounted under /workspace.
+WORKSPACE = Path(
+    os.environ.get(
+        "CARBOT_SIM_WORKSPACE", "/workspace/ros-humble/isaac_3d_lidar_amr_ws"
+    )
+)
 SCENE_PATH = WORKSPACE / "isaac_sim/usd/warehouse_3d_nav_origin_carbot.usd"
 PARAMETER_PATH = (
     WORKSPACE / "src/carbot_description/config/carbot_parameters.yaml"

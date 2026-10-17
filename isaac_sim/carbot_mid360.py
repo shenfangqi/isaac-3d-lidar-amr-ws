@@ -94,6 +94,31 @@ def install_profile(profile_path, get_extension_path_from_name):
     return installed_profile
 
 
+# Isaac 4.5's full-scan buffer (IsaacCreateRTXLidarScanBuffer) has one slot
+# per ray and overwrites only the slots that receive a return in the current
+# scan.  Rays without a return are dropped from the RTX output by default, so
+# their slots keep the last point ever written there: after the robot moves,
+# those stale sensor-frame points ride along with the robot (issue #107).
+# Keeping invalid returns makes every scan rewrite every slot with distance 0,
+# which keepOnlyPositiveDistance (default true) then removes from the cloud.
+# The lidar plugin reads this setting only at Kit startup.
+SKIP_DROPPING_INVALID_POINTS_SETTING = (
+    "/app/sensors/nv/lidar/skipDroppingInvalidPoints"
+)
+SKIP_DROPPING_INVALID_POINTS_KIT_ARG = (
+    f"--{SKIP_DROPPING_INVALID_POINTS_SETTING}=true"
+)
+
+
+def require_invalid_lidar_returns_kept(settings):
+    """Refuse to publish a full-scan cloud that would keep stale points."""
+    if settings.get(SKIP_DROPPING_INVALID_POINTS_SETTING) is not True:
+        raise RuntimeError(
+            "Mid-360 full-scan cloud would keep stale points (issue #107): "
+            f"start Kit with {SKIP_DROPPING_INVALID_POINTS_KIT_ARG}"
+        )
+
+
 def create_mid360_pipeline(stage, parameters, pointcloud_topic=None):
     """Attach an RTX lidar to Carbot and publish its PointCloud2 stream."""
     import omni.graph.core as og
@@ -101,6 +126,9 @@ def create_mid360_pipeline(stage, parameters, pointcloud_topic=None):
     import omni.replicator.core as rep
     from pxr import Gf
 
+    import carb
+
+    require_invalid_lidar_returns_kept(carb.settings.get_settings())
     config = mid360_runtime_config(parameters, pointcloud_topic)
     articulation_root_path = parameters["simulation"][
         "articulation_root_prim"

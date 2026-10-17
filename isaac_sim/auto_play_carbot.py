@@ -21,7 +21,12 @@ os.environ["LD_LIBRARY_PATH"] = ":".join(
     )
 )
 
-WORKSPACE = Path("/workspace/ros-humble/isaac_3d_lidar_amr_ws")
+# start_nav_all.sh may point Isaac at a git worktree mounted under /workspace.
+WORKSPACE = Path(
+    os.environ.get(
+        "CARBOT_SIM_WORKSPACE", "/workspace/ros-humble/isaac_3d_lidar_amr_ws"
+    )
+)
 SCENE_PATH = WORKSPACE / "isaac_sim/usd/warehouse_3d_nav_origin_carbot.usd"
 PARAMETER_PATH = (
     WORKSPACE / "src/carbot_description/config/carbot_parameters.yaml"
@@ -32,7 +37,14 @@ simulation_app = None
 if __name__ == "__main__":
     from isaacsim import SimulationApp  # noqa: E402
 
-    simulation_app = SimulationApp({"headless": True})
+    from isaac_sim.carbot_mid360 import (  # noqa: E402
+        SKIP_DROPPING_INVALID_POINTS_KIT_ARG,
+    )
+
+    simulation_app = SimulationApp({
+        "headless": True,
+        "extra_args": [SKIP_DROPPING_INVALID_POINTS_KIT_ARG],
+    })
 
 import numpy as np  # noqa: E402
 import omni.usd  # noqa: E402
