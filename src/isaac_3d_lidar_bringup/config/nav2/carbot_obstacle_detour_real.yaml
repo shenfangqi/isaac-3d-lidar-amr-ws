@@ -32,8 +32,5 @@ novel_obstacle_keepoff:
     keepoff_radius_m: 0.5
     robot_clear_radius_m: 0.3
     confirm_hits: 3
-    min_view_baseline_m: 0.5
-    stationary_confirm_hits: 8
-    ghost_travel_m: 1.0
     mark_max_range_m: 4.0
     publish_rate_hz: 2.0
