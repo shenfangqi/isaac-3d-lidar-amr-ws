@@ -138,6 +138,8 @@ def test_launch_runs_the_escape_by_default_with_the_default_tree_only():
     assert "'default_nav_to_pose_bt_xml': backup_escape_tree" in escape
     node = source.split('reverse_escape = Node(', 1)[1].split('    )\n', 1)[0]
     assert "remappings=[('cmd_vel', 'cmd_vel_nav')]" in node
+    # The detour tree calls reverse_escape as well.
+    assert "obstacle_detour, \"' == 'true'\"" in node
     navigation = yaml.safe_load((
         PACKAGE_DIR / 'config/nav2/carbot_navigation_real.yaml').read_text(
             encoding='utf-8'))
