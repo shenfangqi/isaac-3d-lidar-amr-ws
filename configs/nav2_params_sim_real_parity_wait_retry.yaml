@@ -53,6 +53,7 @@ local_costmap:
       use_sim_time: true
       global_frame: map
       robot_base_frame: base_footprint
+      publish_frequency: 5.0
       rolling_window: true
       width: 4
       height: 4

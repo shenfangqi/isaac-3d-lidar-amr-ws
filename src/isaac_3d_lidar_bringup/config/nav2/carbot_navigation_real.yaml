@@ -70,6 +70,9 @@ local_costmap:
       # sample and abort FollowPath, starting the oscillatory recovery tree.
       global_frame: map
       robot_base_frame: base_footprint
+      # costmap_raw feeds reverse_escape; the default 1 Hz left up to 5 cm of
+      # backing travel unseen at 0.05 m/s.  RPP reads the costmap in process.
+      publish_frequency: 5.0
       rolling_window: true
       width: 4
       height: 4

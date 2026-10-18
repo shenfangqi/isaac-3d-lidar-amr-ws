@@ -1,4 +1,4 @@
-# 全局路线离拐角太近导致卡车：全局膨胀 0.25 → 0.45 m（2026-10-18）
+# 全局路线离拐角太近导致卡车：全局膨胀 0.25 → 0.45 m，加后退脱困（2026-10-18）
 
 ## 1. 现象
 
@@ -57,18 +57,65 @@
 - `carbot_navigation_real.yaml`：只改 `global_costmap` 的 `inflation_radius`，0.25 → 0.45。局部代价地图（RPP 的碰撞检查）仍然是 0.25，桌腿之间的控制不变。
 - `test_real_nav_safety.py`：全局固定为 0.45，局部仍要求 ≤ 0.25。
 - 重新生成 4 个 parity 配置，并新增近场 parity 配置及其测试。
+- 后退脱困见第 5 节。
 
-## 5. 没有采用：用 Nav2 BackUp 后退脱困
+## 5. 后退脱困（B）
 
-试过在 FollowPath 失败时调用 BackUp 后退 0.10 m 再重新规划，仿真里后退被 BackUp 自己拒绝（`Collision Ahead - Exiting DriveOnHeading`）。原因：
-- 车身离墙 5–7 cm 时，墙所在的 5 cm 格子和车身边缘在同一格，车当前位置在代价地图里已经是致命格（254）。
+### 5.1 Nav2 自带的 BackUp 不能用
+
+在 FollowPath 失败时调用 Nav2 的 BackUp 后退，仿真里后退被 BackUp 自己拒绝（`Collision Ahead - Exiting DriveOnHeading`）。原因：
+- 车身离墙 5–7 cm 时，墙所在的 5 cm 格子和车身边缘在同一格。按 Nav2 的算法，车当前位置已经压在致命格（254）上。
 - Humble 的 BackUp 第一步检查的就是当前位置，于是拒绝后退，即使车后方完全是空的。
 
-要做后退脱困，需要另写只检查车后方新扫过区域的后退动作。
+最需要后退的时候（贴着障碍卡住），它恰好用不了。
+
+### 5.2 `reverse_escape`
+
+新节点 `reverse_escape.py` 提供同样的 `nav2_msgs/action/BackUp` 接口，用自己的名字注册。行为树里的 BackUp 节点用 `server_name="reverse_escape"` 调用它。
+
+碰撞判断按格子中心：
+- 格子中心落在车身多边形内，才算压在车身下；
+- 出发时已经压在车身下的格子忽略；
+- 每次发指令前，把车身沿后退方向扫过剩余距离加前瞻距离。前瞻距离是 `lookahead_m`（0.03 m）加上代价地图这段时间里车能走的距离；有新的致命格进入车身，就停车。
+- 退满要求的距离，或者至少退了 0.05 m 后被挡住，算成功。
+
+**行为树** `navigate_to_pose_backup_escape_real.xml`：
+- 在原来的 `navigate_w_replanning_only_if_path_becomes_invalid.xml` 上，给 FollowPath 加了恢复：后退 0.10 m（0.05 m/s），再重新规划，最多 2 次，之后中止。
+- 规划失败直接中止，不后退。
+- 不清代价地图。
+
+**启动**：
+- 实车启动文件新增 `backup_escape`，默认 `true`。
+- 默认行为树（没有开等待重试、绕障或有界恢复时）换成这棵树，同时启动 `reverse_escape`。
+- 局部代价地图的 `publish_frequency` 从默认的 1 Hz 改为 5 Hz：1 Hz 时 `costmap_raw` 最多旧 1 s，0.05 m/s 后退时相当于 5 cm 看不到。RPP 在进程内读代价地图，不受这个参数影响。
+
+### 5.3 仿真验证
+
+测试时局部代价地图仍是 1 Hz。树通过 NavigateToPose 的 `behavior_tree` 字段逐个目标指定，`reverse_escape` 手动启动。
+
+| 测试 | 结果 |
+|---|---|
+| 车在墙端拐角卡住（全局 0.25），在同一位置调用 | Nav2 `/backup`：ABORTED，移动 0 m；`/reverse_escape`：SUCCEEDED，移动 0.107 m |
+| 车尾离墙约 25 cm，要求后退 0.30 m | 后退 0.166 m 后停下（报 0.07 m 后方有障碍），车尾离墙约 8 cm |
+| 车尾后面是门洞，要求后退 0.30 m | 后退 0.309 m，SUCCEEDED |
+| 全局 0.25 加后退树，拐角场景 2 次 | 每次后退 2 次（各 0.10 m）、重新规划 2 次，但 0.25 下新路线仍贴角，最终 ABORTED |
+| 车在拐角卡住后，换成 A + B（0.45 加后退树）从卡住处出发，2 次 | 每次先报一次"会撞"，后退 0.10 m，重新规划后**到达**（SUCCEEDED） |
+| A + B 正常拐角场景，两个方向各 2 次 | 4/4 成功，后退 0 次 |
+
+结论：
+- A 让路线不再贴角；
+- B 保证车贴住障碍时不会一直卡死：下一个目标会先后退，再按 A 重新规划。
+
+### 5.4 没有覆盖的
+
+- 仿真的车按速度指令直接积分移动，没有履带打滑和后退时的动态。实车后退的手感、`/cmd_vel` 链路（速度平滑器允许 -0.10 m/s）要在实车上确认。
+- 近场通道不标离车身 5 cm 以内的点，车尾 5 cm 内新出现的物体看不到；之前标过的格子会一直保留。
+- parity 仿真配置（`build_sim_real_parity_nav2.py`）只对应 `carbot_navigation_real.yaml`，不含启动文件里的默认行为树替换。仿真里要用后退脱困，需要手动启动 `reverse_escape` 并指定这棵树。
 
 ## 6. 数据
 
 `output/corner_sim/`（未提交）：
 - `corner_trial.py`、`run_series.sh`：仿真场景；
-- `base_*`、`A045_*`、`A055_*`、`B_only_*`：各次结果；
+- `escape_check.py`：直接调用后退动作；
+- `base_*`、`A045_*`、`A055_*`、`B_only_*`、`B025_*`、`AB_unpin_*`、`AB045_*`：各次结果；
 - `offline_plan/`：离线规划脚本和结果。

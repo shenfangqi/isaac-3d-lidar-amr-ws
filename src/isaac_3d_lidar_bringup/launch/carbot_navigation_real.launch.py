@@ -28,6 +28,9 @@ def generate_launch_description():
         bringup_dir, 'behavior_trees', 'navigate_to_pose_wait_and_retry_real.xml')
     detour_tree = os.path.join(
         bringup_dir, 'behavior_trees', 'navigate_to_pose_detour_real.xml')
+    backup_escape_tree = os.path.join(
+        bringup_dir, 'behavior_trees',
+        'navigate_to_pose_backup_escape_real.xml')
     keepoff_config = os.path.join(
         bringup_dir, 'config', 'nav2', 'carbot_obstacle_detour_real.yaml')
     near_field_config = os.path.join(
@@ -51,6 +54,7 @@ def generate_launch_description():
     keepoff_preview = LaunchConfiguration('novel_obstacle_keepoff_preview')
     obstacle_detour = LaunchConfiguration('novel_obstacle_detour')
     near_field = LaunchConfiguration('near_field_scan')
+    backup_escape = LaunchConfiguration('backup_escape')
     keepoff_chain = IfCondition(PythonExpression([
         "'", keepoff_preview, "' == 'true' or '",
         obstacle_detour, "' == 'true'"]))
@@ -240,15 +244,40 @@ def generate_launch_description():
         condition=UnlessCondition(recovery_enabled),
         output='screen',
     )
+    default_tree = PythonExpression([
+        "'", recovery_enabled, "' == 'false' and '",
+        obstacle_wait_retry, "' == 'false' and '",
+        obstacle_detour, "' == 'false'"])
     bt_navigator = Node(
         package='nav2_bt_navigator',
         executable='bt_navigator',
         name='bt_navigator',
         parameters=[navigation_config],
         condition=IfCondition(PythonExpression([
-            "'", recovery_enabled, "' == 'false' and '",
-            obstacle_wait_retry, "' == 'false' and '",
-            obstacle_detour, "' == 'false'"])),
+            default_tree, " and '", backup_escape, "' == 'false'"])),
+        output='screen',
+    )
+    # Default tree plus a reverse escape on controller failure
+    # (navigate_to_pose_backup_escape_real.xml).  Its BackUp node calls
+    # reverse_escape, which must be up before bt_navigator loads the tree.
+    bt_navigator_escape = Node(
+        package='nav2_bt_navigator',
+        executable='bt_navigator',
+        name='bt_navigator',
+        parameters=[navigation_config,
+                    {'default_nav_to_pose_bt_xml': backup_escape_tree}],
+        condition=IfCondition(PythonExpression([
+            default_tree, " and '", backup_escape, "' == 'true'"])),
+        output='screen',
+    )
+    reverse_escape = Node(
+        package='isaac_3d_lidar_bringup',
+        executable='reverse_escape',
+        name='reverse_escape',
+        parameters=[{'use_sim_time': False}],
+        remappings=[('cmd_vel', 'cmd_vel_nav')],
+        condition=IfCondition(PythonExpression([
+            default_tree, " and '", backup_escape, "' == 'true'"])),
         output='screen',
     )
     waypoint_follower = Node(
@@ -769,6 +798,16 @@ def generate_launch_description():
             ),
         ),
         DeclareLaunchArgument(
+            'backup_escape',
+            default_value='true',
+            choices=['true', 'false'],
+            description=(
+                'On a controller failure, back up 0.10 m with reverse_escape '
+                'and plan again (at most twice). Applies to the default '
+                'behavior tree only.'
+            ),
+        ),
+        DeclareLaunchArgument(
             'complex_route_braking_profile',
             default_value='',
             description=(
@@ -791,7 +830,9 @@ def generate_launch_description():
         controller,
         planner,
         behaviors,
+        reverse_escape,
         bt_navigator,
+        bt_navigator_escape,
         waypoint_follower,
         velocity_smoother,
         navigation_lifecycle,

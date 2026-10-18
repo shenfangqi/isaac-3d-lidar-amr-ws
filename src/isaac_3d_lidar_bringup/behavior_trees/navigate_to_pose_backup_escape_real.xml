@@ -1,0 +1,45 @@
+<!--
+  Real robot default (backup_escape:=true): the stock
+  navigate_w_replanning_only_if_path_becomes_invalid.xml plus a bounded
+  escape when the controller fails.
+
+  RPP refuses to turn when the footprint's sweep reaches an obstacle, so a
+  robot that stopped a few centimetres from a corner stayed there and every
+  later goal failed at once (2026-10-18, sofa corner; reproduced in Isaac at
+  a wall end).  On a FollowPath failure the robot backs up 0.10 m at
+  0.05 m/s and plans again from where it stopped; after two escapes the
+  goal aborts with the robot stopped.
+
+  The BackUp node calls reverse_escape (reverse_escape.py), not Nav2's
+  BackUp: Nav2's refuses to start when the current footprint already
+  touches a lethal cell, which is the situation this escape is for.
+  reverse_escape ignores the cells under the robot at the start and stops
+  for any other lethal cell entering the footprint.
+
+  A planner failure aborts without backing up.  No costmap is cleared.
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <PipelineSequence name="NavigateWithReplanning">
+      <RateController hz="1.0">
+        <Fallback>
+          <ReactiveSequence>
+            <Inverter>
+              <GlobalUpdatedGoal/>
+            </Inverter>
+            <IsPathValid path="{path}"/>
+          </ReactiveSequence>
+          <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+        </Fallback>
+      </RateController>
+      <RecoveryNode number_of_retries="2" name="FollowPathWithReverseEscape">
+        <FollowPath path="{path}" controller_id="FollowPath"/>
+        <Sequence name="ReverseAndReplan">
+          <BackUp backup_dist="0.10" backup_speed="0.05" time_allowance="6.0"
+                  server_name="reverse_escape"/>
+          <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+        </Sequence>
+      </RecoveryNode>
+    </PipelineSequence>
+  </BehaviorTree>
+</root>

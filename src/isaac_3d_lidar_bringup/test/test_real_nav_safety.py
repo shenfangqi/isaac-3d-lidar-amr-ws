@@ -167,8 +167,9 @@ def test_real_navigation_launch_is_inactive_and_has_one_final_velocity_path():
 
     assert "default_value='false'" in launch_source
     # Mutually exclusive controller/behavior variants use the same chain:
-    # default, bounded recovery and near-field controllers, two behaviors.
-    assert launch_source.count("('cmd_vel', 'cmd_vel_nav')") == 6
+    # default, bounded recovery and near-field controllers, two behaviors,
+    # and reverse_escape.
+    assert launch_source.count("('cmd_vel', 'cmd_vel_nav')") == 7
     # Only the default behavior_server still yields with UnlessCondition.
     assert launch_source.count('condition=UnlessCondition(recovery_enabled)') == 1
     # The default controller yields to both other controller variants...
