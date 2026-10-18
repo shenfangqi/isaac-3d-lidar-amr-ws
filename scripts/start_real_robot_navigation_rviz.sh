@@ -28,6 +28,7 @@ automatic_activation=true
 stationary_validation=false
 complex_route_validation=false
 keepoff_mode=none
+near_field=false
 localization_strategy=legacy_full_rotation
 localization_motion=forbid
 motion_profile=""
@@ -43,7 +44,7 @@ map_argument_seen=false
 
 usage() {
   cat <<EOF
-Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [--complex-route-validation] [--keepoff-preview|--keepoff-detour] [--localization-strategy STRATEGY] [--localization-motion forbid|guarded --motion-profile JSON [--operator-rotation-clear] --operator-present] [--robot-not-moved] [--surface-recheck off|record|decide] [--localization-translation forbid|guarded --linear-profile JSON [--force-translation-once]] [MAP_YAML]
+Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [--complex-route-validation] [--keepoff-preview|--keepoff-detour] [--near-field] [--localization-strategy STRATEGY] [--localization-motion forbid|guarded --motion-profile JSON [--operator-rotation-clear] --operator-present] [--robot-not-moved] [--surface-recheck off|record|decide] [--localization-translation forbid|guarded --linear-profile JSON [--force-translation-once]] [MAP_YAML]
 
 Start saved-map navigation for the physical Carbot and open RViz.
 
@@ -59,6 +60,8 @@ Options:
                   observation. Nav2 does not read it.
   --keepoff-detour  Issue #1 supervised test: Nav2 plans bounded detours
                   around the keep-off grid. The stop margin is unchanged.
+  --near-field    Add raw MID-360 returns inside the 0.5 m /scan blind zone
+                  to the local costmap (/scan_near). /scan is unchanged.
   --localization-strategy STRATEGY
                   legacy_full_rotation (default), stationary_only or
                   segmented_rotation; use it with --automatic or --automatic-activate.
@@ -140,6 +143,9 @@ while (( $# > 0 )); do
       ;;
     --keepoff-detour)
       keepoff_mode=keepoff-detour
+      ;;
+    --near-field)
+      near_field=true
       ;;
     --localization-strategy)
       if (( $# < 2 )); then
@@ -932,6 +938,7 @@ case "${keepoff_mode}" in
   keepoff-detour) echo "Keep-off: DETOUR TEST, Nav2 plans bounded detours around novel obstacles" ;;
   *) echo "Keep-off: disabled" ;;
 esac
+echo "Near-field channel: $(if [[ "${near_field}" == "true" ]]; then echo "on (/scan_near in the local costmap)"; else echo off; fi)"
 remote test -f "${map_yaml}"
 
 echo "[1/8] Disabling the conflicting web teleop publisher..."
@@ -995,7 +1002,8 @@ remote "${jetson_workspace}/scripts/jetson_nvblox_container.sh" \
   "${robot_not_moved}" "${surface_recheck}" \
   "${localization_translation}" "${remote_linear_profile}" \
   "$([[ "${force_translation_once}" == "true" ]] && echo force-translation-once)" \
-  "$([[ "${keepoff_mode}" != "none" ]] && echo "${keepoff_mode}")" >/dev/null
+  "$([[ "${keepoff_mode}" != "none" ]] && echo "${keepoff_mode}")" \
+  "$([[ "${near_field}" == "true" ]] && echo near-field)" >/dev/null
 
 echo "[4/8] Running the non-motion hardware preflight..."
 run_preflight_with_readiness_retry

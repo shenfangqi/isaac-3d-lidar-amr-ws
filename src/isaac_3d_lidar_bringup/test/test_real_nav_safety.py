@@ -165,10 +165,17 @@ def test_real_navigation_launch_is_inactive_and_has_one_final_velocity_path():
     ).read_text(encoding='utf-8')
 
     assert "default_value='false'" in launch_source
-    # Two mutually exclusive controller/behavior variants use the same chain.
-    assert launch_source.count("('cmd_vel', 'cmd_vel_nav')") == 5
-    # bt_navigator is also replaced by the issue #1 obstacle-replan variant.
-    assert launch_source.count('condition=UnlessCondition(recovery_enabled)') == 2
+    # Mutually exclusive controller/behavior variants use the same chain:
+    # default, bounded recovery and near-field controllers, two behaviors.
+    assert launch_source.count("('cmd_vel', 'cmd_vel_nav')") == 6
+    # Only the default behavior_server still yields with UnlessCondition.
+    assert launch_source.count('condition=UnlessCondition(recovery_enabled)') == 1
+    # The default controller yields to both other controller variants...
+    assert ("\"'\", recovery_enabled, \"' == 'false' and '\",\n"
+            "            near_field, \"' == 'false'\"])),") in launch_source
+    # ...and the near-field one stands down when bounded recovery runs.
+    near_field = launch_source.split('def configure_near_field', 1)[1]
+    assert "or recovery_enabled.perform(context) == 'true'):" in near_field
     assert "if recovery_enabled.perform(context) != 'true':" in launch_source
     assert launch_source.count(
         "('cmd_vel_smoothed', cmd_vel_output)") == 1

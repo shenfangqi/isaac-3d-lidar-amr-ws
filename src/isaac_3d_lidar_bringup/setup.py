@@ -75,6 +75,8 @@ setup(
             'isaac_3d_lidar_bringup.novel_obstacle_keepoff:main',
             'scan_temporal_median = '
             'isaac_3d_lidar_bringup.scan_temporal_median:main',
+            'near_field_scan = '
+            'isaac_3d_lidar_bringup.near_field_scan:main',
             'mesh_voxel_relay = '
             'isaac_3d_lidar_bringup.mesh_voxel_relay:main',
             'fast_lio_base_adapter = '

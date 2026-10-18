@@ -11,7 +11,7 @@ time_gate="${workspace}/scripts/wait_for_mapping_time_sync.py"
 
 usage() {
   echo "Usage: $0 {start|recreate|stop|status|logs} [compact|full|mapping]" >&2
-  echo "       $0 {start|recreate} navigation-safe MAP_YAML [manual|auto|auto-activate] [none|complex-route-validation] [legacy_full_rotation|stationary_only|segmented_rotation] [forbid|guarded PROFILE_JSON EXTRINSICS_HASH CONTROL_CHAIN_HASH true|false [force-probe-once]] [ROBOT_NOT_MOVED true|false] [SURFACE_RECHECK off|record|decide] [TRANSLATION forbid|guarded LINEAR_PROFILE_JSON [force-translation-once]] [keepoff-preview|keepoff-detour]" >&2
+  echo "       $0 {start|recreate} navigation-safe MAP_YAML [manual|auto|auto-activate] [none|complex-route-validation] [legacy_full_rotation|stationary_only|segmented_rotation] [forbid|guarded PROFILE_JSON EXTRINSICS_HASH CONTROL_CHAIN_HASH true|false [force-probe-once]] [ROBOT_NOT_MOVED true|false] [SURFACE_RECHECK off|record|decide] [TRANSLATION forbid|guarded LINEAR_PROFILE_JSON [force-translation-once]] [keepoff-preview|keepoff-detour] [near-field]" >&2
   echo "       $0 {start|recreate} navigation-diagnostic MAP_YAML" >&2
   echo "       Append 'auto' for validation or 'auto-activate' for guarded Nav2 activation." >&2
 }
@@ -160,6 +160,19 @@ case "${mode}" in
       echo "The 18th argument must be empty, 'keepoff-preview' or 'keepoff-detour'." >&2
       exit 2
     fi
+    # Near-field channel: raw MID-360 returns inside the 0.5 m /scan blind zone
+    # become a second local-costmap source (/scan_near).
+    near_field_launch_argument=""
+    if [[ "${19:-}" == "near-field" ]]; then
+      if [[ "${mode}" != "navigation-safe" ]]; then
+        echo "near-field requires navigation-safe mode." >&2
+        exit 2
+      fi
+      near_field_launch_argument=" near_field_scan:=true"
+    elif [[ -n "${19:-}" ]]; then
+      echo "The 19th argument must be empty or 'near-field'." >&2
+      exit 2
+    fi
     if [[ "${motion_policy}" != "forbid" && "${motion_policy}" != "guarded" ]]; then
       echo "Motion policy must be 'forbid' or 'guarded'." >&2
       exit 2
@@ -232,7 +245,7 @@ case "${mode}" in
     if [[ "${mode}" == "navigation-diagnostic" ]]; then
       launch_command="carbot_navigation_real.launch.py map:=${quoted_container_map} autostart:=false cmd_vel_output:=/cmd_vel_diagnostic${auto_launch_argument}"
     else
-      launch_command="carbot_navigation_real.launch.py map:=${quoted_container_map} autostart:=false${auto_launch_argument}${diagnostic_launch_argument}${keepoff_launch_argument}"
+      launch_command="carbot_navigation_real.launch.py map:=${quoted_container_map} autostart:=false${auto_launch_argument}${diagnostic_launch_argument}${keepoff_launch_argument}${near_field_launch_argument}"
     fi
     ;;
   *) usage; exit 2 ;;
