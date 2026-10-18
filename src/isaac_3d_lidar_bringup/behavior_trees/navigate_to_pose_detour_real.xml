@@ -14,8 +14,8 @@
 
   Detours are planned against the global costmap's novel-obstacle keep-off
   layer (novel_obstacle_keepoff): an obstacle absent from the saved map is
-  given an assumed depth and a 0.5 m keep-off, so a detour keeps it outside
-  the MID-360 blind zone or no detour is found and the goal aborts.
+  given an assumed depth and a keep-off (carbot_obstacle_detour_real.yaml),
+  so a detour keeps clear of it or no detour is found and the goal aborts.
 
   No costmap is cleared, and IsPathValid, PipelineSequence/RateController and
   Spin are intentionally absent; the only motion besides FollowPath is the
