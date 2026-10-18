@@ -279,6 +279,8 @@ def test_detour_budget_used_up_waits_and_never_aborts():
     assert run.calls.count('ComputePathToPose') == 4
     assert run.calls.count('FollowPath') == 0
     assert set(run.waits) == {3.0}
+    # Blocked, not refused: no escape.
+    assert 'BackUp' not in run.calls
 
 
 def test_detour_budget_used_up_drives_the_current_route_once_clear():
@@ -311,15 +313,40 @@ def test_controller_failure_chain_is_unchanged(follows, plans, waits,
 @pytest.mark.parametrize('escape_succeeds', [True, False])
 def test_controller_failures_share_the_budget_then_wait(escape_succeeds):
     # Three escape detours, each after a retried failure, then the goal is
-    # kept: every 3 s the current path is driven again.
+    # kept: every 3 s the current path is driven again; the first refused
+    # retry with the route clear backs away once (the sofa corner).
     run = _DetourRun(['collision'] * 8 + ['collision', 'collision', 'goal'],
                      escape_succeeds=escape_succeeds)
 
     assert run.run() is True
     assert run.calls.count('ComputePathToPose') == 4
-    assert run.calls.count('BackUp') == 3
+    assert run.calls.count('BackUp') == 4
+    assert run.calls[-3:] == ['TruncatePathLocal', 'IsPathValid',
+                              'FollowPath']
     assert run.waits[-5:] == [2.0, 2.0, 3.0, 2.0, 3.0]
     assert run.follows == []
+
+
+def test_refused_retries_after_the_budget_back_away_only_once():
+    # A gap RPP never accepts: no rocking back and forth.
+    run = _DetourRun(['collision'] * 1000, cancel_at=600)
+
+    with pytest.raises(_Cancelled):
+        run.run()
+    # Three detour escapes and one after the budget.
+    assert run.calls.count('BackUp') == 4
+    assert run.calls.count('FollowPath') > 100
+    assert run.calls.count('ComputePathToPose') == 4
+
+
+def test_blocked_after_the_budget_then_refused_backs_away_once():
+    run = _DetourRun(['collision'] * 1000, cancel_at=600,
+                     blocked=lambda path, t: path < 3 or t < 60)
+
+    with pytest.raises(_Cancelled):
+        run.run()
+    assert run.calls.count('ComputePathToPose') == 4
+    assert run.calls.count('BackUp') == 1
 
 
 def test_detour_tree_checks_the_route_ahead_while_following():
@@ -349,9 +376,9 @@ def test_detour_tree_checks_the_route_ahead_while_following():
         'novel_obstacle_keepoff']['ros__parameters']['mark_max_range_m']
     pause = trees['FollowRoute'].find(".//Sequence[@name='BlockedPause']")
     assert pause.find('Wait').get('wait_duration') == '3'
-    backup = trees['MainTree'].find('.//BackUp')
-    assert backup.get('server_name') == 'reverse_escape'
-    assert float(backup.get('backup_dist')) == 0.10
+    for backup in trees['MainTree'].iter('BackUp'):
+        assert backup.get('server_name') == 'reverse_escape'
+        assert float(backup.get('backup_dist')) == 0.10
     budget = trees['MainTree'].find(".//RecoveryNode[@name='DetourBudget']")
     assert budget.get('number_of_retries') == '3'
     for loop in root.iter('RetryUntilSuccessful'):
