@@ -107,7 +107,7 @@ global_costmap:
           raytrace_max_range: 10.0
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        inflation_radius: 0.25
+        inflation_radius: 0.45
         cost_scaling_factor: 3.0
 planner_server:
   ros__parameters:

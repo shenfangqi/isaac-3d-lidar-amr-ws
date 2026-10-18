@@ -136,7 +136,15 @@ global_costmap:
           raytrace_max_range: 10.0
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        inflation_radius: 0.25
+        # Planner only; the controller's local costmap keeps 0.25 m.  With
+        # 0.25 m the planned route rounded a sofa corner 0.20 m from the
+        # robot centre, inside the 0.204 m turning sweep, so RPP refused the
+        # turn and the robot stayed stuck (2026-10-18).  0.45 m keeps routes
+        # about 0.30-0.40 m off corners.  Smac2D still only rejects cells
+        # within the 0.133 m inscribed radius, so no gap closes: on the real
+        # map 300 random routes and 73 table/chair spots plan as before
+        # (docs/evidence/corner_clearance_2026-10-18.md).
+        inflation_radius: 0.45
         cost_scaling_factor: 3.0
 
 planner_server:

@@ -133,8 +133,9 @@ def test_real_table_approach_has_stable_path_without_motion_recoveries():
     # 0.25 m remains outside the roughly 0.204 m circumscribed footprint while
     # preserving substantially more narrow-space clearance than 0.45 m.
     assert 0.204 < local['inflation_layer']['inflation_radius'] <= 0.25
-    assert global_['inflation_layer']['inflation_radius'] == \
-        local['inflation_layer']['inflation_radius']
+    # The planner keeps routes off corners so RPP has room to turn; its cost
+    # does not close gaps (Smac2D rejects only the inscribed radius).
+    assert global_['inflation_layer']['inflation_radius'] == 0.45
     assert global_['obstacle_layer']['enabled'] is False
     assert local['obstacle_layer'].get('enabled', True) is True
     assert bt['default_nav_to_pose_bt_xml'].endswith(
