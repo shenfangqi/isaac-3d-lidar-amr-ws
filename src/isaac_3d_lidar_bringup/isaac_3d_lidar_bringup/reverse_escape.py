@@ -22,8 +22,14 @@ It backs straight up and judges collision by cell centres:
   ``lookahead_m`` plus the distance the robot can cover while the costmap
   ages stops the robot.
 
-The result is SUCCEEDED when the robot backed up the requested distance,
-or at least ``min_progress_m`` before a cell blocked it, and FAILED
+If a cell behind stops it before ``min_progress_m``, it drives forward the
+requested distance under the same check instead (``forward_fallback``): on
+2026-10-18 the robot stood with its rear 2-4 cm from a wall, could neither
+turn nor back up, and the space ahead was free.  RPP's refusal was about
+the turn, so a short straight move ahead is checked like any other.
+
+The result is SUCCEEDED when the robot moved at least ``min_progress_m``
+(the requested distance, or less when a cell stopped it) and FAILED
 otherwise.
 """
 
@@ -79,19 +85,20 @@ def footprint_cells(grid, pose, footprint):
 
 
 def first_blocked_distance(grid, costs, start_pose, pose, footprint,
-                           distance, step=0.01):
+                           distance, step=0.01, direction=-1.0):
     """
-    Sweep the footprint straight back from pose by distance.
+    Sweep the footprint straight back (direction -1) or ahead (+1) by distance.
 
-    Returns the backward distance at which a lethal cell that was not under
-    the footprint at start_pose enters it, or None when the sweep is clear.
+    Returns the distance at which a lethal cell that was not under the
+    footprint at start_pose enters it, or None when the sweep is clear.
     """
     ignored = footprint_cells(grid, start_pose, footprint)
     x0, y0, yaw = pose
     steps = max(int(math.ceil(distance / step)), 1)
     for index in range(0, steps + 1):
         back = min(index * step, distance)
-        moved = (x0 - back * math.cos(yaw), y0 - back * math.sin(yaw), yaw)
+        moved = (x0 + direction * back * math.cos(yaw),
+                 y0 + direction * back * math.sin(yaw), yaw)
         for row, col in footprint_cells(grid, moved, footprint) - ignored:
             if costs[row, col] >= LETHAL:
                 return back
@@ -132,6 +139,7 @@ def main(args=None):
             self.declare_parameter('max_speed_mps', 0.05)
             self.declare_parameter('lookahead_m', 0.03)
             self.declare_parameter('min_progress_m', 0.05)
+            self.declare_parameter('forward_fallback', True)
             self.declare_parameter('rate_hz', 20.0)
             # The local costmap publishes costmap_raw at 5 Hz.
             self.declare_parameter('max_costmap_age_s', 1.5)
@@ -206,17 +214,13 @@ def main(args=None):
                         self.get_parameter('max_speed_mps').value)
             allowance = (goal.time_allowance.sec
                          + goal.time_allowance.nanosec * 1e-9) or 10.0
-            lookahead = self.get_parameter('lookahead_m').value
             min_progress = self.get_parameter('min_progress_m').value
-            max_age = self.get_parameter('max_costmap_age_s').value
-            period = 1.0 / self.get_parameter('rate_hz').value
             deadline = time.monotonic() + allowance
 
-            def finish(succeeded, reason, traveled):
+            def finish(succeeded, summary):
                 elapsed = self.get_clock().now() - started
                 result.total_elapsed_time = elapsed.to_msg()
-                message = (f'reverse escape {reason}: backed up '
-                           f'{traveled:.3f} m of {target:.2f} m')
+                message = f'reverse escape {summary} (of {target:.2f} m)'
                 # rclpy fixes one severity per logging call site.
                 if succeeded:
                     self.get_logger().info(message)
@@ -226,54 +230,78 @@ def main(args=None):
                 return result
 
             if speed <= 0.0 or target <= 0.0:
-                return finish(False, 'rejected an empty request', 0.0)
+                return finish(False, 'rejected an empty request')
+            outcome, back, reason = self._drive(
+                handle, -1.0, target, speed, deadline)
+            summary = f'{reason}: backed up {back:.3f} m'
+            if outcome == 'canceled':
+                handle.canceled()
+                self.get_logger().info(f'reverse escape canceled, {summary}')
+                return result
+            if back >= min_progress:
+                return finish(True, summary)
+            if (outcome != 'blocked'
+                    or not self.get_parameter('forward_fallback').value):
+                return finish(False, summary)
+            outcome, ahead, reason = self._drive(
+                handle, 1.0, target, speed, deadline)
+            summary += f'; {reason}: forward {ahead:.3f} m'
+            if outcome == 'canceled':
+                handle.canceled()
+                self.get_logger().info(f'reverse escape canceled, {summary}')
+                return result
+            return finish(ahead >= min_progress, summary)
+
+        def _drive(self, handle, direction, target, speed, deadline):
+            """Drive straight (direction -1 back, +1 ahead); return (outcome, distance, reason)."""
+            lookahead = self.get_parameter('lookahead_m').value
+            max_age = self.get_parameter('max_costmap_age_s').value
+            period = 1.0 / self.get_parameter('rate_hz').value
+            side = 'behind' if direction < 0 else 'ahead'
             try:
                 start = self._pose()
             except TransformException as error:
-                return finish(False, f'has no pose ({error})', 0.0)
+                return 'error', 0.0, f'no pose ({error})'
             traveled = 0.0
             feedback = BackUp.Feedback()
-            while rclpy.ok():
-                if handle.is_cancel_requested:
-                    self._stop()
-                    handle.canceled()
-                    self.get_logger().info(
-                        f'reverse escape canceled after {traveled:.3f} m')
-                    return result
-                try:
-                    pose = self._pose()
-                except TransformException as error:
-                    return finish(False, f'lost its pose ({error})', traveled)
-                traveled = math.hypot(pose[0] - start[0], pose[1] - start[1])
-                feedback.distance_traveled = float(traveled)
-                handle.publish_feedback(feedback)
-                if traveled >= target:
-                    return finish(True, 'done', traveled)
-                if time.monotonic() > deadline:
-                    return finish(traveled >= min_progress, 'timed out',
-                                  traveled)
-                with self._lock:
-                    costmap, stamp = self._costmap, self._costmap_time
-                age = (None if stamp is None else
-                       (self.get_clock().now() - stamp).nanoseconds * 1e-9)
-                if (costmap is None or costmap[0]['frame'] != self._frame
-                        or age > max_age):
-                    return finish(traveled >= min_progress,
-                                  'has no fresh local costmap', traveled)
-                # Cells may have appeared since the costmap was taken.
-                margin = lookahead + speed * max(age, 0.0)
-                blocked = first_blocked_distance(
-                    costmap[0], costmap[1], start, pose, self._footprint,
-                    target - traveled + margin)
-                if blocked is not None and blocked <= margin:
-                    return finish(traveled >= min_progress,
-                                  f'blocked {blocked:.2f} m behind',
-                                  traveled)
-                command = Twist()
-                command.linear.x = -speed
-                self._cmd.publish(command)
-                time.sleep(period)
-            return finish(False, 'interrupted', traveled)
+            try:
+                while rclpy.ok():
+                    if handle.is_cancel_requested:
+                        return 'canceled', traveled, 'canceled'
+                    try:
+                        pose = self._pose()
+                    except TransformException as error:
+                        return 'error', traveled, f'lost its pose ({error})'
+                    traveled = math.hypot(pose[0] - start[0],
+                                          pose[1] - start[1])
+                    feedback.distance_traveled = float(traveled)
+                    handle.publish_feedback(feedback)
+                    if traveled >= target:
+                        return 'done', traveled, 'done'
+                    if time.monotonic() > deadline:
+                        return 'timeout', traveled, 'timed out'
+                    with self._lock:
+                        costmap, stamp = self._costmap, self._costmap_time
+                    age = (None if stamp is None else
+                           (self.get_clock().now() - stamp).nanoseconds * 1e-9)
+                    if (costmap is None or costmap[0]['frame'] != self._frame
+                            or age > max_age):
+                        return 'error', traveled, 'no fresh local costmap'
+                    # Cells may have appeared since the costmap was taken.
+                    margin = lookahead + speed * max(age, 0.0)
+                    blocked = first_blocked_distance(
+                        costmap[0], costmap[1], start, pose, self._footprint,
+                        target - traveled + margin, direction=direction)
+                    if blocked is not None and blocked <= margin:
+                        return 'blocked', traveled, \
+                            f'blocked {blocked:.2f} m {side}'
+                    command = Twist()
+                    command.linear.x = direction * speed
+                    self._cmd.publish(command)
+                    time.sleep(period)
+                return 'error', traveled, 'interrupted'
+            finally:
+                self._stop()
 
     rclpy.init(args=args)
     node = ReverseEscape()

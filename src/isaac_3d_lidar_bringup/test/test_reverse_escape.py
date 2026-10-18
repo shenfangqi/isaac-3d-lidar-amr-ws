@@ -89,6 +89,26 @@ def test_sweep_is_measured_from_the_current_pose():
     assert blocked is not None and 0.08 <= blocked <= 0.10
 
 
+def test_forward_sweep_checks_the_space_ahead_only():
+    # Rear against a wall (forward fallback case): ahead is clear, behind
+    # is blocked within the 0.05 m minimum progress (cell centres 4.5 cm
+    # behind the rear edge).
+    costs = _costs()
+    for y in np.arange(-0.2, 0.2, 0.05):
+        _mark(costs, -0.130 - 0.03, y)
+    pose = (0.0, 0.0, 0.0)
+    assert first_blocked_distance(
+        GRID, costs, pose, pose, FOOTPRINT, 0.13, direction=-1.0) <= 0.05
+    assert first_blocked_distance(
+        GRID, costs, pose, pose, FOOTPRINT, 0.13, direction=1.0) is None
+    # An obstacle ahead stops the forward move at its distance.
+    for y in np.arange(-0.2, 0.2, 0.05):
+        _mark(costs, 0.155 + 0.08, y)
+    blocked = first_blocked_distance(
+        GRID, costs, pose, pose, FOOTPRINT, 0.13, direction=1.0)
+    assert blocked is not None and 0.03 <= blocked <= 0.11
+
+
 def test_escape_tree_calls_reverse_escape_after_a_controller_failure():
     tree = ElementTree.parse(
         PACKAGE_DIR / 'behavior_trees/navigate_to_pose_backup_escape_real.xml')

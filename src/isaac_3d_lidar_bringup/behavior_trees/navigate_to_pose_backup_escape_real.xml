@@ -14,7 +14,9 @@
   BackUp: Nav2's refuses to start when the current footprint already
   touches a lethal cell, which is the situation this escape is for.
   reverse_escape ignores the cells under the robot at the start and stops
-  for any other lethal cell entering the footprint.
+  for any other lethal cell entering the footprint.  When a wall behind
+  stops it within 0.05 m, it drives 0.10 m ahead instead under the same
+  check (a robot parked with its rear against a wall).
 
   A planner failure aborts without backing up.  No costmap is cleared.
 -->
