@@ -215,10 +215,13 @@ def main(args=None):
             def finish(succeeded, reason, traveled):
                 elapsed = self.get_clock().now() - started
                 result.total_elapsed_time = elapsed.to_msg()
-                log = self.get_logger().info if succeeded else \
-                    self.get_logger().warning
-                log(f'reverse escape {reason}: backed up {traveled:.3f} m '
-                    f'of {target:.2f} m')
+                message = (f'reverse escape {reason}: backed up '
+                           f'{traveled:.3f} m of {target:.2f} m')
+                # rclpy fixes one severity per logging call site.
+                if succeeded:
+                    self.get_logger().info(message)
+                else:
+                    self.get_logger().warning(message)
                 (handle.succeed if succeeded else handle.abort)()
                 return result
 
