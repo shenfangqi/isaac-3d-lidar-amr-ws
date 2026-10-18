@@ -10,8 +10,15 @@ global /scan range_min; this node is the dedicated near-field channel.
 
 For every azimuth bin around base_footprint:
 
-* the nearest raw point within ``max_range_m`` whose height lies in the
-  /scan band and which is outside the footprint (plus a margin) is a hit;
+* among the raw points within ``max_range_m`` whose height lies in the
+  /scan band and which are outside the footprint (plus a margin), the
+  ``min_points``-th nearest is the hit.  A Livox return off a near surface
+  trails sparse points along the beam towards the sensor, densest just in
+  front of the surface (robot 2026-10-18: a box face 0.43 m away, about one
+  trail point per degree per frame down to 0.15 m, and a median of four face
+  points per degree).  The nearest point read the box 0.35 m away (63 % of
+  the bins too close); the third-nearest reads it at 0.42 m (5 % too close,
+  by at most 9 cm) and still marks 84 % of the bins it covers;
 * otherwise, if a beam whose elevation keeps it inside the height band
   across the whole near field returned beyond ``max_range_m``, the near
   field along that bearing is observed free and the bin reports a range
@@ -55,7 +62,8 @@ def grow_polygon(polygon, margin):
 def near_field_ranges(points, lidar_origin, footprint, bins=360,
                       max_range_m=0.6, min_height_m=0.10, max_height_m=0.35,
                       footprint_margin_m=0.05, min_lidar_range_m=0.1,
-                      clear_elevation_deg=(-8.0, 13.0), clear_pad_m=0.05):
+                      clear_elevation_deg=(-8.0, 13.0), clear_pad_m=0.05,
+                      min_points=3):
     """
     Return per-bin ranges (NaN, hit distance, or max_range + clear_pad).
 
@@ -85,10 +93,13 @@ def near_field_ranges(points, lidar_origin, footprint, bins=360,
     hit = ((distance <= max_range_m) & (z >= min_height_m)
            & (z <= max_height_m) & ~self_mask)
     if hit.any():
-        nearest = np.full(bins, np.inf)
-        np.minimum.at(nearest, index[hit], distance[hit])
-        found = np.isfinite(nearest)
-        ranges[found] = nearest[found]
+        hit_index, hit_distance = index[hit], distance[hit]
+        order = np.lexsort((hit_distance, hit_index))
+        hit_index, hit_distance = hit_index[order], hit_distance[order]
+        starts = np.searchsorted(hit_index, np.arange(bins))
+        counts = np.bincount(hit_index, minlength=bins)
+        found = counts >= min_points
+        ranges[found] = hit_distance[starts[found] + min_points - 1]
 
     elevation = np.degrees(np.arctan2(
         offset[:, 2], np.hypot(offset[:, 0], offset[:, 1])))
@@ -174,6 +185,7 @@ def main(args=None):
             self.declare_parameter('min_lidar_range_m', 0.1)
             self.declare_parameter('clear_elevation_min_deg', -8.0)
             self.declare_parameter('clear_elevation_max_deg', 13.0)
+            self.declare_parameter('min_points', 3)
             # A 20 000-point MID-360 frame is about 360 kB; best-effort
             # delivery loses whole frames when a fragment is lost (59 % of the
             # frames arrived in a loopback bag replay, 94 % with reliable).
@@ -196,6 +208,7 @@ def main(args=None):
                 'clear_elevation_deg': (
                     self.get_parameter('clear_elevation_min_deg').value,
                     self.get_parameter('clear_elevation_max_deg').value),
+                'min_points': int(self.get_parameter('min_points').value),
             }
             self._tf_buffer = Buffer()
             self._tf_listener = TransformListener(self._tf_buffer, self)

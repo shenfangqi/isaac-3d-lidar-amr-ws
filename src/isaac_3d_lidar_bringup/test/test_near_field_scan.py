@@ -21,6 +21,11 @@ def _bin_of(x, y):
     return _bin(math.degrees(math.atan2(y, x)))
 
 
+def _surface(x, y, heights=(0.15, 0.20, 0.25, 0.30)):
+    """Return a small vertical patch: several points in one azimuth bin."""
+    return [(x, y, z) for z in heights]
+
+
 def _ranges(points, **overrides):
     return near_field_ranges(np.array(points, dtype=float), LIDAR, FOOTPRINT,
                              bins=BINS, **overrides)
@@ -28,14 +33,25 @@ def _ranges(points, **overrides):
 
 def test_an_obstacle_inside_the_scan_blind_zone_is_a_hit():
     # A bag face 0.30 m ahead, 0.15-0.30 m high.
-    face = [(0.30, y, z) for y in (-0.05, 0.0, 0.05) for z in (0.15, 0.30)]
+    face = [p for y in (-0.05, 0.0, 0.05) for p in _surface(0.30, y)]
     ranges = _ranges(face)
     assert math.isclose(ranges[_bin(0.5)], 0.30, abs_tol=1e-4)
 
 
-def test_the_nearest_return_of_a_bin_wins():
-    ranges = _ranges([(0.45, 0.001, 0.2), (0.25, 0.001, 0.2)])
+def test_the_nearer_of_two_surfaces_in_a_bin_wins():
+    ranges = _ranges(_surface(0.45, 0.001) + _surface(0.25, 0.001))
     assert math.isclose(ranges[_bin(0.2)], 0.25, abs_tol=1e-4)
+
+
+def test_a_sparse_livox_trail_in_front_of_a_surface_is_ignored():
+    # Two trail points closer than the face, as in front of a near box.
+    trail = [(0.22, 0.001, 0.25), (0.31, 0.001, 0.20)]
+    ranges = _ranges(trail + _surface(0.43, 0.001))
+    assert math.isclose(ranges[_bin(0.2)], 0.43, abs_tol=1e-4)
+
+
+def test_fewer_than_min_points_mark_nothing():
+    assert np.isnan(_ranges([(0.3, 0.001, 0.2), (0.3, 0.001, 0.25)])).all()
 
 
 def test_floor_roof_and_out_of_band_returns_are_ignored():
@@ -45,7 +61,7 @@ def test_floor_roof_and_out_of_band_returns_are_ignored():
 
 def test_returns_on_the_robot_itself_are_ignored():
     # Inside the footprint plus the 5 cm margin.
-    ranges = _ranges([(0.19, 0.0, 0.2), (0.0, 0.17, 0.2)])
+    ranges = _ranges(_surface(0.19, 0.0) + _surface(0.0, 0.17))
     assert np.isnan(ranges).all()
 
 
@@ -72,7 +88,7 @@ def test_a_steep_beam_does_not_clear_the_near_field():
 
 def test_a_hit_is_never_replaced_by_free_space():
     far = (2.0, 0.001, LIDAR[2])
-    ranges = _ranges([far, (0.35, 0.001, 0.2)])
+    ranges = _ranges([far] + _surface(0.35, 0.001))
     assert math.isclose(ranges[_bin(0.2)], 0.35, abs_tol=1e-4)
 
 
@@ -116,3 +132,22 @@ def test_an_empty_livox_frame_has_no_points():
     from isaac_3d_lidar_bringup.near_field_scan import livox_custom_xyz
 
     assert livox_custom_xyz(_livox_cdr('livox_frame', []))[3].shape == (0, 3)
+
+
+def test_recorded_box_is_read_at_its_face_not_its_trail():
+    """Robot 2026-10-18: a box face 0.43 m ahead, five MID-360 frames."""
+    from pathlib import Path
+
+    data = np.load(Path(__file__).parent / 'data/mid360_box_0p43m_front.npz')
+    lidar = np.array([0.0166, 0.0, 0.209])
+    front = [_bin(degrees) for degrees in range(-12, 12)]
+    marked = []
+    for key in data.files:
+        points = data[key].astype(float) + lidar
+        ranges = near_field_ranges(points, lidar, FOOTPRINT, bins=BINS)[front]
+        marked += list(ranges[~np.isnan(ranges)])
+    marked = np.array(marked)
+    assert len(marked) >= 0.7 * 5 * len(front)
+    assert abs(np.median(marked) - 0.42) < 0.02
+    assert (marked < 0.39).mean() < 0.10
+    assert marked.min() > 0.30
