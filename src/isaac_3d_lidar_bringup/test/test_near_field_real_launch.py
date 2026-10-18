@@ -13,10 +13,11 @@ def _read(path):
     return path.read_text(encoding='utf-8')
 
 
-def test_near_field_is_opt_in():
+def test_near_field_is_on_by_default_and_can_be_turned_off():
     source = _read(PACKAGE_DIR / 'launch/carbot_navigation_real.launch.py')
-    assert ("'near_field_scan',\n"
-            "            default_value='false',") in source
+    block = source.split("DeclareLaunchArgument(\n            'near_field_scan',", 1)[1]
+    assert "default_value='true'," in block.split('),', 1)[0]
+    assert "choices=['true', 'false']," in block.split('),', 1)[0]
     assert 'OpaqueFunction(function=configure_near_field)' in source
     assert "executable='near_field_scan'" in source
     assert 'condition=IfCondition(near_field),' in source
@@ -71,8 +72,12 @@ def test_robot_scripts_forward_the_near_field_flag():
         PROJECT_DIR / 'scripts/start_real_robot_navigation_rviz.sh')
     assert 'if [[ "${19:-}" == "near-field" ]]; then' in container
     assert 'near_field_launch_argument=" near_field_scan:=true"' in container
+    assert 'near_field_launch_argument=" near_field_scan:=false"' in container
     assert ('${keepoff_launch_argument}${near_field_launch_argument}'
             in container)
-    assert 'near_field=false' in start
-    assert '--near-field)' in start
-    assert 'echo near-field)" >/dev/null' in start
+    assert ('cmd_vel_output:=/cmd_vel_diagnostic${auto_launch_argument}'
+            '${near_field_launch_argument}') in container
+    assert 'near_field=true' in start
+    assert '--no-near-field)' in start
+    assert ('echo near-field || echo no-near-field)" >/dev/null'
+            in start)
