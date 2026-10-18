@@ -112,7 +112,27 @@
 - 近场通道不标离车身 5 cm 以内的点，车尾 5 cm 内新出现的物体看不到；之前标过的格子会一直保留。
 - parity 仿真配置（`build_sim_real_parity_nav2.py`）只对应 `carbot_navigation_real.yaml`，不含启动文件里的默认行为树替换。仿真里要用后退脱困，需要手动启动 `reverse_escape` 并指定这棵树。
 
-## 6. 数据
+## 6. 实车验证（2026-10-18 下午）
+
+用 `scripts/deploy_bringup_to_jetson.sh --apply` 部署分支 `feat/corner-clearance-backup`（`ed3d26c`），`--check` 结果 IN_SYNC。启动 `./start_auto_nav.sh`，近场通道开，到达 READY。
+
+运行时确认：
+- bt_navigator 的 `default_nav_to_pose_bt_xml` 是 `navigate_to_pose_backup_escape_real.xml`。加载这棵树时需要 `reverse_escape` 动作服务，bt_navigator 正常激活；
+- `reverse_escape` 进程在运行；
+- 全局膨胀 0.45，局部 `publish_frequency` 5.0。
+
+| 目标 | 结果 |
+|---|---|
+| (2.64, 5.67) → (4.19, 2.82) | 成功，无"会撞" |
+| (4.12, 2.80) → (3.02, 3.97)，绕沙发西南角（上午在 (3.07, 3.12) 卡住的路线） | **成功**，无"会撞"，无后退 |
+| (2.96, 3.98) → (3.82, 3.14) | 出发点离沙发西面约 11 cm，转向被 RPP 拒绝 → `reverse escape done: backed up 0.102 m` → 重新规划，转向后绕过西南角，行驶 31 s；接近目标时再次后退 0.101 m；最后停在 (3.74, 2.91)，离目标 0.24 m，`Goal failed` |
+
+第三趟的目标离沙发南面实测边缘只有约 7 cm，比车的内切半径 0.133 m 还近，车中心到不了，所以停下并中止是正确的。
+
+- 操作员观察：路线拐弯的弧度比以前大一些（A 的效果）；车贴着沙发时能后退，再转向沿路线继续走（B 的效果）。
+- 实车后退经过速度平滑器和指令链路正常执行，每次实测 0.10 m。
+
+## 7. 数据
 
 `output/corner_sim/`（未提交）：
 - `corner_trial.py`、`run_series.sh`：仿真场景；
