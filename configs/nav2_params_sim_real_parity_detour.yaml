@@ -90,7 +90,7 @@ global_costmap:
       update_frequency: 5.0
       publish_frequency: 2.0
       resolution: 0.05
-      footprint: '[[0.155, 0.133], [0.155, -0.133], [-0.130, -0.133], [-0.130, 0.133]]'
+      footprint: '[]'
       track_unknown_space: true
       plugins: [static_layer, novel_keepoff_layer, obstacle_layer, inflation_layer]
       static_layer:
@@ -112,6 +112,7 @@ global_costmap:
         plugin: nav2_costmap_2d::InflationLayer
         inflation_radius: 0.45
         cost_scaling_factor: 3.0
+      robot_radius: 0.13
       novel_keepoff_layer:
         plugin: nav2_costmap_2d::StaticLayer
         map_topic: /novel_obstacle_keepoff

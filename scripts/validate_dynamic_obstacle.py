@@ -61,12 +61,40 @@ parser.add_argument(
     "cell on free static map cells (evidence that was not cleared)",
 )
 parser.add_argument(
+    "--behavior-tree",
+    default="",
+    help="NavigateToPose behavior_tree for this goal (default: the "
+    "bt_navigator default tree)",
+)
+parser.add_argument(
+    "--route-check",
+    action="store_true",
+    help="issue #123 detour tree (route-ahead check): detour must not back "
+    "away; blocked and narrow must wait stationary instead of aborting, "
+    "and are cancelled after --cancel-after-stop-s",
+)
+parser.add_argument(
+    "--expect-pass",
+    action="store_true",
+    help="--route-check narrow: the gap is wide enough for the keep-off; "
+    "the goal must succeed through it without backing away",
+)
+parser.add_argument(
+    "--cancel-after-stop-s",
+    type=float,
+    default=20.0,
+    help="--route-check blocked/narrow: cancel the goal once every "
+    "velocity command has been zero this long with the obstacle present",
+)
+parser.add_argument(
     "--trace-output",
     help="write plans, obstacle and the odometry trace to this JSON file",
 )
 args, ros_args = parser.parse_known_args()
 if (args.scenario == "narrow") != (args.obstacle_box is not None):
     parser.error("--obstacle-box is required by, and only used by, narrow")
+if args.expect_pass and not (args.route_check and args.scenario == "narrow"):
+    parser.error("--expect-pass is only used by --route-check narrow")
 
 # Carbot measured footprint in base_footprint (x forward, y left).
 FOOTPRINT = ((0.155, 0.133), (0.155, -0.133), (-0.130, -0.133), (-0.130, 0.133))
@@ -221,6 +249,12 @@ class DynamicObstacleValidation(Node):
         self.global_obstacle_cells_at_replan = None
         self.replan_path_clearance = None
         self.minimum_clearance = math.inf
+        self.current_clearance = None
+        self.stop_clearance = None
+        self.reversing = False
+        self.reverse_episodes = 0
+        self.last_motion_at = None
+        self.cancel_requested_at = None
         self.perimeter = footprint_perimeter()
         self.plans = []
         self.odom_trace = []
@@ -357,15 +391,16 @@ class DynamicObstacleValidation(Node):
         )
         cosine = math.cos(yaw)
         sine = math.sin(yaw)
+        clearance = math.inf
         for box in obstacle_boxes(self.obstacle_command):
             for local_x, local_y in self.perimeter:
                 point = (
                     pose.position.x + cosine * local_x - sine * local_y,
                     pose.position.y + sine * local_x + cosine * local_y,
                 )
-                self.minimum_clearance = min(
-                    self.minimum_clearance, distance_to_box(point, box)
-                )
+                clearance = min(clearance, distance_to_box(point, box))
+        self.current_clearance = clearance
+        self.minimum_clearance = min(self.minimum_clearance, clearance)
 
     def odom_callback(self, message):
         self.latest_odom = message
@@ -385,6 +420,13 @@ class DynamicObstacleValidation(Node):
         speed = abs(message.linear.x) + 0.25 * abs(message.angular.z)
         self.cmd_history.append((time.monotonic(), speed))
         self.cmd_history = self.cmd_history[-200:]
+        if speed >= 0.01:
+            self.last_motion_at = time.monotonic()
+        # Count reverse_escape (and any other backward) motions.
+        reversing = message.linear.x < -0.01
+        if reversing and not self.reversing:
+            self.reverse_episodes += 1
+        self.reversing = reversing
 
     def scan_callback(self, message):
         if not self.obstacle_enabled or self.latest_odom is None:
@@ -529,6 +571,7 @@ class DynamicObstacleValidation(Node):
             )
             if duration >= 0.75 and not self.stop_observed:
                 self.stop_observed = True
+                self.stop_clearance = self.current_clearance
                 print(
                     f"[DYNAMIC][STOP] observed after {duration:.2f}s "
                     "below threshold",
@@ -574,7 +617,8 @@ def main():
 
         node.goal_started = True
         send_future = node.action_client.send_goal_async(
-            NavigateToPose.Goal(pose=goal),
+            NavigateToPose.Goal(
+                pose=goal, behavior_tree=args.behavior_tree),
             feedback_callback=node.feedback_callback,
         )
         if not wait_until(node, send_future.done, 10.0):
@@ -607,6 +651,24 @@ def main():
                 and node.obstacle_enabled
             ):
                 node.hide_obstacle()
+            if (
+                args.route_check
+                and args.scenario in ("blocked", "narrow")
+                and not args.expect_pass
+                and node.cancel_requested_at is None
+            ):
+                # Issue #123: the goal waits instead of aborting.  Cancel it
+                # like an operator once the robot has stood still long enough.
+                still_since = max(node.last_motion_at or 0.0,
+                                  node.obstacle_placed_at)
+                if time.monotonic() - still_since >= args.cancel_after_stop_s:
+                    node.cancel_requested_at = time.monotonic()
+                    print(
+                        "[DYNAMIC][CANCEL] stationary for "
+                        f"{args.cancel_after_stop_s:.0f} s, cancelling",
+                        flush=True,
+                    )
+                    goal_handle.cancel_goal_async()
 
         if not result_future.done():
             goal_handle.cancel_goal_async()
@@ -668,6 +730,12 @@ def main():
                 "minimum_footprint_clearance_m": round(
                     node.minimum_clearance, 3
                 ),
+                "stop_footprint_clearance_m": (
+                    None if node.stop_clearance is None
+                    else round(node.stop_clearance, 3)
+                ),
+                "reverse_episodes": node.reverse_episodes,
+                "cancelled_by_validator": node.cancel_requested_at is not None,
             }
         )
         if args.trace_output:
@@ -710,6 +778,22 @@ def main():
                 result.status == GoalStatus.STATUS_SUCCEEDED
                 and node.plan_count == 2
                 and (node.global_obstacle_cells_at_replan or 0) > 0
+                # Issue #123: stopped early, so no reverse escape.
+                and not (args.route_check and node.reverse_episodes)
+            )
+        elif args.route_check and args.expect_pass:
+            passed = (
+                result.status == GoalStatus.STATUS_SUCCEEDED
+                and 1 <= node.plan_count <= 4
+                and not node.reverse_episodes
+            )
+        elif args.route_check and args.scenario in ("blocked", "narrow"):
+            # Issue #123: no abort; the robot waited stationary until the
+            # validator cancelled.  Initial plan plus at most three detours.
+            passed = (
+                result.status == GoalStatus.STATUS_CANCELED
+                and node.cancel_requested_at is not None
+                and 1 <= node.plan_count <= 4
             )
         elif args.scenario == "narrow":
             # Initial plan plus at most the detour tree's three replans.

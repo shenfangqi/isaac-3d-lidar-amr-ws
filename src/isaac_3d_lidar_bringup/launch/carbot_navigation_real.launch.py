@@ -625,8 +625,10 @@ def generate_launch_description():
             choices=['true', 'false'],
             description=(
                 'Issue #1 supervised test: plan bounded detours around the '
-                'keep-off grid (starts the keep-off chain). The controller '
-                'and stop margin are unchanged. Mutually exclusive with '
+                'keep-off grid (starts the keep-off chain). A keep-off on '
+                'the route ahead stops the robot early (issue #123); the goal '
+                'then waits instead of aborting. The controller and stop '
+                'margin are unchanged. Mutually exclusive with '
                 'obstacle_wait_retry and bounded_recovery_enabled.'
             ),
         ),
