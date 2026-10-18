@@ -48,7 +48,10 @@ def test_detour_is_opt_in_exclusive_and_keeps_the_controller():
     assert 'controller_server' not in detour
     assert 'velocity_smoother' not in detour
     assert 'condition=UnlessCondition(obstacle_detour),' in source
-    assert "obstacle_detour, \"' == 'false'\"]))," in source
+    # Both default bt_navigator variants (with and without the reverse
+    # escape) yield to the detour tree.
+    assert "obstacle_detour, \"' == 'false'\"])\n" in source
+    assert source.count('default_tree, " and \'", backup_escape') == 3
     keepoff = yaml.safe_load(_read(
         PACKAGE_DIR / 'config/nav2/carbot_obstacle_detour_real.yaml'))
     layers = keepoff['global_costmap']['global_costmap']['ros__parameters']

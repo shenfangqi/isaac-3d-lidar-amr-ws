@@ -86,10 +86,13 @@ def test_launch_keeps_obstacle_wait_retry_opt_in_and_exclusive():
     setup = (PACKAGE_DIR / 'setup.py').read_text(encoding='utf-8')
 
     assert "'obstacle_wait_retry',\n            default_value='false'," in source
-    # The default bt_navigator yields to every alternative tree.
-    assert ("\"'\", recovery_enabled, \"' == 'false' and '\",\n"
-            "            obstacle_wait_retry, \"' == 'false' and '\",\n"
-            "            obstacle_detour, \"' == 'false'\"") in source
+    # The default bt_navigator (with or without the reverse escape) yields
+    # to every alternative tree.
+    assert ("    default_tree = PythonExpression([\n"
+            "        \"'\", recovery_enabled, \"' == 'false' and '\",\n"
+            "        obstacle_wait_retry, \"' == 'false' and '\",\n"
+            "        obstacle_detour, \"' == 'false'\"])") in source
+    assert source.count('default_tree, " and \'", backup_escape') == 3
     assert "if obstacle_wait_retry.perform(context) != 'true':" in source
     assert "if recovery_enabled.perform(context) == 'true':" in source
     assert 'OpaqueFunction(function=configure_obstacle_wait_retry)' in source

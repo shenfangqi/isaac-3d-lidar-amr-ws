@@ -248,6 +248,29 @@ def test_detour_parity_profile_matches_the_keepoff_overlay():
     assert variant == parity
 
 
+def test_near_field_parity_profile_matches_the_robot_default():
+    builder = load_parity_builder()
+    real = nav_parameters("real")
+    overlay = load_yaml(
+        "src/isaac_3d_lidar_bringup/config/nav2/carbot_near_field_real.yaml"
+    )
+    path = "configs/nav2_params_sim_real_parity_near_field.yaml"
+    stored = (WORKSPACE / path).read_text(encoding="utf-8")
+    assert stored == builder.render(real, near_field_overlay=overlay), (
+        "run python3 scripts/build_sim_real_parity_nav2.py --near-field"
+    )
+
+    # Only the local costmap's /scan_near source separates it.
+    variant = load_yaml(path)
+    parity = load_yaml("configs/nav2_params_sim_real_parity.yaml")
+    layer = variant["local_costmap"]["local_costmap"]["ros__parameters"][
+        "obstacle_layer"]
+    assert layer["observation_sources"] == "scan scan_near"
+    assert layer.pop("scan_near")["topic"] == "/scan_near"
+    layer["observation_sources"] = "scan"
+    assert variant == parity
+
+
 def test_sim_launch_can_select_real_navigation_parity_profile():
     launch_source = (LAUNCH_ROOT / "carbot_sim.launch.py").read_text(
         encoding="utf-8"

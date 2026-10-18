@@ -133,8 +133,9 @@ def test_real_table_approach_has_stable_path_without_motion_recoveries():
     # 0.25 m remains outside the roughly 0.204 m circumscribed footprint while
     # preserving substantially more narrow-space clearance than 0.45 m.
     assert 0.204 < local['inflation_layer']['inflation_radius'] <= 0.25
-    assert global_['inflation_layer']['inflation_radius'] == \
-        local['inflation_layer']['inflation_radius']
+    # The planner keeps routes off corners so RPP has room to turn; its cost
+    # does not close gaps (Smac2D rejects only the inscribed radius).
+    assert global_['inflation_layer']['inflation_radius'] == 0.45
     assert global_['obstacle_layer']['enabled'] is False
     assert local['obstacle_layer'].get('enabled', True) is True
     assert bt['default_nav_to_pose_bt_xml'].endswith(
@@ -166,8 +167,9 @@ def test_real_navigation_launch_is_inactive_and_has_one_final_velocity_path():
 
     assert "default_value='false'" in launch_source
     # Mutually exclusive controller/behavior variants use the same chain:
-    # default, bounded recovery and near-field controllers, two behaviors.
-    assert launch_source.count("('cmd_vel', 'cmd_vel_nav')") == 6
+    # default, bounded recovery and near-field controllers, two behaviors,
+    # and reverse_escape.
+    assert launch_source.count("('cmd_vel', 'cmd_vel_nav')") == 7
     # Only the default behavior_server still yields with UnlessCondition.
     assert launch_source.count('condition=UnlessCondition(recovery_enabled)') == 1
     # The default controller yields to both other controller variants...

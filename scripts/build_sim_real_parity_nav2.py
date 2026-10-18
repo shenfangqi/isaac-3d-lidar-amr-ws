@@ -31,6 +31,12 @@ DETOUR_OVERLAY = (
     ROOT / "src/isaac_3d_lidar_bringup/config/nav2/carbot_obstacle_detour_real.yaml"
 )
 DETOUR_OUTPUT = ROOT / "configs/nav2_params_sim_real_parity_detour.yaml"
+# The robot's default near_field_scan:=true: the local costmap also reads
+# /scan_near (carbot_near_field_real.yaml).
+NEAR_FIELD_OVERLAY = (
+    ROOT / "src/isaac_3d_lidar_bringup/config/nav2/carbot_near_field_real.yaml"
+)
+NEAR_FIELD_OUTPUT = ROOT / "configs/nav2_params_sim_real_parity_near_field.yaml"
 DETOUR_TREE = (
     "/workspace/ros-humble/isaac_3d_lidar_amr_ws/src/isaac_3d_lidar_bringup/"
     "behavior_trees/navigate_to_pose_detour_real.xml"
@@ -94,6 +100,15 @@ DETOUR_HEADER = """\
 """
 
 
+NEAR_FIELD_HEADER = """\
+# Variant: near_field_scan:=true, the robot default. The local_costmap section
+# of src/isaac_3d_lidar_bringup/config/nav2/carbot_near_field_real.yaml is
+# merged. Start near_field_scan separately with input_type:=pointcloud2 and
+# use_sim_time:=true.
+#   python3 scripts/build_sim_real_parity_nav2.py --near-field
+"""
+
+
 def _merge(base, overlay):
     for key, value in overlay.items():
         if isinstance(value, dict) and isinstance(base.get(key), dict):
@@ -102,9 +117,13 @@ def _merge(base, overlay):
             base[key] = copy.deepcopy(value)
 
 
-def build_profile(real, wait_retry=False, detour_overlay=None):
+def build_profile(real, wait_retry=False, detour_overlay=None,
+                  near_field_overlay=None):
     """Return the parity profile for one loaded real Nav2 document."""
     profile = copy.deepcopy(real)
+    if near_field_overlay is not None:
+        _merge(profile,
+               {"local_costmap": near_field_overlay["local_costmap"]})
     if wait_retry:
         profile["bt_navigator"]["ros__parameters"][
             "default_nav_to_pose_bt_xml"] = WAIT_RETRY_TREE
@@ -127,16 +146,20 @@ _Dumper.add_representer(
         "tag:yaml.org,2002:seq", value, flow_style=True))
 
 
-def render(real, wait_retry=False, detour_overlay=None):
+def render(real, wait_retry=False, detour_overlay=None,
+           near_field_overlay=None):
     """Return the parity profile text exactly as it is stored."""
     body = yaml.dump(
-        build_profile(real, wait_retry, detour_overlay), Dumper=_Dumper,
+        build_profile(real, wait_retry, detour_overlay, near_field_overlay),
+        Dumper=_Dumper,
         sort_keys=False, default_flow_style=False, width=120)
     variant = ""
     if wait_retry:
         variant = WAIT_RETRY_HEADER
     elif detour_overlay is not None:
         variant = DETOUR_HEADER
+    elif near_field_overlay is not None:
+        variant = NEAR_FIELD_HEADER
     return HEADER + variant + body
 
 
@@ -150,19 +173,28 @@ def main():
     parser.add_argument(
         "--detour", action="store_true",
         help="build the issue #1 detour development variant")
+    parser.add_argument(
+        "--near-field", action="store_true",
+        help="build the near_field_scan:=true variant (the robot default)")
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    if args.wait_retry and args.detour:
+    if args.wait_retry + args.detour + args.near_field > 1:
         parser.error("choose one variant")
     real = yaml.safe_load(args.real.read_text(encoding="utf-8"))
     detour_overlay = None
     if args.detour:
         detour_overlay = yaml.safe_load(
             DETOUR_OVERLAY.read_text(encoding="utf-8"))
+    near_field_overlay = None
+    if args.near_field:
+        near_field_overlay = yaml.safe_load(
+            NEAR_FIELD_OVERLAY.read_text(encoding="utf-8"))
     if args.output is None:
         args.output = (WAIT_RETRY_OUTPUT if args.wait_retry
-                       else DETOUR_OUTPUT if args.detour else OUTPUT)
-    rendered = render(real, args.wait_retry, detour_overlay)
+                       else DETOUR_OUTPUT if args.detour
+                       else NEAR_FIELD_OUTPUT if args.near_field else OUTPUT)
+    rendered = render(real, args.wait_retry, detour_overlay,
+                      near_field_overlay)
     if args.check:
         if not args.output.is_file() or args.output.read_text(
                 encoding="utf-8") != rendered:
