@@ -29,6 +29,14 @@ check instead (``forward_fallback``): on
 turn nor back up, and the space ahead was free.  RPP's refusal was about
 the turn, so a short straight move ahead is checked like any other.
 
+Each move starts with ``settle_s`` of zero commands.  The ESP32 wheel PID
+(2wheel-carbot-esp32 motor_pid_controller.c) clears its integral only when
+the target is exactly zero; the velocity smoother ramps from forward to
+reverse without an exact zero, so the forward integral held the motors off
+and the robot backed up 0.03-0.05 m in 6 s (robot, 2026-10-18).  Holding
+zero lets the smoother output an exact zero first (0.5 s from 0.10 m/s at
+0.20 m/s^2).
+
 The result is SUCCEEDED when the robot moved at least ``min_progress_m``
 (the requested distance, or less when a cell stopped it) and FAILED
 otherwise.
@@ -141,6 +149,7 @@ def main(args=None):
             self.declare_parameter('lookahead_m', 0.03)
             self.declare_parameter('min_progress_m', 0.05)
             self.declare_parameter('forward_fallback', True)
+            self.declare_parameter('settle_s', 0.7)
             self.declare_parameter('rate_hz', 20.0)
             # The local costmap publishes costmap_raw at 5 Hz.
             self.declare_parameter('max_costmap_age_s', 1.5)
@@ -276,11 +285,18 @@ def main(args=None):
         def _drive_loop(self, handle, direction, target, speed, allowance):
             stats = {'cycles': 0, 'period_sum': 0.0, 'period_max': 0.0,
                      'tf_age_max': 0.0, 'costmap_age_max': 0.0}
-            deadline = time.monotonic() + allowance
             lookahead = self.get_parameter('lookahead_m').value
             max_age = self.get_parameter('max_costmap_age_s').value
             period = 1.0 / self.get_parameter('rate_hz').value
             side = 'behind' if direction < 0 else 'ahead'
+            settle_until = time.monotonic() + self.get_parameter(
+                'settle_s').value
+            while rclpy.ok() and time.monotonic() < settle_until:
+                if handle.is_cancel_requested:
+                    return 'canceled', 0.0, 'canceled', stats
+                self._stop()
+                time.sleep(period)
+            deadline = time.monotonic() + allowance
             try:
                 start = self._pose()
             except TransformException as error:
