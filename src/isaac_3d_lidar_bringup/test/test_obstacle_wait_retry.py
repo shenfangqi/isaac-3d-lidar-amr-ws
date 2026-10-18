@@ -23,8 +23,9 @@ def _main_tree(path=TREE):
 class _Run:
     """Tick the tree once to completion against scripted action results."""
 
-    def __init__(self, follow_results):
+    def __init__(self, follow_results, escape_succeeds=True):
         self.follow_results = list(follow_results)
+        self.escape_succeeds = escape_succeeds
         self.calls = []
 
     def tick(self, node):
@@ -40,9 +41,14 @@ class _Run:
                 if attempt == retries or not self.tick(recovery):
                     return False
             return False
+        if tag == 'ForceSuccess':
+            self.tick(node[0])
+            return True
         self.calls.append(tag)
         if tag == 'FollowPath':
             return self.follow_results.pop(0)
+        if tag == 'BackUp':
+            return self.escape_succeeds
         if tag in ('ComputePathToPose', 'Wait'):
             return True
         raise AssertionError(f'unexpected node {tag}')
@@ -117,20 +123,32 @@ def test_launch_keeps_obstacle_wait_retry_opt_in_and_exclusive():
     # Detours are bounded: three, each with one transient-pause retry.
     ([False] * 8, 4, 8, False),
 ])
-def test_detour_tree_bounds_its_replans(follow_results, plans, follows, success):
-    run = _Run(follow_results)
+@pytest.mark.parametrize('escape_succeeds', [True, False])
+def test_detour_tree_bounds_its_replans(follow_results, plans, follows, success,
+                                        escape_succeeds):
+    run = _Run(follow_results, escape_succeeds)
 
     assert run.tick(_main_tree(DETOUR_TREE)) is success
     assert run.calls.count('ComputePathToPose') == plans
     assert run.calls.count('FollowPath') == follows
+    # Every detour backs away first; a failed escape still plans the detour.
+    assert run.calls.count('BackUp') == plans - 1
     assert run.follow_results == []
 
 
-def test_detour_tree_never_clears_costmaps_or_moves_on_its_own():
+def test_detour_tree_never_clears_costmaps_and_only_escapes_before_a_detour():
     names = {element.tag for element in _main_tree(DETOUR_TREE).iter()}
 
     assert names == {'Sequence', 'ComputePathToPose', 'RecoveryNode',
-                     'FollowPath', 'Wait'}
+                     'FollowPath', 'Wait', 'ForceSuccess', 'BackUp'}
+    detour = _main_tree(DETOUR_TREE).find(".//Sequence[@name='Detour']")
+    escape = detour[0]
+    assert escape.tag == 'ForceSuccess'
+    backup = escape.find('BackUp')
+    assert backup.get('server_name') == 'reverse_escape'
+    assert float(backup.get('backup_dist')) == 0.10
+    assert [child.tag for child in detour] == [
+        'ForceSuccess', 'Wait', 'ComputePathToPose']
     budget = _main_tree(DETOUR_TREE).find('RecoveryNode')
     assert budget.get('name') == 'DetourBudget'
     assert budget.get('number_of_retries') == '3'

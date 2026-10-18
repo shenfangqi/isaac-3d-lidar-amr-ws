@@ -3,17 +3,23 @@
   novel_obstacle_detour:=true enables it for operator-supervised tests.
   Compute one global path and keep it while the controller makes progress.
   On a FollowPath failure, wait 2 s and retry the unchanged path once (a
-  transient obstacle).  If it fails again, wait 2 s and compute a new path;
-  up to three such detours are allowed, each triggered only by a controller
-  failure, so normal driving still uses a single path.
+  transient obstacle).  If it fails again, back away with reverse_escape
+  (0.10 m back, or ahead when a wall is behind; reverse_escape.py), wait
+  2 s and compute a new path; up to three such detours are allowed, each
+  triggered only by a controller failure, so normal driving still uses a
+  single path.  RPP stops a few centimetres from the obstacle and refuses
+  the turn a detour starts with; backing away gives it room (Isaac, 1.0 m
+  gap: the robot stopped 5 cm short and every detour aborted).  An escape
+  that cannot move does not end the goal: the detour is planned anyway.
 
   Detours are planned against the global costmap's novel-obstacle keep-off
   layer (novel_obstacle_keepoff): an obstacle absent from the saved map is
-  given an assumed depth and a 0.5 m keep-off, so a detour keeps it outside
-  the MID-360 blind zone or no detour is found and the goal aborts.
+  given an assumed depth and a keep-off (carbot_obstacle_detour_real.yaml),
+  so a detour keeps clear of it or no detour is found and the goal aborts.
 
   No costmap is cleared, and IsPathValid, PipelineSequence/RateController and
-  Spin/BackUp are intentionally absent.
+  Spin are intentionally absent; the only motion besides FollowPath is the
+  bounded reverse_escape.
 -->
 <root main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
@@ -28,6 +34,10 @@
           <Wait wait_duration="2"/>
         </RecoveryNode>
         <Sequence name="Detour">
+          <ForceSuccess>
+            <BackUp backup_dist="0.10" backup_speed="0.05" time_allowance="6.0"
+                    server_name="reverse_escape"/>
+          </ForceSuccess>
           <!-- Let the keep-off evidence settle while stationary. -->
           <Wait wait_duration="2"/>
           <ComputePathToPose

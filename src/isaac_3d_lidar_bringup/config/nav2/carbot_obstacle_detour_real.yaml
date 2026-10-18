@@ -6,13 +6,19 @@
 #
 # The native global obstacle layer stays disabled.  Novel obstacles reach the
 # planner only through the keep-off grid: the saved map republished with
-# confirmed novel returns, an assumed depth behind them and a 0.5 m lethal
-# keep-off.  The second StaticLayer overwrites the master grid with it (the
-# default).  Humble's use_maximum is costmap-wide: enabling it stops the first
-# StaticLayer from writing the map's unknown cells, which then read as free.
-# Until the node publishes, the second layer has no map, the global costmap is
-# not current and the planner waits indefinitely: start the node with Nav2.
-# The local costmap is unchanged.
+# confirmed novel returns, an assumed depth behind them and a lethal
+# keep-off around them.  The second StaticLayer overwrites the master grid
+# with it (the default).  Humble's use_maximum is costmap-wide: enabling it
+# stops the first StaticLayer from writing the map's unknown cells, which then
+# read as free.  Until the node publishes, the second layer has no map, the
+# global costmap is not current and the planner waits indefinitely: start the
+# node with Nav2.  The local costmap is unchanged.
+#
+# Depth and keep-off were 0.4 m and 0.5 m while nothing saw inside 0.5 m.
+# With /scan_near (0.1-0.6 m) in the local costmap and reverse_escape
+# backing the robot off before a detour, they are 0.2 m and 0.3 m: on
+# 2026-10-18 a box with 0.8 m to the wall was planned around as a closed
+# corridor, because 0.4 m depth plus 0.5 m keep-off reached the wall.
 global_costmap:
   global_costmap:
     ros__parameters:
@@ -29,8 +35,8 @@ novel_obstacle_keepoff:
     clearing_scan_topic: /scan
     map_topic: /map
     output_topic: /novel_obstacle_keepoff
-    assumed_depth_m: 0.4
-    keepoff_radius_m: 0.5
+    assumed_depth_m: 0.2
+    keepoff_radius_m: 0.3
     robot_clear_radius_m: 0.3
     confirm_hits: 3
     mark_max_range_m: 4.0

@@ -259,7 +259,8 @@ def generate_launch_description():
     )
     # Default tree plus a reverse escape on controller failure
     # (navigate_to_pose_backup_escape_real.xml).  Its BackUp node calls
-    # reverse_escape, which must be up before bt_navigator loads the tree.
+    # reverse_escape, which must be up before bt_navigator loads the tree;
+    # the detour tree calls it too.
     bt_navigator_escape = Node(
         package='nav2_bt_navigator',
         executable='bt_navigator',
@@ -277,7 +278,8 @@ def generate_launch_description():
         parameters=[{'use_sim_time': False}],
         remappings=[('cmd_vel', 'cmd_vel_nav')],
         condition=IfCondition(PythonExpression([
-            default_tree, " and '", backup_escape, "' == 'true'"])),
+            "(", default_tree, " and '", backup_escape, "' == 'true') or '",
+            obstacle_detour, "' == 'true'"])),
         output='screen',
     )
     waypoint_follower = Node(
