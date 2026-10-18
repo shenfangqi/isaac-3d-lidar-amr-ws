@@ -22,8 +22,9 @@ It backs straight up and judges collision by cell centres:
   ``lookahead_m`` plus the distance the robot can cover while the costmap
   ages stops the robot.
 
-If a cell behind stops it before ``min_progress_m``, it drives forward the
-requested distance under the same check instead (``forward_fallback``): on
+If a cell behind stops it, or ``time_allowance`` runs out, before
+``min_progress_m``, it drives forward the requested distance under the same
+check instead (``forward_fallback``): on
 2026-10-18 the robot stood with its rear 2-4 cm from a wall, could neither
 turn nor back up, and the space ahead was free.  RPP's refusal was about
 the turn, so a short straight move ahead is checked like any other.
@@ -185,10 +186,16 @@ def main(args=None):
         def _on_goal(self, _request):
             return GoalResponse.REJECT if self._active else GoalResponse.ACCEPT
 
-        def _pose(self):
-            transform = self._tf_buffer.lookup_transform(
+        def _pose(self, stats=None):
+            stamped = self._tf_buffer.lookup_transform(
                 self._frame, self._base, Time(),
-                timeout=Duration(seconds=0.2)).transform
+                timeout=Duration(seconds=0.2))
+            # A static transform carries a zero stamp: no age to report.
+            if stats is not None and stamped.header.stamp.sec > 0:
+                age = (self.get_clock().now() - Time.from_msg(
+                    stamped.header.stamp)).nanoseconds * 1e-9
+                stats['tf_age_max'] = max(stats['tf_age_max'], age)
+            transform = stamped.transform
             q = transform.rotation
             yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y),
                              1.0 - 2.0 * (q.y * q.y + q.z * q.z))
@@ -215,7 +222,6 @@ def main(args=None):
             allowance = (goal.time_allowance.sec
                          + goal.time_allowance.nanosec * 1e-9) or 10.0
             min_progress = self.get_parameter('min_progress_m').value
-            deadline = time.monotonic() + allowance
 
             def finish(succeeded, summary):
                 elapsed = self.get_clock().now() - started
@@ -232,7 +238,7 @@ def main(args=None):
             if speed <= 0.0 or target <= 0.0:
                 return finish(False, 'rejected an empty request')
             outcome, back, reason = self._drive(
-                handle, -1.0, target, speed, deadline)
+                handle, -1.0, target, speed, allowance)
             summary = f'{reason}: backed up {back:.3f} m'
             if outcome == 'canceled':
                 handle.canceled()
@@ -240,11 +246,13 @@ def main(args=None):
                 return result
             if back >= min_progress:
                 return finish(True, summary)
-            if (outcome != 'blocked'
+            # A backward move that stalled (2026-10-18: 0.032 m in 6 s on the
+            # robot, cause unknown) is treated like one a cell blocked.
+            if (outcome not in ('blocked', 'timeout')
                     or not self.get_parameter('forward_fallback').value):
                 return finish(False, summary)
             outcome, ahead, reason = self._drive(
-                handle, 1.0, target, speed, deadline)
+                handle, 1.0, target, speed, allowance)
             summary += f'; {reason}: forward {ahead:.3f} m'
             if outcome == 'canceled':
                 handle.canceled()
@@ -252,8 +260,23 @@ def main(args=None):
                 return result
             return finish(ahead >= min_progress, summary)
 
-        def _drive(self, handle, direction, target, speed, deadline):
+        def _drive(self, handle, direction, target, speed, allowance):
             """Drive straight (direction -1 back, +1 ahead); return (outcome, distance, reason)."""
+            outcome, traveled, reason, stats = self._drive_loop(
+                handle, direction, target, speed, allowance)
+            # Loop timing and data ages, to explain a stalled move.
+            if stats['cycles']:
+                reason += (f' [{stats["cycles"]} cycles, period mean '
+                           f'{stats["period_sum"] / stats["cycles"]:.3f} max '
+                           f'{stats["period_max"]:.3f} s, tf age max '
+                           f'{stats["tf_age_max"]:.2f} s, costmap age max '
+                           f'{stats["costmap_age_max"]:.2f} s]')
+            return outcome, traveled, reason
+
+        def _drive_loop(self, handle, direction, target, speed, allowance):
+            stats = {'cycles': 0, 'period_sum': 0.0, 'period_max': 0.0,
+                     'tf_age_max': 0.0, 'costmap_age_max': 0.0}
+            deadline = time.monotonic() + allowance
             lookahead = self.get_parameter('lookahead_m').value
             max_age = self.get_parameter('max_costmap_age_s').value
             period = 1.0 / self.get_parameter('rate_hz').value
@@ -261,32 +284,43 @@ def main(args=None):
             try:
                 start = self._pose()
             except TransformException as error:
-                return 'error', 0.0, f'no pose ({error})'
+                return 'error', 0.0, f'no pose ({error})', stats
             traveled = 0.0
             feedback = BackUp.Feedback()
+            last = None
             try:
                 while rclpy.ok():
+                    now = time.monotonic()
+                    if last is not None:
+                        stats['period_sum'] += now - last
+                        stats['period_max'] = max(stats['period_max'],
+                                                  now - last)
+                        stats['cycles'] += 1
+                    last = now
                     if handle.is_cancel_requested:
-                        return 'canceled', traveled, 'canceled'
+                        return 'canceled', traveled, 'canceled', stats
                     try:
-                        pose = self._pose()
+                        pose = self._pose(stats)
                     except TransformException as error:
-                        return 'error', traveled, f'lost its pose ({error})'
+                        return 'error', traveled, f'lost its pose ({error})', stats
                     traveled = math.hypot(pose[0] - start[0],
                                           pose[1] - start[1])
                     feedback.distance_traveled = float(traveled)
                     handle.publish_feedback(feedback)
                     if traveled >= target:
-                        return 'done', traveled, 'done'
+                        return 'done', traveled, 'done', stats
                     if time.monotonic() > deadline:
-                        return 'timeout', traveled, 'timed out'
+                        return 'timeout', traveled, 'timed out', stats
                     with self._lock:
                         costmap, stamp = self._costmap, self._costmap_time
                     age = (None if stamp is None else
                            (self.get_clock().now() - stamp).nanoseconds * 1e-9)
+                    if age is not None:
+                        stats['costmap_age_max'] = max(
+                            stats['costmap_age_max'], age)
                     if (costmap is None or costmap[0]['frame'] != self._frame
                             or age > max_age):
-                        return 'error', traveled, 'no fresh local costmap'
+                        return 'error', traveled, 'no fresh local costmap', stats
                     # Cells may have appeared since the costmap was taken.
                     margin = lookahead + speed * max(age, 0.0)
                     blocked = first_blocked_distance(
@@ -294,12 +328,12 @@ def main(args=None):
                         target - traveled + margin, direction=direction)
                     if blocked is not None and blocked <= margin:
                         return 'blocked', traveled, \
-                            f'blocked {blocked:.2f} m {side}'
+                            f'blocked {blocked:.2f} m {side}', stats
                     command = Twist()
                     command.linear.x = direction * speed
                     self._cmd.publish(command)
                     time.sleep(period)
-                return 'error', traveled, 'interrupted'
+                return 'error', traveled, 'interrupted', stats
             finally:
                 self._stop()
 
