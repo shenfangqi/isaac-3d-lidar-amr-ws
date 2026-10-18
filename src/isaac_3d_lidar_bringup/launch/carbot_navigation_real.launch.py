@@ -578,7 +578,9 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'near_field_scan',
-            default_value='false',
+            # On since the 2026-10-18 robot coverage check
+            # (docs/evidence/near_field_coverage_robot_2026-10-18.md).
+            default_value='true',
             choices=['true', 'false'],
             description=(
                 'Add /scan_near (raw MID-360 returns 0.1-0.6 m around the '

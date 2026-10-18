@@ -28,7 +28,7 @@ automatic_activation=true
 stationary_validation=false
 complex_route_validation=false
 keepoff_mode=none
-near_field=false
+near_field=true
 localization_strategy=legacy_full_rotation
 localization_motion=forbid
 motion_profile=""
@@ -44,7 +44,7 @@ map_argument_seen=false
 
 usage() {
   cat <<EOF
-Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [--complex-route-validation] [--keepoff-preview|--keepoff-detour] [--near-field] [--localization-strategy STRATEGY] [--localization-motion forbid|guarded --motion-profile JSON [--operator-rotation-clear] --operator-present] [--robot-not-moved] [--surface-recheck off|record|decide] [--localization-translation forbid|guarded --linear-profile JSON [--force-translation-once]] [MAP_YAML]
+Usage: $0 [--health-check] [--automatic|--automatic-activate|--manual] [--complex-route-validation] [--keepoff-preview|--keepoff-detour] [--no-near-field] [--localization-strategy STRATEGY] [--localization-motion forbid|guarded --motion-profile JSON [--operator-rotation-clear] --operator-present] [--robot-not-moved] [--surface-recheck off|record|decide] [--localization-translation forbid|guarded --linear-profile JSON [--force-translation-once]] [MAP_YAML]
 
 Start saved-map navigation for the physical Carbot and open RViz.
 
@@ -60,8 +60,10 @@ Options:
                   observation. Nav2 does not read it.
   --keepoff-detour  Issue #1 supervised test: Nav2 plans bounded detours
                   around the keep-off grid. The stop margin is unchanged.
-  --near-field    Add raw MID-360 returns inside the 0.5 m /scan blind zone
-                  to the local costmap (/scan_near). /scan is unchanged.
+  --no-near-field  Leave out the near-field channel. By default raw MID-360
+                  returns inside the 0.5 m /scan blind zone are added to the
+                  local costmap (/scan_near); /scan is unchanged either way.
+                  --near-field is accepted and changes nothing.
   --localization-strategy STRATEGY
                   legacy_full_rotation (default), stationary_only or
                   segmented_rotation; use it with --automatic or --automatic-activate.
@@ -146,6 +148,9 @@ while (( $# > 0 )); do
       ;;
     --near-field)
       near_field=true
+      ;;
+    --no-near-field)
+      near_field=false
       ;;
     --localization-strategy)
       if (( $# < 2 )); then
@@ -1003,7 +1008,7 @@ remote "${jetson_workspace}/scripts/jetson_nvblox_container.sh" \
   "${localization_translation}" "${remote_linear_profile}" \
   "$([[ "${force_translation_once}" == "true" ]] && echo force-translation-once)" \
   "$([[ "${keepoff_mode}" != "none" ]] && echo "${keepoff_mode}")" \
-  "$([[ "${near_field}" == "true" ]] && echo near-field)" >/dev/null
+  "$([[ "${near_field}" == "true" ]] && echo near-field || echo no-near-field)" >/dev/null
 
 echo "[4/8] Running the non-motion hardware preflight..."
 run_preflight_with_readiness_retry
