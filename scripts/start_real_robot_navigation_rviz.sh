@@ -59,7 +59,10 @@ Options:
   --keepoff-preview  Publish the Issue #1 novel-obstacle keep-off grid for
                   observation. Nav2 does not read it.
   --keepoff-detour  Issue #1 supervised test: Nav2 plans bounded detours
-                  around the keep-off grid. The stop margin is unchanged.
+                  around the keep-off grid. A keep-off on the next 4 m of
+                  the route stops the robot early; after 3 s it continues
+                  or detours. The goal does not abort by itself: cancel it
+                  if the robot keeps waiting. The stop margin is unchanged.
   --no-near-field  Leave out the near-field channel. By default raw MID-360
                   returns inside the 0.5 m /scan blind zone are added to the
                   local costmap (/scan_near); /scan is unchanged either way.

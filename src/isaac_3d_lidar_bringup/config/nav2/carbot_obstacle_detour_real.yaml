@@ -19,9 +19,21 @@
 # backing the robot off before a detour, they are 0.2 m and 0.3 m: on
 # 2026-10-18 a box with 0.8 m to the wall was planned around as a closed
 # corridor, because 0.4 m depth plus 0.5 m keep-off reached the wall.
+#
+# Issue #123: the detour tree checks the route ahead with IsPathValid, which
+# the planner answers against this costmap.  With a footprint it tests the
+# polygon at each pose's yaw, and Smac2D leaves every yaw at 0, so a route
+# Smac2D placed beside a wall could fail on the wall.  With a radius it
+# fails only where the path centre is lethal or inscribed, cells Smac2D
+# never plans through.  The radius is the polygon's inscribed radius (rear
+# edge 0.130 m), so the inflation costs are unchanged, and Smac2D checks
+# only the centre cost either way: planning is unchanged.  The controller's
+# local costmap keeps the polygon.
 global_costmap:
   global_costmap:
     ros__parameters:
+      footprint: "[]"
+      robot_radius: 0.130
       plugins: [static_layer, novel_keepoff_layer, obstacle_layer, inflation_layer]
       novel_keepoff_layer:
         plugin: nav2_costmap_2d::StaticLayer
