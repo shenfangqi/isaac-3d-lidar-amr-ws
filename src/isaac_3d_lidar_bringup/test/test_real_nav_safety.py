@@ -168,8 +168,13 @@ def test_real_navigation_launch_is_inactive_and_has_one_final_velocity_path():
     assert "default_value='false'" in launch_source
     # Mutually exclusive controller/behavior variants use the same chain:
     # default, bounded recovery and near-field controllers, two behaviors,
-    # and reverse_escape.
-    assert launch_source.count("('cmd_vel', 'cmd_vel_nav')") == 7
+    # and reverse_escape, plus the composed controller, behavior server and
+    # velocity smoother (nav2_composition).
+    assert launch_source.count("('cmd_vel', 'cmd_vel_nav')") == 10
+    composed = launch_source.split('def configure_composed_nav2', 1)[1]
+    composed = composed.split('return LaunchDescription', 1)[0]
+    assert "('cmd_vel_smoothed', cmd_vel_output.perform(context))" in composed
+    assert "'autostart': (autostart.perform(context) == 'true'" in composed
     # Only the default behavior_server still yields with UnlessCondition.
     assert launch_source.count('condition=UnlessCondition(recovery_enabled)') == 1
     # The default controller yields to both other controller variants...

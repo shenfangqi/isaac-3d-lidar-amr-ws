@@ -214,7 +214,8 @@ def test_densified_beams_use_the_nearer_neighbour_range():
     assert (extra > 0.0).all() and (extra < np.radians(1.0)).all()
     assert (new_ranges[3:] == 2.0).all()
     spacing = np.diff(np.sort(np.append(extra, angles[:2])))
-    assert spacing.max() * 10.0 <= 0.025 + 1e-9
+    # The spacing is kept at the 2.0 m the extra beams reach.
+    assert spacing.max() * 2.0 <= 0.025 + 1e-9
 
 
 def test_full_circle_scans_are_filled_across_the_seam():
