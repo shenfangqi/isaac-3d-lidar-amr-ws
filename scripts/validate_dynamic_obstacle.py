@@ -784,16 +784,18 @@ def main():
         elif args.route_check and args.expect_pass:
             passed = (
                 result.status == GoalStatus.STATUS_SUCCEEDED
-                and 1 <= node.plan_count <= 4
+                and node.plan_count >= 1
                 and not node.reverse_episodes
             )
         elif args.route_check and args.scenario in ("blocked", "narrow"):
             # Issue #123: no abort; the robot waited stationary until the
-            # validator cancelled.  Initial plan plus at most three detours.
+            # validator cancelled.  Route-block detours are not counted;
+            # reverse_escape runs at most three times.
             passed = (
                 result.status == GoalStatus.STATUS_CANCELED
                 and node.cancel_requested_at is not None
-                and 1 <= node.plan_count <= 4
+                and node.plan_count >= 1
+                and node.reverse_episodes <= 3
             )
         elif args.scenario == "narrow":
             # Initial plan plus at most the detour tree's three replans.
