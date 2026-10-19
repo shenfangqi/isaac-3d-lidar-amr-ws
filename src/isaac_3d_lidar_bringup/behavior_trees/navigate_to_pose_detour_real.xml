@@ -9,116 +9,111 @@
   crosses it, FollowPath is halted at once, however far away the obstacle
   is, and the robot waits 3 s.  If the route ahead is clear again (a person
   walked past) the robot continues on the unchanged path; otherwise a detour
-  is planned without backing away first.  The global costmap uses a robot
+  is planned without backing away.  When no detour can be planned, the
+  robot stays stopped and every 3 s continues on the current path if its
+  route ahead is clear, or adopts a path that can now be planned.  These
+  stops and detours are not counted.  The global costmap uses a robot
   radius (carbot_obstacle_detour_real.yaml), so IsPathValid fails only on
   lethal or inscribed cells at the path centre: the saved map's walls never
   stop a path Smac2D planned around them.
 
   On a FollowPath failure with the route ahead clear (RPP refused to drive
-  into an obstacle the keep-off has not marked), wait 2 s and retry the
-  unchanged path once.  If it fails again, back away with reverse_escape
-  (0.10 m back, or ahead when a wall is behind; reverse_escape.py), wait
-  2 s and compute a new path.  An escape that cannot move does not end the
-  goal: the detour is planned anyway.
+  into an obstacle the keep-off has not marked, e.g. a corner), wait 2 s
+  and retry the unchanged path once.  If it fails again, back away with
+  reverse_escape (0.10 m back, or ahead when a wall is behind;
+  reverse_escape.py), wait 2 s and compute a new path.  An escape that
+  cannot move does not end the goal.  At most three escapes per goal: in a
+  gap the planner accepts and RPP refuses, unbounded escapes rocked the
+  robot 0.10 m back and forth (Isaac, 0.6 m gap).  After the third, a
+  refusal only waits: every 3 s the current path is driven again, still
+  stopping and detouring for route blocks as above.
 
-  Both kinds of detour share a budget of three.  When a detour cannot be
-  planned, the robot stays stopped and every 3 s continues on the current
-  path if its route ahead is clear, or adopts a path that can now be
-  planned.  When the budget is used up, the robot stays stopped and every
-  3 s drives the current path again if its route ahead is clear.  The
-  first time FollowPath then fails with the route clear, it backs away once
-  with reverse_escape (2026-10-18 robot: without it the robot stayed against
-  the sofa corner, RPP refusing every retry); later refusals only wait.  The goal
-  therefore never aborts by itself after the first path: it ends when the
-  goal is reached or the operator cancels it (the halt cancels the running
-  Wait and FollowPath).  Every Wait increments the navigation feedback's
-  number_of_recoveries and the behavior server logs "Running wait".
+  The goal therefore never aborts by itself after the first path: it ends
+  when the goal is reached or the operator cancels it (the halt cancels the
+  running Wait and FollowPath).  Every Wait increments the navigation
+  feedback's number_of_recoveries and the behavior server logs
+  "Running wait".  (2026-10-19: a shared budget of three for both kinds was
+  used up by a box's growing keep-off, leaving no escape for a corner.)
 
   Detours are planned against the global costmap's novel-obstacle keep-off
   layer (novel_obstacle_keepoff): an obstacle absent from the saved map is
   given an assumed depth and a keep-off (carbot_obstacle_detour_real.yaml).
 
   No costmap is cleared, PipelineSequence/RateController and Spin are
-  intentionally absent, and the only motion besides FollowPath is the
-  bounded reverse_escape: at most once per detour and once after the
-  budget.  The large PauseWhileBlocked count only stands for
-  "unbounded": each pause lasts at least 3 s.
+  intentionally absent, and the only motion besides FollowPath is
+  reverse_escape, at most three times.  The large retry counts only stand
+  for "unbounded": each pass waits at least 2 s.
 -->
 <root main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
-    <Sequence name="NavigateWithBoundedDetours">
+    <Sequence name="NavigateWithBoundedEscapes">
       <ComputePathToPose
         goal="{goal}"
         path="{path}"
         planner_id="GridBased"/>
-      <Fallback name="DetourOrWait">
-        <RecoveryNode number_of_retries="3" name="DetourBudget">
-          <SubTree ID="FollowRoute" __shared_blackboard="true"/>
-          <Sequence name="Detour">
-            <Fallback name="EscapeAfterControllerFailure">
-              <!-- Stopped early by the route check: no need to back away. -->
-              <Inverter>
-                <SubTree ID="RouteAheadClear" __shared_blackboard="true"/>
-              </Inverter>
-              <Sequence>
-                <ForceSuccess>
-                  <BackUp backup_dist="0.10" backup_speed="0.05" time_allowance="6.0"
-                          server_name="reverse_escape"/>
-                </ForceSuccess>
-                <!-- Let the keep-off evidence settle while stationary. -->
-                <Wait wait_duration="2"/>
-              </Sequence>
-            </Fallback>
-            <Fallback name="PlanOrWait">
-              <ComputePathToPose
-                goal="{goal}"
-                path="{path}"
-                planner_id="GridBased"/>
-              <RetryUntilSuccessful num_attempts="-1" name="WaitForRoute">
-                <Sequence>
-                  <Wait wait_duration="3"/>
-                  <Fallback>
-                    <SubTree ID="RouteAheadClear" __shared_blackboard="true"/>
-                    <ComputePathToPose
-                      goal="{goal}"
-                      path="{path}"
-                      planner_id="GridBased"/>
-                  </Fallback>
-                </Sequence>
-              </RetryUntilSuccessful>
-            </Fallback>
-          </Sequence>
-        </RecoveryNode>
-        <Fallback name="AfterDetourBudget">
-          <!-- Wait while the route ahead is blocked; leave on the first
-               failure with the route clear (RPP refused, e.g. a corner). -->
-          <RecoveryNode number_of_retries="1000000" name="WaitUntilRefused">
-            <Sequence>
-              <Wait wait_duration="3"/>
-              <SubTree ID="FollowRoute" __shared_blackboard="true"/>
-            </Sequence>
-            <Inverter>
-              <SubTree ID="RouteAheadClear" __shared_blackboard="true"/>
-            </Inverter>
-          </RecoveryNode>
-          <!-- Back away once, then only wait: in a gap the robot cannot
-               use, an escape before every retry rocked it 0.10 m back and
-               forth every 11 s (Isaac, 0.6 m gap). -->
-          <Sequence name="EscapeOnceThenWait">
+      <Fallback name="EscapeOrWait">
+        <RecoveryNode number_of_retries="3" name="EscapeBudget">
+          <SubTree ID="DetourAroundBlocks" __shared_blackboard="true"/>
+          <Sequence name="Escape">
             <ForceSuccess>
               <BackUp backup_dist="0.10" backup_speed="0.05" time_allowance="6.0"
                       server_name="reverse_escape"/>
             </ForceSuccess>
-            <RetryUntilSuccessful num_attempts="-1" name="WaitAfterDetourBudget">
-              <Sequence>
-                <Wait wait_duration="3"/>
-                <SubTree ID="FollowRoute" __shared_blackboard="true"/>
-              </Sequence>
-            </RetryUntilSuccessful>
+            <!-- Let the keep-off evidence settle while stationary. -->
+            <Wait wait_duration="2"/>
+            <SubTree ID="PlanOrWait" __shared_blackboard="true"/>
           </Sequence>
-        </Fallback>
+        </RecoveryNode>
+        <RetryUntilSuccessful num_attempts="-1" name="WaitAfterEscapeBudget">
+          <Sequence>
+            <Wait wait_duration="3"/>
+            <SubTree ID="DetourAroundBlocks" __shared_blackboard="true"/>
+          </Sequence>
+        </RetryUntilSuccessful>
       </Fallback>
     </Sequence>
+  </BehaviorTree>
+
+  <!--
+    Drive {path}; when its route ahead stays blocked, plan a detour (no
+    escape, not counted).  Fails only when FollowPath fails twice with the
+    route ahead clear.
+  -->
+  <BehaviorTree ID="DetourAroundBlocks">
+    <RecoveryNode number_of_retries="1000000" name="DetourWhileBlocked">
+      <SubTree ID="FollowRoute" __shared_blackboard="true"/>
+      <Sequence name="BlockedDetour">
+        <Inverter>
+          <SubTree ID="RouteAheadClear" __shared_blackboard="true"/>
+        </Inverter>
+        <SubTree ID="PlanOrWait" __shared_blackboard="true"/>
+      </Sequence>
+    </RecoveryNode>
+  </BehaviorTree>
+
+  <!--
+    Plan a new {path}; while that fails, stay stopped and every 3 s accept
+    the current path if its route ahead is clear, or plan again.
+  -->
+  <BehaviorTree ID="PlanOrWait">
+    <Fallback>
+      <ComputePathToPose
+        goal="{goal}"
+        path="{path}"
+        planner_id="GridBased"/>
+      <RetryUntilSuccessful num_attempts="-1" name="WaitForRoute">
+        <Sequence>
+          <Wait wait_duration="3"/>
+          <Fallback>
+            <SubTree ID="RouteAheadClear" __shared_blackboard="true"/>
+            <ComputePathToPose
+              goal="{goal}"
+              path="{path}"
+              planner_id="GridBased"/>
+          </Fallback>
+        </Sequence>
+      </RetryUntilSuccessful>
+    </Fallback>
   </BehaviorTree>
 
   <!--
