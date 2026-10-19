@@ -25,7 +25,10 @@
   planned, the robot stays stopped and every 3 s continues on the current
   path if its route ahead is clear, or adopts a path that can now be
   planned.  When the budget is used up, the robot stays stopped and every
-  3 s drives the current path again if its route ahead is clear.  The goal
+  3 s drives the current path again if its route ahead is clear.  The
+  first time FollowPath then fails with the route clear, it backs away once
+  with reverse_escape (2026-10-18 robot: without it the robot stayed against
+  the sofa corner, RPP refusing every retry); later refusals only wait.  The goal
   therefore never aborts by itself after the first path: it ends when the
   goal is reached or the operator cancels it (the halt cancels the running
   Wait and FollowPath).  Every Wait increments the navigation feedback's
@@ -37,7 +40,8 @@
 
   No costmap is cleared, PipelineSequence/RateController and Spin are
   intentionally absent, and the only motion besides FollowPath is the
-  bounded reverse_escape.  The large PauseWhileBlocked count only stands for
+  bounded reverse_escape: at most once per detour and once after the
+  budget.  The large PauseWhileBlocked count only stands for
   "unbounded": each pause lasts at least 3 s.
 -->
 <root main_tree_to_execute="MainTree">
@@ -85,12 +89,34 @@
             </Fallback>
           </Sequence>
         </RecoveryNode>
-        <RetryUntilSuccessful num_attempts="-1" name="WaitAfterDetourBudget">
-          <Sequence>
-            <Wait wait_duration="3"/>
-            <SubTree ID="FollowRoute" __shared_blackboard="true"/>
+        <Fallback name="AfterDetourBudget">
+          <!-- Wait while the route ahead is blocked; leave on the first
+               failure with the route clear (RPP refused, e.g. a corner). -->
+          <RecoveryNode number_of_retries="1000000" name="WaitUntilRefused">
+            <Sequence>
+              <Wait wait_duration="3"/>
+              <SubTree ID="FollowRoute" __shared_blackboard="true"/>
+            </Sequence>
+            <Inverter>
+              <SubTree ID="RouteAheadClear" __shared_blackboard="true"/>
+            </Inverter>
+          </RecoveryNode>
+          <!-- Back away once, then only wait: in a gap the robot cannot
+               use, an escape before every retry rocked it 0.10 m back and
+               forth every 11 s (Isaac, 0.6 m gap). -->
+          <Sequence name="EscapeOnceThenWait">
+            <ForceSuccess>
+              <BackUp backup_dist="0.10" backup_speed="0.05" time_allowance="6.0"
+                      server_name="reverse_escape"/>
+            </ForceSuccess>
+            <RetryUntilSuccessful num_attempts="-1" name="WaitAfterDetourBudget">
+              <Sequence>
+                <Wait wait_duration="3"/>
+                <SubTree ID="FollowRoute" __shared_blackboard="true"/>
+              </Sequence>
+            </RetryUntilSuccessful>
           </Sequence>
-        </RetryUntilSuccessful>
+        </Fallback>
       </Fallback>
     </Sequence>
   </BehaviorTree>
