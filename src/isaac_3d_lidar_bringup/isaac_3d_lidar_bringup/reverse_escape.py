@@ -153,6 +153,9 @@ def main(args=None):
             self.declare_parameter('rate_hz', 20.0)
             # The local costmap publishes costmap_raw at 5 Hz.
             self.declare_parameter('max_costmap_age_s', 1.5)
+            # Inputs are subscribed only while a goal runs; allow this long
+            # (beyond settle_s) for the first costmap and transform.
+            self.declare_parameter('input_wait_s', 2.0)
             self._footprint = footprint_from_string(
                 self.get_parameter('footprint').value)
             self._frame = self.get_parameter('global_frame').value
@@ -162,11 +165,12 @@ def main(args=None):
             self._lock = threading.Lock()
             self._active = False
             group = ReentrantCallbackGroup()
-            self._tf_buffer = Buffer()
-            self._tf_listener = TransformListener(self._tf_buffer, self)
-            self.create_subscription(
-                Costmap, self.get_parameter('costmap_topic').value,
-                self._on_costmap, 1, callback_group=group)
+            self._group = group
+            # Subscribed only while a goal runs: receiving /tf and the
+            # costmap all the time cost the Jetson ~0.1 core (2026-10-19).
+            self._tf_buffer = None
+            self._tf_listener = None
+            self._costmap_subscription = None
             # Remapped to cmd_vel_nav in the launch file, like the
             # controller and behavior_server.
             self._cmd = self.create_publisher(Twist, 'cmd_vel', 1)
@@ -192,6 +196,34 @@ def main(args=None):
                 self._costmap = (grid, costs)
                 self._costmap_time = Time.from_msg(message.header.stamp)
 
+        def _open_inputs(self):
+            with self._lock:
+                self._costmap = None
+                self._costmap_time = None
+            self._tf_buffer = Buffer()
+            self._tf_listener = TransformListener(self._tf_buffer, self)
+            self._costmap_subscription = self.create_subscription(
+                Costmap, self.get_parameter('costmap_topic').value,
+                self._on_costmap, 1, callback_group=self._group)
+
+        def _close_inputs(self):
+            if self._costmap_subscription is not None:
+                self.destroy_subscription(self._costmap_subscription)
+                self._costmap_subscription = None
+            if self._tf_listener is not None:
+                self._tf_listener.unregister()
+                self._tf_listener = None
+
+        def _inputs_ready(self):
+            with self._lock:
+                stamp = self._costmap_time
+            if stamp is None:
+                return False
+            age = (self.get_clock().now() - stamp).nanoseconds * 1e-9
+            return (age <= self.get_parameter('max_costmap_age_s').value
+                    and self._tf_buffer.can_transform(
+                        self._frame, self._base, Time()))
+
         def _on_goal(self, _request):
             return GoalResponse.REJECT if self._active else GoalResponse.ACCEPT
 
@@ -216,9 +248,11 @@ def main(args=None):
         def _execute(self, handle):
             self._active = True
             try:
+                self._open_inputs()
                 return self._run(handle)
             finally:
                 self._stop()
+                self._close_inputs()
                 self._active = False
 
         def _run(self, handle):
@@ -291,7 +325,12 @@ def main(args=None):
             side = 'behind' if direction < 0 else 'ahead'
             settle_until = time.monotonic() + self.get_parameter(
                 'settle_s').value
-            while rclpy.ok() and time.monotonic() < settle_until:
+            inputs_until = settle_until + self.get_parameter(
+                'input_wait_s').value
+            while rclpy.ok() and (
+                    time.monotonic() < settle_until
+                    or (time.monotonic() < inputs_until
+                        and not self._inputs_ready())):
                 if handle.is_cancel_requested:
                     return 'canceled', 0.0, 'canceled', stats
                 self._stop()
