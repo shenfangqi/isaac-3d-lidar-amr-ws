@@ -191,9 +191,11 @@ class MotionGuardNode(Node):
         self._tf_listener = TransformListener(self._tf_buffer, self)
         self.create_subscription(String, value('request_topic'),
                                  self._on_request, 10, callback_group=control)
-        self.create_subscription(Odometry, value('odom_topic'), self._on_odom,
-                                 qos_profile_sensor_data,
-                                 callback_group=control)
+        # Inputs only a guard that can still move needs; dropped on release.
+        self._inputs = []
+        self._inputs.append(self.create_subscription(
+            Odometry, value('odom_topic'), self._on_odom,
+            qos_profile_sensor_data, callback_group=control))
         latched = QoSProfile(depth=1,
                              reliability=ReliabilityPolicy.RELIABLE,
                              durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -201,20 +203,21 @@ class MotionGuardNode(Node):
                                  self._on_emergency, latched,
                                  callback_group=control)
         if CarbotStatus is not None:
-            self.create_subscription(
+            self._inputs.append(self.create_subscription(
                 CarbotStatus, value('chassis_status_topic'),
                 self._on_chassis, qos_profile_sensor_data,
-                callback_group=control)
-        self.create_subscription(LaserScan, value('scan_topic'),
-                                 self._on_scan, qos_profile_sensor_data,
-                                 callback_group=sweep)
+                callback_group=control))
+        self._inputs.append(self.create_subscription(
+            LaserScan, value('scan_topic'), self._on_scan,
+            qos_profile_sensor_data, callback_group=sweep))
         self.create_subscription(String, value('translation_request_topic'),
                                  self._on_translation_request, 10,
                                  callback_group=control)
         self.create_subscription(String, value('route_plan_topic'),
                                  self._on_route_plan, 10, callback_group=control)
-        self.create_subscription(OccupancyGrid, value('map_topic'), self._on_map,
-                                 latched, callback_group=route)
+        self._inputs.append(self.create_subscription(
+            OccupancyGrid, value('map_topic'), self._on_map, latched,
+            callback_group=route))
         self.create_timer(0.1, self._route_cycle, callback_group=route)
         self._status = self.create_publisher(String, value('status_topic'), 1)
         self._translation_status = self.create_publisher(
@@ -450,7 +453,23 @@ class MotionGuardNode(Node):
             self._publisher.publish(Twist())
             self.destroy_publisher(self._publisher)
             self._publisher = None
+        if not self._released:
+            self._go_dormant()
         self._released = True
+
+    def _go_dormant(self):
+        """
+        Drop the motion inputs once released; only the status remains.
+
+        A released guard never publishes velocity again (the publisher is
+        not recreated), yet receiving /tf, odometry and scans for the rest
+        of the navigation run cost the Jetson ~0.2 core (2026-10-19).
+        """
+        for subscription in self._inputs:
+            self.destroy_subscription(subscription)
+        self._inputs = []
+        self._tf_listener.unregister()
+        self.get_logger().info('motion guard released: inputs dropped')
 
     def stop_output(self):
         """Publish one zero command before the process exits."""

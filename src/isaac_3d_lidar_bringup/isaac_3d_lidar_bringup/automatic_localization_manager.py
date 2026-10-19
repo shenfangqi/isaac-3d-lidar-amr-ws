@@ -515,6 +515,9 @@ class AutomaticLocalizationManager(Node):
             'min_valid_scan_beams': 30,
             'scan_match_tolerance_m': 0.15,
             'scan_score_max_beams': 120,
+            # While READY the score is status evidence only; scoring every
+            # 10 Hz scan cost the Jetson ~0.2 core (2026-10-19).
+            'ready_scan_score_period_sec': 2.0,
             'occupied_threshold': 65,
             'global_search_position_step_m': 0.20,
             'global_search_yaw_step_rad': math.radians(10.0),
@@ -1612,6 +1615,11 @@ class AutomaticLocalizationManager(Node):
             return
         received = time.monotonic()
         self._last_scan_time = received
+        if (self._state == State.READY
+                and self._last_score_time is not None
+                and received - self._last_score_time < self._parameter(
+                    'ready_scan_score_period_sec')):
+            return
         self._pending_scans.append((message, received))
         if self._state == State.SEARCH_GLOBAL_POSE:
             self._stationary_search_scans.append(message)
@@ -1928,6 +1936,12 @@ class AutomaticLocalizationManager(Node):
     def _transition(self, state):
         self._state = state
         self._state_started = time.monotonic()
+        if (state == State.READY
+                and getattr(self, '_cloud_subscription', None) is not None):
+            # Clouds are only used before READY, and READY never returns to
+            # localization; receiving them cost ~0.1 core on the Jetson.
+            self.destroy_subscription(self._cloud_subscription)
+            self._cloud_subscription = None
         # A quality hold never carries into another state.
         self._quality_since = None
         self._quality_passed_at = None
