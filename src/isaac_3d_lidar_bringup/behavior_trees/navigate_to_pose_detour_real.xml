@@ -25,8 +25,9 @@
   cannot move does not end the goal.  At most three escapes per goal: in a
   gap the planner accepts and RPP refuses, unbounded escapes rocked the
   robot 0.10 m back and forth (Isaac, 0.6 m gap).  After the third, a
-  refusal only waits: every 3 s the current path is driven again, still
-  stopping and detouring for route blocks as above.
+  refusal only waits: every 3 s a path is planned again (the current one
+  is kept if none can be) and driven, still stopping and detouring for
+  route blocks as above.
 
   The goal therefore never aborts by itself after the first path: it ends
   when the goal is reached or the operator cancels it (the halt cancels the
@@ -45,7 +46,37 @@
   for "unbounded": each pass waits at least 2 s.
 -->
 <root main_tree_to_execute="MainTree">
+  <!--
+    A new goal sent while one runs (same tree) only replaces {goal}: Humble
+    keeps ticking this tree (2026-10-20 robot: new goals were ignored while
+    the robot waited at the sofa corner).  On any goal change, halt
+    everything and start over from a new plan.  GlobalUpdatedGoal also
+    reports the first tick of each goal as a change, which costs one
+    restart before anything runs.  goal_changed tells that restart from an
+    initial plan failure, which still aborts.
+  -->
   <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="1000000" name="RestartOnNewGoal">
+      <ReactiveSequence name="NavigateUntilGoalChanges">
+        <Fallback name="SameGoal">
+          <Inverter>
+            <GlobalUpdatedGoal/>
+          </Inverter>
+          <Sequence>
+            <SetBlackboard output_key="goal_changed" value="true"/>
+            <AlwaysFailure/>
+          </Sequence>
+        </Fallback>
+        <SubTree ID="Navigate" __shared_blackboard="true"/>
+      </ReactiveSequence>
+      <BlackboardCheckString value_A="{goal_changed}" value_B="true"
+                             return_on_mismatch="FAILURE">
+        <SetBlackboard output_key="goal_changed" value="false"/>
+      </BlackboardCheckString>
+    </RecoveryNode>
+  </BehaviorTree>
+
+  <BehaviorTree ID="Navigate">
     <Sequence name="NavigateWithBoundedEscapes">
       <ComputePathToPose
         goal="{goal}"
@@ -67,6 +98,14 @@
         <RetryUntilSuccessful num_attempts="-1" name="WaitAfterEscapeBudget">
           <Sequence>
             <Wait wait_duration="3"/>
+            <!-- Replan (no escape) so a changed scene is used; keep the
+                 current path if nothing can be planned. -->
+            <ForceSuccess>
+              <ComputePathToPose
+                goal="{goal}"
+                path="{path}"
+                planner_id="GridBased"/>
+            </ForceSuccess>
             <SubTree ID="DetourAroundBlocks" __shared_blackboard="true"/>
           </Sequence>
         </RetryUntilSuccessful>
