@@ -26,10 +26,12 @@ geometry:
     position_from_base_link_m: [0.0125, 0.0, 0.035]
   body_visual:
     size_m: [0.110, 0.150, 0.0589]
-    position_from_base_link_m: [0.0, 0.0, 0.04055]
+    # Measured front clearance to the green plate edge: 0.059 m.
+    position_from_base_link_m: [0.01256608, 0.0, 0.04055]
   body_visual_base_plate:
-    size_m: [0.220, 0.170, 0.010]
-    position_from_base_link_m: [0.0, 0.0, 0.0061]
+    size_m: [0.225, 0.213, 0.010]
+    # Places the calibrated MID-360 centre 0.110 m behind the front edge.
+    position_from_base_link_m: [0.01406608, 0.0, 0.0061]
   wheel_groups:
     front_idler:
       x_m: 0.111250
@@ -117,13 +119,14 @@ hardware_response:
 
 sensors:
   vl53l5cx_sim_mount:
-    # Eight upright visual prototypes; board dimensions/pose are provisional
-    # until the purchased module and final bracket are measured.
+    # Low perimeter visual prototype. Optical centres sit just inside the
+    # measured navigation footprint so the tracks do not mask the FoV. Board
+    # dimensions and the final protective brackets still require measurement.
     parent_frame: base_link
-    edge_inset_m: 0.008
-    front_rear_corner_inset_m: 0.017
-    left_right_corner_inset_m: 0.020
-    center_above_plate_m: 0.006
+    optical_center_height_from_ground_m: 0.075
+    optical_center_footprint_inset_m: 0.002
+    front_rear_lateral_inset_m: 0.028
+    side_longitudinal_inset_m: 0.025
     board_size_m: [0.004, 0.012, 0.012]
     optical_window_size_m: [0.001, 0.0064, 0.003]
     detection_fov_deg: [45.0, 45.0]
@@ -131,7 +134,7 @@ sensors:
     # Visual/kinematic prototype. Measure the installed bracket before using
     # these transforms as real-camera extrinsics.
     parent_frame: base_link
-    yaw_pivot_xyz_m: [0.110, 0.0, 0.0111]
+    yaw_pivot_xyz_m: [0.12656608, 0.0, 0.0111]
     mast_height_m: 0.050
     yaw_limit_rad: 1.5707963267948966
     pitch_limit_rad: 0.2617993877991494
@@ -195,7 +198,12 @@ sensors:
       operating_temperature_c: [-20.0, 55.0]
       ingress_protection: IP67
     visual_proxy:
-      radius_m: 0.025
+      # Visual-only approximation inside Livox's official 65 x 65 x 60 mm
+      # envelope. These parts do not add collision, inertia or sensor offsets.
+      mount_size_m: [0.058, 0.058, 0.006]
+      body_size_m: [0.065, 0.065, 0.040]
+      scan_window_radius_m: 0.028
+      scan_window_height_m: 0.014
 
 interfaces:
   wheel_ticks:

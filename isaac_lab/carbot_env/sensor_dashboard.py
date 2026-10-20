@@ -67,6 +67,7 @@ class SensorDashboard:
                     with ui.HStack(height=32):
                         ui.Button('Turn left 15 deg', clicked_fn=lambda: self.commands.append(('turn', math.pi/12)))
                         ui.Button('Turn right 15 deg', clicked_fn=lambda: self.commands.append(('turn', -math.pi/12)))
+                        ui.Button('ToF mounts', clicked_fn=self.mounts_view)
                         ui.Button('Overview', clicked_fn=self.overview)
                     ui.Label('Steps change pose directly. +X arrow = vehicle front.', height=20)
                     ui.Separator(height=4)
@@ -105,7 +106,7 @@ class SensorDashboard:
                         ui.Label('Orange points: ToF hits')
                     ui.Label('Static geometry preview. Invalid is not verified free space.', height=22)
         self.arrange_layout()
-        self.overview()
+        self.mounts_view()
 
     def arrange_layout(self):
         for title in ('Stage', 'Layer', 'Render Settings', 'Content', 'Console',
@@ -125,6 +126,10 @@ class SensorDashboard:
     def overview(self):
         from isaacsim.core.utils.viewports import set_camera_view
         set_camera_view(eye=(2.4, 2.8, 3.2), target=(0., 0., .1))
+
+    def mounts_view(self):
+        from isaacsim.core.utils.viewports import set_camera_view
+        set_camera_view(eye=(.52, .58, .36), target=(0., 0., .065))
 
     def apply_commands(self):
         robot = self.env.scene['robot']
