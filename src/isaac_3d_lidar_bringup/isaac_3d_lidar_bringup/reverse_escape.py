@@ -153,8 +153,8 @@ def main(args=None):
             self.declare_parameter('rate_hz', 20.0)
             # The local costmap publishes costmap_raw at 5 Hz.
             self.declare_parameter('max_costmap_age_s', 1.5)
-            # Inputs are subscribed only while a goal runs; allow this long
-            # (beyond settle_s) for the first costmap and transform.
+            # The costmap is taken only while a goal runs; allow this long
+            # (beyond settle_s) for the first one.
             self.declare_parameter('input_wait_s', 2.0)
             self._footprint = footprint_from_string(
                 self.get_parameter('footprint').value)
@@ -165,12 +165,15 @@ def main(args=None):
             self._lock = threading.Lock()
             self._active = False
             group = ReentrantCallbackGroup()
-            self._group = group
-            # Subscribed only while a goal runs: receiving /tf and the
-            # costmap all the time cost the Jetson ~0.1 core (2026-10-19).
-            self._tf_buffer = None
-            self._tf_listener = None
-            self._costmap_subscription = None
+            self._tf_buffer = Buffer()
+            self._tf_listener = TransformListener(self._tf_buffer, self)
+            # The costmap is decoded only while a goal runs (~0.1 core on
+            # the Jetson otherwise).  Subscribing per goal and destroying
+            # the subscription afterwards races the multi-threaded
+            # executor (2026-10-20: it killed the motion guard).
+            self.create_subscription(
+                Costmap, self.get_parameter('costmap_topic').value,
+                self._on_costmap, 1, callback_group=group)
             # Remapped to cmd_vel_nav in the launch file, like the
             # controller and behavior_server.
             self._cmd = self.create_publisher(Twist, 'cmd_vel', 1)
@@ -182,6 +185,8 @@ def main(args=None):
                 callback_group=group)
 
         def _on_costmap(self, message):
+            if not self._active:
+                return
             meta = message.metadata
             grid = {
                 'resolution': meta.resolution,
@@ -196,23 +201,10 @@ def main(args=None):
                 self._costmap = (grid, costs)
                 self._costmap_time = Time.from_msg(message.header.stamp)
 
-        def _open_inputs(self):
+        def _forget_costmap(self):
             with self._lock:
                 self._costmap = None
                 self._costmap_time = None
-            self._tf_buffer = Buffer()
-            self._tf_listener = TransformListener(self._tf_buffer, self)
-            self._costmap_subscription = self.create_subscription(
-                Costmap, self.get_parameter('costmap_topic').value,
-                self._on_costmap, 1, callback_group=self._group)
-
-        def _close_inputs(self):
-            if self._costmap_subscription is not None:
-                self.destroy_subscription(self._costmap_subscription)
-                self._costmap_subscription = None
-            if self._tf_listener is not None:
-                self._tf_listener.unregister()
-                self._tf_listener = None
 
         def _inputs_ready(self):
             with self._lock:
@@ -246,13 +238,13 @@ def main(args=None):
             self._cmd.publish(Twist())
 
         def _execute(self, handle):
+            # A costmap kept from an earlier goal is never used.
+            self._forget_costmap()
             self._active = True
             try:
-                self._open_inputs()
                 return self._run(handle)
             finally:
                 self._stop()
-                self._close_inputs()
                 self._active = False
 
         def _run(self, handle):

@@ -191,7 +191,10 @@ class MotionGuardNode(Node):
         self._tf_listener = TransformListener(self._tf_buffer, self)
         self.create_subscription(String, value('request_topic'),
                                  self._on_request, 10, callback_group=control)
-        # Inputs only a guard that can still move needs; dropped on release.
+        # A released guard (terminal: it never publishes velocity again)
+        # ignores these inputs.  Destroying the subscriptions instead raced
+        # the 4-thread executor and killed the guard (2026-10-20 robot:
+        # "cannot use Destroyable because destruction was requested").
         self._inputs = []
         self._inputs.append(self.create_subscription(
             Odometry, value('odom_topic'), self._on_odom,
@@ -285,6 +288,8 @@ class MotionGuardNode(Node):
             self._route_plans[key] = plan
 
     def _on_map(self, message):
+        if self._released:
+            return
         # Route group: building the clearance fields never delays control.
         grid = grid_snapshot(message)
         try:
@@ -326,6 +331,8 @@ class MotionGuardNode(Node):
             self._core.on_request(request, time.monotonic())
 
     def _on_odom(self, message):
+        if self._released:
+            return
         pose = message.pose.pose
         twist = message.twist.twist
         stamp = message.header.stamp
@@ -340,6 +347,8 @@ class MotionGuardNode(Node):
             self._linear.on_odom(sample)
 
     def _on_chassis(self, message):
+        if self._released:
+            return
         with self._lock:
             now = time.monotonic()
             self._core.on_chassis(message.agent_connected,
@@ -353,6 +362,8 @@ class MotionGuardNode(Node):
             self._linear.on_emergency(message.data, time.monotonic())
 
     def _on_scan(self, scan):
+        if self._released:
+            return
         with self._lock:
             angle = self._core.sweep_query()
             attestation = self._attestation
@@ -454,22 +465,8 @@ class MotionGuardNode(Node):
             self.destroy_publisher(self._publisher)
             self._publisher = None
         if not self._released:
-            self._go_dormant()
+            self.get_logger().info('motion guard released: inputs ignored')
         self._released = True
-
-    def _go_dormant(self):
-        """
-        Drop the motion inputs once released; only the status remains.
-
-        A released guard never publishes velocity again (the publisher is
-        not recreated), yet receiving /tf, odometry and scans for the rest
-        of the navigation run cost the Jetson ~0.2 core (2026-10-19).
-        """
-        for subscription in self._inputs:
-            self.destroy_subscription(subscription)
-        self._inputs = []
-        self._tf_listener.unregister()
-        self.get_logger().info('motion guard released: inputs dropped')
 
     def stop_output(self):
         """Publish one zero command before the process exits."""
