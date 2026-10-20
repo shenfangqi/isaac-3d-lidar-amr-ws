@@ -1,5 +1,13 @@
 # Current authoritative project state
 
+## Detour route check and Jetson CPU work: 2026-10-20 (resume here)
+
+- **Resume from `docs/handoff_2026-10-20_detour_cpu.md`** (Chinese): current deployment, detour rules, robot test results, CPU numbers, deployment and testing procedures, open items.
+- main `7c92657`. The Jetson bringup runs `4e68df7` (#129); **#130 is merged but not deployed**. `carbot-ros2` on the Jetson has `carbot_hardware_cpp` (C++ IMU adapter, default in `mid360_stack.launch.py`) built by hand; power mode MAXN_SUPER.
+- Navigation uses one `nav2_container` (`nav2_composition:=true` default; `false` restores separate processes).
+- Never start a new ROS process on the Jetson while the robot drives (FAST-LIO pose-jump faults on 2026-10-19).
+- Next: deploy #130, copy the updated `nav_rec.sh`, remind the user to record the sofa-corner pass without a box, confirm a new goal mid-run takes effect.
+
 ## ESP32 clock fixes deployed (#97, #95, #100): 2026-10-15 late evening
 
 - On the Jetson, the files changed by these PRs (`device_clock.py`, `wheel_odometry.py`, `wheel_odometry_fused.yaml`, `start_micro_ros_agent_serial.sh`, `wait_for_time_sync.sh`) in `/home/shenfq/Projects/carbot-ros2/src/carbot_hardware` match main `24e30fc`; the other `carbot_hardware` files were not compared. This was a manual copy plus `colcon build --packages-select carbot_hardware`, because `deploy_bringup_to_jetson.sh` does not cover it. Backups of the replaced files are in `carbot-ros2/.deploy_backup/issue97-20261015-223843/`, `issue95-20261015-230135/` and `issue95-monotonic-20261015-231337/`. The bringup deployment (#84/#85) is unchanged.
