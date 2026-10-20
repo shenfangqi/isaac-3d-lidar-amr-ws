@@ -119,6 +119,10 @@ class _Cancelled(Exception):
     """The operator cancelled the goal while the tree was waiting."""
 
 
+class _GoalChanged(Exception):
+    """A new goal arrived (preemption) while the tree was waiting."""
+
+
 class _DetourRun:
     """
     Tick the detour tree to completion on a simulated clock.
@@ -127,11 +131,14 @@ class _DetourRun:
     (0 is the first plan, each successful plan adds one) crosses a keep-off
     at time t; only the Wait nodes advance t.  FollowPath pops 'goal' or
     'collision' (RPP refused to drive on).  A Wait that ends after
-    cancel_at raises _Cancelled, like an operator cancel.
+    cancel_at raises _Cancelled, like an operator cancel.  A Wait that ends
+    after an entry of new_goal_at replaces the goal, as a preempting goal
+    does in Humble; planner(goal, plan_calls) can override plans.
     """
 
     def __init__(self, follows=(), blocked=lambda path, t: False,
-                 plans=(), escape_succeeds=True, cancel_at=None):
+                 plans=(), escape_succeeds=True, cancel_at=None,
+                 new_goal_at=(), planner=None):
         root = ElementTree.parse(DETOUR_TREE).getroot()
         self.trees = {tree.get('ID'): tree[0] for tree in root}
         self.follows = list(follows)
@@ -143,12 +150,28 @@ class _DetourRun:
         self.path = -1
         self.calls = []
         self.waits = []
+        self.new_goal_at = sorted(new_goal_at)
+        self.planner = planner
+        self.goal = 0
+        self.seen_goal = None
+        self.plan_calls = 0
+        self.restarts = 0
+        self.blackboard = {}
 
     def run(self):
         return self.tick(self.trees['MainTree'])
 
     def tick(self, node):
         tag = node.tag
+        if tag == 'ReactiveSequence' and (
+                node.get('name') == 'NavigateUntilGoalChanges'):
+            # The goal check is re-ticked every tick; a change halts the
+            # navigation below it.
+            try:
+                return all(self.tick(child) for child in node)
+            except _GoalChanged:
+                self.restarts += 1
+                return self.tick(node[0]) and False
         if tag in ('Sequence', 'ReactiveSequence'):
             return all(self.tick(child) for child in node)
         if tag == 'Fallback':
@@ -174,6 +197,20 @@ class _DetourRun:
             return not self.tick(node[0])
         if tag == 'SubTree':
             return self.tick(self.trees[node.get('ID')])
+        if tag == 'GlobalUpdatedGoal':
+            changed = self.goal != self.seen_goal
+            self.seen_goal = self.goal
+            return changed
+        if tag == 'SetBlackboard':
+            self.blackboard[node.get('output_key')] = node.get('value')
+            return True
+        if tag == 'AlwaysFailure':
+            return False
+        if tag == 'BlackboardCheckString':
+            key = node.get('value_A').strip('{}')
+            if self.blackboard.get(key) == node.get('value_B'):
+                return self.tick(node[0])
+            return node.get('return_on_mismatch') == 'SUCCESS'
         self.calls.append(tag)
         if tag == 'TruncatePathLocal':
             return True
@@ -189,9 +226,17 @@ class _DetourRun:
             self.t += duration
             if self.cancel_at is not None and self.t > self.cancel_at:
                 raise _Cancelled
+            if self.new_goal_at and self.t > self.new_goal_at[0]:
+                self.new_goal_at.pop(0)
+                self.goal += 1
+                raise _GoalChanged
             return True
         if tag == 'ComputePathToPose':
-            planned = self.plans.pop(0) if self.plans else True
+            self.plan_calls += 1
+            if self.planner is not None:
+                planned = self.planner(self.goal, self.plan_calls)
+            else:
+                planned = self.plans.pop(0) if self.plans else True
             if planned:
                 self.path += 1
             return planned
@@ -317,7 +362,9 @@ def test_three_escapes_then_the_goal_is_kept(escape_succeeds):
                      escape_succeeds=escape_succeeds)
 
     assert run.run() is True
-    assert run.calls.count('ComputePathToPose') == 4
+    # The first plan, three escape detours and a plan before each of the
+    # two retries after the budget.
+    assert run.calls.count('ComputePathToPose') == 6
     assert run.calls.count('BackUp') == 3
     assert run.calls[-3:] == ['TruncatePathLocal', 'IsPathValid',
                               'FollowPath']
@@ -333,7 +380,8 @@ def test_refused_forever_escapes_three_times_only():
         run.run()
     assert run.calls.count('BackUp') == 3
     assert run.calls.count('FollowPath') > 100
-    assert run.calls.count('ComputePathToPose') == 4
+    # After the budget every retry replans first (no escape).
+    assert run.calls.count('ComputePathToPose') > 50
 
 
 def test_route_blocks_leave_all_three_escapes_for_a_corner():
@@ -356,6 +404,8 @@ def test_detour_tree_checks_the_route_ahead_while_following():
     assert names == {
         'Sequence', 'Fallback', 'RecoveryNode', 'RetryUntilSuccessful',
         'ReactiveSequence', 'Inverter', 'ForceSuccess', 'SubTree',
+        'GlobalUpdatedGoal', 'SetBlackboard', 'AlwaysFailure',
+        'BlackboardCheckString',
         'ComputePathToPose', 'FollowPath', 'Wait', 'BackUp',
         'TruncatePathLocal', 'IsPathValid'}
     guarded = trees['FollowRoute'].find(
@@ -374,12 +424,19 @@ def test_detour_tree_checks_the_route_ahead_while_following():
         'novel_obstacle_keepoff']['ros__parameters']['mark_max_range_m']
     pause = trees['FollowRoute'].find(".//Sequence[@name='BlockedPause']")
     assert pause.find('Wait').get('wait_duration') == '3'
-    for backup in trees['MainTree'].iter('BackUp'):
+    for backup in trees['Navigate'].iter('BackUp'):
         assert backup.get('server_name') == 'reverse_escape'
         assert float(backup.get('backup_dist')) == 0.10
-    budget = trees['MainTree'].find(".//RecoveryNode[@name='EscapeBudget']")
+    budget = trees['Navigate'].find(".//RecoveryNode[@name='EscapeBudget']")
     assert budget.get('number_of_retries') == '3'
-    assert len(list(trees['MainTree'].iter('BackUp'))) == 1
+    assert len(list(trees['Navigate'].iter('BackUp'))) == 1
+    # A changed goal halts everything below and restarts from a new plan.
+    restart = trees['MainTree']
+    assert restart.get('name') == 'RestartOnNewGoal'
+    reactive = restart[0]
+    assert reactive.tag == 'ReactiveSequence'
+    assert reactive[0].find('Inverter/GlobalUpdatedGoal') is not None
+    assert reactive[1].get('ID') == 'Navigate'
     # The route-block detour never backs away.
     assert not list(trees['DetourAroundBlocks'].iter('BackUp'))
     for loop in root.iter('RetryUntilSuccessful'):
@@ -403,3 +460,37 @@ def test_detour_costmap_radius_matches_the_footprint_inscribed_radius():
     assert detour['footprint'] == '[]'
     assert detour['robot_radius'] == pytest.approx(inscribed)
     assert real['inflation_layer']['inflation_radius'] > detour['robot_radius']
+
+
+def test_retries_after_the_budget_replan_and_keep_the_path_if_none():
+    # 2026-10-20 robot: with the escapes used up, the robot kept retrying
+    # the path planned around a box after the box had gone.
+    run = _DetourRun(['collision'] * 8 + ['collision', 'collision', 'goal'],
+                     plans=[True] * 4 + [False])
+
+    assert run.run() is True
+    # The failed plan after the budget kept path 3; the next one is 4.
+    assert run.path == 4
+    assert run.calls.count('BackUp') == 3
+
+
+def test_a_new_goal_restarts_navigation_from_a_new_plan():
+    # 2026-10-20 robot: goals sent while the robot waited were ignored.
+    run = _DetourRun(['goal'], new_goal_at=[10],
+                     blocked=lambda path, t: t < 10,
+                     planner=lambda goal, calls: goal == 1 or calls == 1)
+
+    assert run.run() is True
+    assert run.goal == 1
+    assert run.restarts == 1
+    # One more plan for the new goal, and no escape.
+    assert run.calls.count('FollowPath') == 1
+    assert 'BackUp' not in run.calls
+
+
+def test_an_initial_plan_failure_still_aborts():
+    run = _DetourRun(['goal'], plans=[False])
+
+    assert run.run() is False
+    assert run.calls.count('ComputePathToPose') == 1
+    assert run.calls.count('FollowPath') == 0
