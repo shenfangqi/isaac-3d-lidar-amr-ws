@@ -1,5 +1,11 @@
 from launch import LaunchDescription
-from launch.substitutions import PathJoinSubstitution
+from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition, UnlessCondition
+from launch.substitutions import (
+    LaunchConfiguration,
+    PathJoinSubstitution,
+    PythonExpression,
+)
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -12,8 +18,21 @@ def generate_launch_description():
         [FindPackageShare("carbot_hardware"), "config", "mid360_imu.yaml"]
     )
 
+    # The C++ port of the IMU adapter produces identical messages; the Python
+    # node used about half a Jetson core at 200 Hz (2026-10-19).
+    # imu_adapter:=python restores the original node.
+    use_python_adapter = PythonExpression(
+        ["'", LaunchConfiguration("imu_adapter"), "' == 'python'"]
+    )
+
     return LaunchDescription(
         [
+            DeclareLaunchArgument(
+                "imu_adapter",
+                default_value="cpp",
+                choices=["cpp", "python"],
+                description="MID-360 IMU adapter implementation",
+            ),
             Node(
                 package="livox_ros_driver2",
                 executable="livox_ros_driver2_node",
@@ -36,11 +55,20 @@ def generate_launch_description():
                 ],
             ),
             Node(
+                package="carbot_hardware_cpp",
+                executable="mid360_imu_adapter",
+                name="mid360_imu_adapter",
+                output="screen",
+                parameters=[imu_config],
+                condition=UnlessCondition(use_python_adapter),
+            ),
+            Node(
                 package="carbot_hardware",
                 executable="mid360_imu_adapter",
                 name="mid360_imu_adapter",
                 output="screen",
                 parameters=[imu_config],
+                condition=IfCondition(use_python_adapter),
             ),
         ]
     )

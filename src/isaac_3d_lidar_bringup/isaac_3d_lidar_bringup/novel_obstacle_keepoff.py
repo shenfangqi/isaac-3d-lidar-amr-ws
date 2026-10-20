@@ -25,6 +25,7 @@ overwrites the master grid:
   static-map mask and would be taken for novel obstacles.
 """
 
+import array
 import math
 
 import numpy as np
@@ -64,9 +65,12 @@ def densify_beams(angles, ranges, max_spacing_m, max_range_m, max_gap=1):
     same pattern scan after scan, so some cells are never passed by a beam
     and can never be cleared.  Between two finite returns at most
     ``max_gap`` inf beams apart the space is taken as free up to the nearer
-    range; extra beams there keep the spacing at ``max_range_m`` within
-    ``max_spacing_m``.  An object narrower than that span which no beam hits
-    can be cleared: the raw beams cannot see it either.
+    range; extra beams there keep the spacing at that range (at most
+    ``max_range_m``) within ``max_spacing_m``.  An object narrower than that
+    span which no beam hits can be cleared: the raw beams cannot see it
+    either.  (Spacing at ``max_range_m`` for every pair, as before
+    2026-10-19, added ~2.5x more beams than a home's few-metre returns
+    need; on the Jetson clearing cost ~0.3 core.)
     """
     angles = np.asarray(angles, dtype=float)
     ranges = np.asarray(ranges, dtype=float)
@@ -88,7 +92,8 @@ def densify_beams(angles, ranges, max_spacing_m, max_range_m, max_gap=1):
                          - angles[finite[-1]])
     keep = steps <= max_gap + 1
     first, second, span = first[keep], second[keep], span[keep]
-    counts = np.ceil(np.abs(span) * max_range_m / max_spacing_m).astype(int)
+    reach = np.minimum(np.minimum(ranges[first], ranges[second]), max_range_m)
+    counts = np.ceil(np.abs(span) * reach / max_spacing_m).astype(int)
     new_angles, new_ranges = [], []
     for count in np.unique(counts[counts > 1]):
         pair = counts == count
@@ -145,6 +150,8 @@ class KeepoffGrid:
         self.robot_clear_cells = robot_clear_radius_m / resolution
         # Widest gap between clearing beams at max_range_m.
         self.clear_spacing_m = resolution / 2.0
+        # Sample distances along a clearing beam.
+        self._clear_steps = np.arange(0.0, max_range_m, self._sample_step())
 
     def _cells(self, xs, ys):
         columns = np.floor((xs - self.origin_x) / self.resolution).astype(int)
@@ -188,10 +195,14 @@ class KeepoffGrid:
         x0, y0 = origin
         # Stop one cell short of the return so the surface itself survives.
         reach = np.minimum(ranges[finite], self.max_range_m) - self.resolution
-        steps = np.arange(0.0, self.max_range_m, self._sample_step())
-        inside = steps[None, :] < reach[:, None]
-        distance = np.broadcast_to(steps, inside.shape)[inside]
-        beam = np.nonzero(inside)[0]
+        # Each beam's samples closer than its reach, generated per beam
+        # rather than as a beams x max-range mask: most beams end within a
+        # few metres (on the Jetson the mask cost ~0.3 core at 10 Hz).
+        steps = self._clear_steps
+        counts = np.searchsorted(steps, reach, side='left')
+        beam = np.repeat(np.arange(reach.size), counts)
+        starts = np.cumsum(counts) - counts
+        distance = steps[np.arange(beam.size) - np.repeat(starts, counts)]
         rows, columns, _ = self._cells(
             x0 + distance * cos[beam], y0 + distance * sin[beam])
         self.hits[rows, columns] = 0
@@ -282,6 +293,9 @@ class NovelObstacleKeepoff(Node):
         self.declare_parameter('mark_max_range_m', 4.0)
         self.declare_parameter('max_range_m', 10.0)
         self.declare_parameter('publish_rate_hz', 2.0)
+        # An unchanged grid is republished only this often: every new grid
+        # makes the global costmap re-inflate the whole map.
+        self.declare_parameter('unchanged_republish_s', 5.0)
         self.declare_parameter('transform_wait_sec', 0.5)
         self.declare_parameter('odom_topic', '/odom')
         self.declare_parameter('max_yaw_rate_rad_s', 0.1)
@@ -290,6 +304,8 @@ class NovelObstacleKeepoff(Node):
             self.get_parameter('max_yaw_rate_rad_s').value,
             self.get_parameter('turn_settle_s').value)
         self._odom_seen = False
+        self._last_data = None
+        self._last_publish_s = None
 
         self._grid = None
         self._map_header = None
@@ -411,13 +427,22 @@ class NovelObstacleKeepoff(Node):
             robot_xy = (translation.x, translation.y)
         except TransformException:
             pass
+        data = self._grid.render(robot_xy, self._map_data).tobytes()
+        now_s = self.get_clock().now().nanoseconds * 1e-9
+        if (data == self._last_data and self._last_publish_s is not None
+                and now_s - self._last_publish_s < self.get_parameter(
+                    'unchanged_republish_s').value):
+            return
         message = OccupancyGrid()
         message.header.frame_id = self._map_header.frame_id
         message.header.stamp = self.get_clock().now().to_msg()
         message.info = self._map_info
-        message.data = self._grid.render(
-            robot_xy, self._map_data).ravel().tolist()
+        # array('b') skips rclpy's per-element check of a 177k-cell list
+        # (8.7 ms per grid); the serialized message is identical.
+        message.data = array.array('b', data)
         self._publisher.publish(message)
+        self._last_data = data
+        self._last_publish_s = now_s
 
 
 def main(args=None):

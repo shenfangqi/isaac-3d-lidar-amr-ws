@@ -4,11 +4,17 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
+from launch.actions import (
+    DeclareLaunchArgument,
+    GroupAction,
+    IncludeLaunchDescription,
+    OpaqueFunction,
+)
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression
-from launch_ros.actions import Node
+from launch_ros.actions import ComposableNodeContainer, Node
+from launch_ros.descriptions import ComposableNode
 from launch_ros.parameter_descriptions import ParameterValue
 
 
@@ -55,6 +61,11 @@ def generate_launch_description():
     obstacle_detour = LaunchConfiguration('novel_obstacle_detour')
     near_field = LaunchConfiguration('near_field_scan')
     backup_escape = LaunchConfiguration('backup_escape')
+    nav2_composition = LaunchConfiguration('nav2_composition')
+    # The bounded-recovery variant keeps its separate processes.
+    nav2_composed = PythonExpression([
+        "'", nav2_composition, "' == 'true' and '",
+        recovery_enabled, "' == 'false'"])
     keepoff_chain = IfCondition(PythonExpression([
         "'", keepoff_preview, "' == 'true' or '",
         obstacle_detour, "' == 'true'"]))
@@ -583,7 +594,131 @@ def generate_launch_description():
                  output='screen'),
         ]
 
+    # One component container for map_server, AMCL and the Nav2 servers
+    # with their lifecycle managers, the same variants as the separate
+    # processes above.  On the Jetson (2026-10-19) each idle Nav2 process
+    # cost 5-10% of a core.  A component reads only the parameters passed
+    # to it, while the costmaps a server creates read the process-wide
+    # --params-file: both are given, or the costmaps silently keep their
+    # defaults (footprint [], inflation 0.55).
+    def configure_composed_nav2(context):
+        # PythonExpression performs to 'True'/'False'; read the arguments.
+        if (nav2_composition.perform(context) != 'true'
+                or recovery_enabled.perform(context) == 'true'):
+            return []
+        detour = obstacle_detour.perform(context) == 'true'
+        wait_retry = obstacle_wait_retry.perform(context) == 'true'
+        if detour and wait_retry:
+            raise RuntimeError(
+                'novel_obstacle_detour and obstacle_wait_retry both replace '
+                'the navigation behavior tree; enable only one')
+        near = near_field.perform(context) == 'true'
+        automatic = automatic_localization.perform(context) == 'true'
+        controller_files = [navigation_config] + (
+            [near_field_config] if near else [])
+        planner_files = [navigation_config] + (
+            [keepoff_config] if detour else [])
+        if detour:
+            tree = [{'default_nav_to_pose_bt_xml': detour_tree}]
+        elif wait_retry:
+            tree = [{'default_nav_to_pose_bt_xml': obstacle_wait_retry_tree}]
+        elif backup_escape.perform(context) == 'true':
+            tree = [{'default_nav_to_pose_bt_xml': backup_escape_tree}]
+        else:
+            tree = []
+        process_files = [amcl_config] + controller_files + planner_files[1:]
+        nodes = [
+            ComposableNode(
+                package='nav2_map_server', plugin='nav2_map_server::MapServer',
+                name='map_server',
+                parameters=[amcl_config, {'yaml_filename': map_yaml}]),
+        ]
+        if automatic:
+            nodes.append(ComposableNode(
+                package='nav2_amcl', plugin='nav2_amcl::AmclNode', name='amcl',
+                parameters=[amcl_config],
+                remappings=[('initialpose', '/amcl_initialpose')]))
+        nodes += [
+            ComposableNode(
+                package='nav2_lifecycle_manager',
+                plugin='nav2_lifecycle_manager::LifecycleManager',
+                name='lifecycle_manager_localization',
+                parameters=[{
+                    'use_sim_time': False,
+                    'autostart': (autostart.perform(context) == 'true'
+                                  and not automatic),
+                    'node_names': (['map_server', 'amcl'] if automatic
+                                   else ['map_server']),
+                }]),
+            ComposableNode(
+                package='nav2_controller',
+                plugin='nav2_controller::ControllerServer',
+                name='controller_server', parameters=controller_files,
+                remappings=[('cmd_vel', 'cmd_vel_nav')]),
+            ComposableNode(
+                package='nav2_planner', plugin='nav2_planner::PlannerServer',
+                name='planner_server', parameters=planner_files),
+            ComposableNode(
+                package='nav2_behaviors', plugin='behavior_server::BehaviorServer',
+                name='behavior_server', parameters=[navigation_config],
+                remappings=[('cmd_vel', 'cmd_vel_nav')]),
+            ComposableNode(
+                package='nav2_bt_navigator',
+                plugin='nav2_bt_navigator::BtNavigator',
+                name='bt_navigator', parameters=[navigation_config, *tree]),
+            ComposableNode(
+                package='nav2_waypoint_follower',
+                plugin='nav2_waypoint_follower::WaypointFollower',
+                name='waypoint_follower', parameters=[navigation_config]),
+            ComposableNode(
+                package='nav2_velocity_smoother',
+                plugin='nav2_velocity_smoother::VelocitySmoother',
+                name='velocity_smoother', parameters=[navigation_config],
+                remappings=[
+                    ('cmd_vel', 'cmd_vel_nav'),
+                    ('cmd_vel_smoothed', cmd_vel_output.perform(context)),
+                ]),
+            ComposableNode(
+                package='nav2_lifecycle_manager',
+                plugin='nav2_lifecycle_manager::LifecycleManager',
+                name='lifecycle_manager_navigation',
+                parameters=[{
+                    'use_sim_time': False,
+                    'autostart': (autostart.perform(context) == 'true'
+                                  and not automatic),
+                    'node_names': [
+                        'controller_server',
+                        'planner_server',
+                        'behavior_server',
+                        'bt_navigator',
+                        'waypoint_follower',
+                        'velocity_smoother',
+                    ],
+                }]),
+        ]
+        arguments = ['--ros-args']
+        for path in process_files:
+            arguments += ['--params-file', path]
+        return [ComposableNodeContainer(
+            name='nav2_container', namespace='',
+            package='rclcpp_components',
+            executable='component_container_isolated',
+            arguments=arguments,
+            composable_node_descriptions=nodes,
+            output='screen')]
+
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'nav2_composition',
+            default_value='true',
+            choices=['true', 'false'],
+            description=(
+                'Run map_server, AMCL and the Nav2 servers as components of '
+                'one container (same parameters and variants). false starts '
+                'them as separate processes. bounded_recovery_enabled always '
+                'uses separate processes.'
+            ),
+        ),
         DeclareLaunchArgument('bounded_recovery_enabled', default_value='false',
                               choices=['true', 'false']),
         DeclareLaunchArgument('recovery_acceptance_profile', default_value=''),
@@ -820,26 +955,31 @@ def generate_launch_description():
             ),
         ),
         OpaqueFunction(function=configure_recovery),
-        OpaqueFunction(function=configure_obstacle_wait_retry),
-        OpaqueFunction(function=configure_obstacle_detour),
-        OpaqueFunction(function=configure_near_field),
+        OpaqueFunction(function=configure_composed_nav2),
+        # Separate processes, unless nav2_composition runs them in
+        # nav2_container (configure_composed_nav2).
+        GroupAction([
+            OpaqueFunction(function=configure_obstacle_wait_retry),
+            OpaqueFunction(function=configure_obstacle_detour),
+            OpaqueFunction(function=configure_near_field),
+            map_server,
+            amcl,
+            manual_localization_lifecycle,
+            automatic_localization_lifecycle,
+            controller,
+            planner,
+            behaviors,
+            bt_navigator,
+            bt_navigator_escape,
+            waypoint_follower,
+            velocity_smoother,
+            navigation_lifecycle,
+        ], condition=UnlessCondition(nav2_composed)),
         lio_odometry,
         scan_projection,
         localization_scan_projection,
-        map_server,
         manual_localizer,
-        amcl,
-        manual_localization_lifecycle,
-        automatic_localization_lifecycle,
-        controller,
-        planner,
-        behaviors,
         reverse_escape,
-        bt_navigator,
-        bt_navigator_escape,
-        waypoint_follower,
-        velocity_smoother,
-        navigation_lifecycle,
         automatic_localization_manager,
         recovery_preview,
         recovery_runtime_observer,
