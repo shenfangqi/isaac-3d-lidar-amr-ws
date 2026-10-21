@@ -41,6 +41,8 @@ def generate_launch_description():
         bringup_dir, 'config', 'nav2', 'carbot_obstacle_detour_real.yaml')
     near_field_config = os.path.join(
         bringup_dir, 'config', 'nav2', 'carbot_near_field_real.yaml')
+    event_recorder_config = os.path.join(
+        bringup_dir, 'config', 'nav2', 'carbot_event_recorder_real.yaml')
     auto_localization_config = os.path.join(
         bringup_dir, 'config', 'nav2',
         'carbot_auto_localization_real.yaml')
@@ -60,6 +62,7 @@ def generate_launch_description():
     keepoff_preview = LaunchConfiguration('novel_obstacle_keepoff_preview')
     obstacle_detour = LaunchConfiguration('novel_obstacle_detour')
     near_field = LaunchConfiguration('near_field_scan')
+    event_recorder = LaunchConfiguration('nav_event_recorder')
     backup_escape = LaunchConfiguration('backup_escape')
     nav2_composition = LaunchConfiguration('nav2_composition')
     # The bounded-recovery variant keeps its separate processes.
@@ -494,6 +497,18 @@ def generate_launch_description():
         output='screen',
     )
 
+    # Always-on black box: started with navigation so that nothing has to be
+    # started on the Jetson while the robot drives; writes a bag only around
+    # an event (carbot_event_recorder_real.yaml).
+    event_recorder_node = Node(
+        package='isaac_3d_lidar_bringup',
+        executable='nav_event_recorder',
+        name='nav_event_recorder',
+        parameters=[event_recorder_config],
+        condition=IfCondition(event_recorder),
+        output='screen',
+    )
+
     def configure_near_field(context):
         if (near_field.perform(context) != 'true'
                 or recovery_enabled.perform(context) == 'true'):
@@ -755,6 +770,16 @@ def generate_launch_description():
             ),
         ),
         DeclareLaunchArgument(
+            'nav_event_recorder',
+            default_value='true',
+            choices=['true', 'false'],
+            description=(
+                'Keep the last 30 s of navigation topics in memory and write '
+                'a bag to nav_events/ around each stop, error, aborted goal, '
+                'lack of progress or localization fault.'
+            ),
+        ),
+        DeclareLaunchArgument(
             'novel_obstacle_detour',
             default_value='false',
             choices=['true', 'false'],
@@ -988,4 +1013,5 @@ def generate_launch_description():
         localization_motion_guard,
         *keepoff_nodes,
         near_field_node,
+        event_recorder_node,
     ])

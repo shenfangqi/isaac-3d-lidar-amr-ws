@@ -1,0 +1,49 @@
+# Always-on navigation event recorder (nav_event_recorder.py).
+#
+# Starts with the real navigation launch (nav_event_recorder:=true, default),
+# so no ROS process has to be started while the robot drives.  It keeps the
+# last pre_s seconds of these topics in memory and writes a bag to output_dir
+# (Jetson ~/Projects/isaac_ros-dev/nav_events) only around an event: an
+# ERROR log (e.g. RPP "detected collision ahead"), the controller's "Goal was
+# canceled" (route-check stop or goal change), an aborted goal, no progress
+# for no_progress_window_s, or a localization fault.
+#
+# The topic list matches the manual recorder used in the 2026-10-19..21 robot
+# tests (tmp_issue1_bags/nav_rec.sh) plus /rosout: no raw LiDAR or IMU, which
+# would cost CPU and memory on the Jetson.
+nav_event_recorder:
+  ros__parameters:
+    use_sim_time: false
+    output_dir: /workspaces/isaac_ros-dev/nav_events
+    topics:
+      - /cmd_vel:geometry_msgs/msg/Twist
+      - /cmd_vel_nav:geometry_msgs/msg/Twist
+      - /plan:nav_msgs/msg/Path
+      - /scan:sensor_msgs/msg/LaserScan
+      - /scan_near:sensor_msgs/msg/LaserScan
+      - /local_costmap/costmap_raw:nav2_msgs/msg/Costmap
+      - /odom:nav_msgs/msg/Odometry
+      - /tf:tf2_msgs/msg/TFMessage
+      - /tf_static:tf2_msgs/msg/TFMessage
+      - /amcl_pose:geometry_msgs/msg/PoseWithCovarianceStamped
+      - /novel_obstacle_keepoff:nav_msgs/msg/OccupancyGrid
+      - /automatic_localization/status:std_msgs/msg/String
+      - /localization/fault_reason:std_msgs/msg/String
+      - /navigate_to_pose/_action/status:action_msgs/msg/GoalStatusArray
+      - /rosout:rcl_interfaces/msg/Log
+    latched_topics: [/tf_static]
+    reliable_topics: [/rosout, /navigate_to_pose/_action/status]
+    pre_s: 30.0
+    post_s: 10.0
+    max_post_s: 60.0
+    # About 0.2 MB/s with these topics (manual bag preempt_01: 27 MB in
+    # 136 s), so 90 s of history is under 20 MB.
+    max_buffer_mb: 200.0
+    max_total_mb: 3000.0
+    max_events: 200
+    rosout_trigger_level: 40
+    rosout_trigger_patterns: ['Goal was canceled']
+    rosout_ignore_patterns: ['']
+    rosout_repeat_s: 30.0
+    no_progress_window_s: 20.0
+    no_progress_distance_m: 0.05
