@@ -11,6 +11,7 @@ from isaac_3d_lidar_bringup.nav_event_recorder import (
     event_dir_name,
     EventCapture,
     GoalStatusTrigger,
+    LastValue,
     MessageRing,
     parse_topics,
     ProgressMonitor,
@@ -53,6 +54,31 @@ def test_events_merge_into_one_window_capped_after_the_first():
         capture.trigger(second * S, 'no_progress')
     start, end, _ = capture.poll(400 * S)
     assert (start, end) == (170 * S, 260 * S)
+
+
+def test_open_window_can_be_forced_closed_at_shutdown():
+    capture = EventCapture(pre_ns=30 * S, post_ns=10 * S, max_post_ns=60 * S)
+    assert capture.poll(100 * S, force=True) is None
+    capture.trigger(100 * S, 'rosout_error')
+    assert capture.poll(103 * S) is None
+    start, end, events = capture.poll(103 * S, force=True)
+    assert (start, end) == (70 * S, 103 * S)
+    assert len(events) == 1 and not capture.active
+
+
+def test_last_value_gives_the_message_current_at_a_window_start():
+    last = LastValue()
+    assert last.before(10 * S) is None
+    for second, data in ((1, b'plan1'), (50, b'plan2'), (80, b'plan3')):
+        last.append(second * S, data)
+    assert last.before(60 * S) == (50 * S, b'plan2')
+    assert last.before(50 * S) == (1 * S, b'plan1')
+    # Pruning to 70 s keeps plan2: it is still current at 70 s.
+    last.prune(70 * S)
+    assert last.before(75 * S) == (50 * S, b'plan2')
+    assert last.before(100 * S) == (80 * S, b'plan3')
+    last.prune(90 * S)
+    assert last.before(100 * S) == (80 * S, b'plan3')
 
 
 def test_rosout_trigger_levels_patterns_and_repeats():
@@ -145,6 +171,10 @@ def test_config_topics_parse_and_cover_the_manual_recorder():
     assert '/livox/lidar' not in topics
     assert not any('imu' in topic for topic in topics)
     assert parameters['latched_topics'] == ['/tf_static']
+    assert parameters['keep_last_topics'] == [
+        '/plan', '/navigate_to_pose/_action/status']
+    assert set(parameters['keep_last_topics']) <= set(topics)
+    assert parameters['rosout_repeat_s'] <= 10.0
     with pytest.raises(ValueError):
         parse_topics(['/scan'])
 
