@@ -38,12 +38,19 @@ controller_server:
       # ceiling, effectively prevented useful curvature regulation.
       use_regulated_linear_velocity_scaling: true
       regulated_linear_scaling_min_radius: 0.40
-      regulated_linear_scaling_min_speed: 0.04
+      # Keep every nonzero forward command above the measured track deadband
+      # (hardware_response.track_deadband.forward_min_sustainable_mps 0.05).
+      # At 0.04 the robot stalled 0.08-0.11 m from a goal on 2026-10-21 (bag
+      # nav_events/20261021T133338Z_no_progress): it could not creep inside
+      # the 0.10 m xy tolerance, RPP flipped between rotating to the goal
+      # heading and rotating to the path end as the in-place turn moved the
+      # centre across 0.10 m, and the progress checker aborted.
+      regulated_linear_scaling_min_speed: 0.06
       use_cost_regulated_linear_velocity_scaling: true
       cost_scaling_dist: 0.25
       cost_scaling_gain: 1.0
       inflation_cost_scaling_factor: 3.0
-      min_approach_linear_velocity: 0.04
+      min_approach_linear_velocity: 0.06
       approach_velocity_scaling_dist: 0.30
       use_collision_detection: true
       # Keep the existing one-second collision horizon.  The fix lowers the
