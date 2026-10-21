@@ -22,7 +22,12 @@ and writes a rosbag2 only when an event fires:
 
 Events within ``post_s`` of each other share one bag; the bag covers
 ``pre_s`` before the first event to ``post_s`` after the last one, at most
-``max_post_s`` after the first.  Bags go to ``output_dir/<UTC time>_<reason>``
+``max_post_s`` after the first.  Topics in ``keep_last_topics`` (the plan,
+the goal status) are published rarely, so each bag also starts with the
+message that was current when its window opened.  When the node stops, an
+open window is written at once instead of being lost (on 2026-10-21 a
+startup failure was recorded and the container stopped before the 10 s
+after the event had passed).  Bags go to ``output_dir/<UTC time>_<reason>``
 with an ``event.json`` listing the events, and the oldest are deleted beyond
 ``max_total_mb`` or ``max_events``.  Writing runs on a separate thread, so the
 subscriptions keep buffering while a bag is written.
@@ -74,6 +79,31 @@ class MessageRing:
         return self._bytes
 
 
+class LastValue:
+    """Recent messages of one topic, enough to know the one current at a time."""
+
+    def __init__(self):
+        self._items = collections.deque()
+
+    def append(self, stamp_ns, data):
+        self._items.append((stamp_ns, data))
+
+    def prune(self, oldest_ns):
+        # Keep the newest message at or before oldest_ns: it is still current
+        # for any window that opens after oldest_ns.
+        while len(self._items) > 1 and self._items[1][0] <= oldest_ns:
+            self._items.popleft()
+
+    def before(self, stamp_ns):
+        """Return the newest message published before ``stamp_ns``."""
+        found = None
+        for item in self._items:
+            if item[0] >= stamp_ns:
+                break
+            found = item
+        return found
+
+
 class EventCapture:
     """Merge events into capture windows [first - pre, last + post]."""
 
@@ -98,10 +128,15 @@ class EventCapture:
         self._events.append(
             {'stamp_ns': stamp_ns, 'reason': reason, 'detail': detail})
 
-    def poll(self, now_ns):
-        """Return (start_ns, end_ns, events) once the window has closed."""
-        if not self._events or now_ns < self._end_ns:
+    def poll(self, now_ns, force=False):
+        """
+        Return (start_ns, end_ns, events) once the window has closed.
+
+        ``force`` closes an open window at ``now_ns`` (node shutdown).
+        """
+        if not self._events or (now_ns < self._end_ns and not force):
             return None
+        self._end_ns = min(self._end_ns, now_ns)
         events = self._events
         window = (events[0]['stamp_ns'] - self.pre_ns, self._end_ns, events)
         self._events = []
@@ -301,6 +336,9 @@ def main(args=None):
             self.declare_parameter('topics', [''])
             self.declare_parameter('latched_topics', ['/tf_static'])
             self.declare_parameter('reliable_topics', ['/rosout'])
+            self.declare_parameter(
+                'keep_last_topics',
+                ['/plan', '/navigate_to_pose/_action/status'])
             self.declare_parameter('pre_s', 30.0)
             self.declare_parameter('post_s', 10.0)
             self.declare_parameter('max_post_s', 60.0)
@@ -312,7 +350,7 @@ def main(args=None):
             self.declare_parameter(
                 'rosout_trigger_patterns', ['Goal was canceled'])
             self.declare_parameter('rosout_ignore_patterns', [''])
-            self.declare_parameter('rosout_repeat_s', 30.0)
+            self.declare_parameter('rosout_repeat_s', 5.0)
             self.declare_parameter(
                 'goal_status_topic', '/navigate_to_pose/_action/status')
             self.declare_parameter('odom_topic', '/odom')
@@ -339,6 +377,9 @@ def main(args=None):
                 int(value('max_post_s').value * 1e9))
             self._keep_ns = pre_ns + self._capture.max_post_ns
             self._latched = collections.OrderedDict()
+            self._last = {topic: LastValue()
+                          for topic in value('keep_last_topics').value
+                          if topic in self._topics}
             self._rosout = RosoutTrigger(
                 int(value('rosout_trigger_level').value),
                 value('rosout_trigger_patterns').value,
@@ -415,6 +456,8 @@ def main(args=None):
                             self._latched[topic] + [data])[-20:]
                     else:
                         self._ring.append(stamp_ns, topic, data)
+                        if topic in self._last:
+                            self._last[topic].append(stamp_ns, data)
                 if decoder is not None:
                     decoder(stamp_ns,
                             deserialize_message(data, message_class))
@@ -455,51 +498,71 @@ def main(args=None):
                 self._trigger(stamp_ns, 'localization_emergency_stop')
             self._emergency = bool(message.data)
 
-        def _tick(self):
+        def _tick(self, force=False):
             now_ns = self._now_ns()
-            window = self._capture.poll(now_ns)
+            window = self._capture.poll(now_ns, force=force)
             if window is not None:
                 start_ns, end_ns, events = window
                 messages = self._ring.window(start_ns, end_ns)
                 latched = [(topic, data)
                            for topic, items in self._latched.items()
                            for data in items]
+                for topic, last in self._last.items():
+                    item = last.before(start_ns)
+                    if item is not None:
+                        latched.append((topic, item[1]))
                 self._jobs.put((start_ns, end_ns, events, messages, latched))
             if not self._capture.active:
                 self._ring.prune(now_ns - self._keep_ns)
+                for last in self._last.values():
+                    last.prune(now_ns - self._keep_ns)
+
+        def flush(self, timeout_s=4.0):
+            """Write an open window now and wait for pending bags."""
+            self._tick(force=True)
+            deadline = time.monotonic() + timeout_s
+            while (self._jobs.unfinished_tasks
+                   and time.monotonic() < deadline):
+                time.sleep(0.05)
 
         def _write_loop(self):
             while True:
-                start_ns, end_ns, events, messages, latched = self._jobs.get()
-                first = events[0]
-                path = os.path.join(
-                    self._output_dir,
-                    event_dir_name(first['stamp_ns'], first['reason']))
+                job = self._jobs.get()
                 try:
-                    os.makedirs(path, exist_ok=False)
-                    began = time.monotonic()
-                    summary = write_event_bag(
-                        path, messages, latched, self._types, start_ns, {
-                            'start_ns': start_ns,
-                            'end_ns': end_ns,
-                            'odom_at_write': self._last_pose,
-                            'events': [
-                                dict(e, offset_s=round(
-                                    (e['stamp_ns'] - start_ns) / 1e9, 3))
-                                for e in events],
-                        })
-                    removed = prune_event_dirs(
-                        self._output_dir, self._max_total_mb,
-                        self._max_events, keep=path)
-                    self.get_logger().info(
-                        f'wrote {path} ({len(events)} events, '
-                        f'{sum(summary["message_counts"].values())} msgs, '
-                        f'{time.monotonic() - began:.1f} s)'
-                        + (f'; removed {len(removed)} old' if removed
-                           else ''))
-                except Exception as error:  # keep the recorder alive
-                    self.get_logger().error(
-                        f'event bag {path} failed: {error}')
+                    self._write_job(*job)
+                finally:
+                    self._jobs.task_done()
+
+        def _write_job(self, start_ns, end_ns, events, messages, latched):
+            first = events[0]
+            path = os.path.join(
+                self._output_dir,
+                event_dir_name(first['stamp_ns'], first['reason']))
+            try:
+                os.makedirs(path, exist_ok=False)
+                began = time.monotonic()
+                summary = write_event_bag(
+                    path, messages, latched, self._types, start_ns, {
+                        'start_ns': start_ns,
+                        'end_ns': end_ns,
+                        'odom_at_write': self._last_pose,
+                        'events': [
+                            dict(e, offset_s=round(
+                                (e['stamp_ns'] - start_ns) / 1e9, 3))
+                            for e in events],
+                    })
+                removed = prune_event_dirs(
+                    self._output_dir, self._max_total_mb,
+                    self._max_events, keep=path)
+                self.get_logger().info(
+                    f'wrote {path} ({len(events)} events, '
+                    f'{sum(summary["message_counts"].values())} msgs, '
+                    f'{time.monotonic() - began:.1f} s)'
+                    + (f'; removed {len(removed)} old' if removed
+                       else ''))
+            except Exception as error:  # keep the recorder alive
+                self.get_logger().error(
+                    f'event bag {path} failed: {error}')
 
     rclpy.init(args=args)
     node = NavEventRecorder()
@@ -508,6 +571,7 @@ def main(args=None):
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
+        node.flush()
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

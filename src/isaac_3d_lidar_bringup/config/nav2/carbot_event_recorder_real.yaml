@@ -33,6 +33,9 @@ nav_event_recorder:
       - /rosout:rcl_interfaces/msg/Log
     latched_topics: [/tf_static]
     reliable_topics: [/rosout, /navigate_to_pose/_action/status]
+    # Published only on (re)planning or goal changes: each bag also gets the
+    # message current when its window opened.
+    keep_last_topics: [/plan, /navigate_to_pose/_action/status]
     pre_s: 30.0
     post_s: 10.0
     max_post_s: 60.0
@@ -44,6 +47,9 @@ nav_event_recorder:
     rosout_trigger_level: 40
     rosout_trigger_patterns: ['Goal was canceled']
     rosout_ignore_patterns: ['']
-    rosout_repeat_s: 30.0
+    # A repeat within 5 s is one event.  30 s dropped the second "Failed to
+    # make progress" (17 s after the first) and the escape that followed
+    # (2026-10-21).
+    rosout_repeat_s: 5.0
     no_progress_window_s: 20.0
     no_progress_distance_m: 0.05
