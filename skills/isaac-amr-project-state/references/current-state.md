@@ -1,6 +1,16 @@
 # Current authoritative project state
 
-## Detour route check and Jetson CPU work: 2026-10-20 (resume here)
+## Event recorder, RPP speed floors, IMU gap monitor, RL direction: 2026-10-21 (resume here)
+
+- **Resume from `docs/handoff_2026-10-21_recorder_rl.md`** (Chinese); `docs/handoff_2026-10-20_detour_cpu.md` still holds the detour rules, CPU numbers, deployment and robot-test procedures.
+- main `b249a54`. Jetson bringup `e33f65b` (IN_SYNC). `carbot-ros2` IMU files (`carbot_hardware_cpp`, `carbot_hardware`) = main, deployed by hand (backup `.deploy_backup/imugap137-20261021-233748`), IMU 200 Hz.
+- Always-on `nav_event_recorder` (#134/#135, default on) keeps 30 s of nav topics in RAM and writes a bag to Jetson `~/Projects/isaac_ros-dev/nav_events/` around ERROR logs, "Goal was canceled", aborted goals, 20 s without progress and localization faults. No raw LiDAR/IMU. 14.6 % of one core at READY. Copy bags back with rsync after each session; today's are in `output/issue1_robot/nav_events/`.
+- #136: RPP `regulated_linear_scaling_min_speed` and `min_approach_linear_velocity` 0.04 -> 0.06 m/s (above the 0.05 m/s forward track deadband) after a goal-side hover stall.
+- #137: IMU adapters log `MID-360 IMU input gap` (ERROR) after a pause > 0.5 s. A FAST-LIO silence fault on 2026-10-21 23:31 showed stall-then-catch-up output with continuous raw LiDAR; IMU wait suspected, unconfirmed. Check for this ERROR at the next stall.
+- User direction: fixes must generalize; do not ask the user to record per scenario. Issue #132 (Nav2 route + RL local avoidance with a hard veto) is under review, not yet decided. Rule-based detour work is frozen; the "goal next to an unmapped obstacle -> repeated RPP refusal and backing" loop is left for RL.
+- `start_real_nav.sh` rotation-only localization fails with an obstacle within 0.5 m; `start_auto_nav.sh` needs the operator's `y`, which the agent must not supply.
+
+## Detour route check and Jetson CPU work: 2026-10-20
 
 - **Resume from `docs/handoff_2026-10-20_detour_cpu.md`** (Chinese): current deployment, detour rules, robot test results, CPU numbers, deployment and testing procedures, open items.
 - main `7c92657`. The Jetson bringup runs `4e68df7` (#129); **#130 is merged but not deployed**. `carbot-ros2` on the Jetson has `carbot_hardware_cpp` (C++ IMU adapter, default in `mid360_stack.launch.py`) built by hand; power mode MAXN_SUPER.
