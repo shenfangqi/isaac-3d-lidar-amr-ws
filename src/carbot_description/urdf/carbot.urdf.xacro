@@ -163,25 +163,25 @@
     <!-- Visual-only MID-360 envelope. Sensor origins and physical parameters
          remain defined by the fixed joints and canonical calibration above. -->
     <visual name="mid360_mount_visual">
-      <origin xyz="0 0 ${p['sensors']['mid360']['visual_proxy']['mount_size_m'][2] / 2.0}" rpy="0 0 0"/>
+      <origin xyz="0 0 ${p['geometry']['mid360_visual_proxy']['mount_size_m'][2] / 2.0}" rpy="0 0 0"/>
       <geometry>
-        <box size="${p['sensors']['mid360']['visual_proxy']['mount_size_m'][0]} ${p['sensors']['mid360']['visual_proxy']['mount_size_m'][1]} ${p['sensors']['mid360']['visual_proxy']['mount_size_m'][2]}"/>
+        <box size="${p['geometry']['mid360_visual_proxy']['mount_size_m'][0]} ${p['geometry']['mid360_visual_proxy']['mount_size_m'][1]} ${p['geometry']['mid360_visual_proxy']['mount_size_m'][2]}"/>
       </geometry>
       <material name="mid360_mount_gray"/>
     </visual>
     <visual name="mid360_body_visual">
-      <origin xyz="0 0 ${p['sensors']['mid360']['visual_proxy']['mount_size_m'][2] + p['sensors']['mid360']['visual_proxy']['body_size_m'][2] / 2.0}" rpy="0 0 0"/>
+      <origin xyz="0 0 ${p['geometry']['mid360_visual_proxy']['mount_size_m'][2] + p['geometry']['mid360_visual_proxy']['body_size_m'][2] / 2.0}" rpy="0 0 0"/>
       <geometry>
-        <box size="${p['sensors']['mid360']['visual_proxy']['body_size_m'][0]} ${p['sensors']['mid360']['visual_proxy']['body_size_m'][1]} ${p['sensors']['mid360']['visual_proxy']['body_size_m'][2]}"/>
+        <box size="${p['geometry']['mid360_visual_proxy']['body_size_m'][0]} ${p['geometry']['mid360_visual_proxy']['body_size_m'][1]} ${p['geometry']['mid360_visual_proxy']['body_size_m'][2]}"/>
       </geometry>
       <material name="mid360_body_gray"/>
     </visual>
     <visual name="mid360_scan_window_visual">
-      <origin xyz="0 0 ${lidar_housing_height - p['sensors']['mid360']['visual_proxy']['scan_window_height_m'] / 2.0}" rpy="0 0 0"/>
+      <origin xyz="0 0 ${lidar_housing_height - p['geometry']['mid360_visual_proxy']['scan_window_height_m'] / 2.0}" rpy="0 0 0"/>
       <geometry>
         <cylinder
-          radius="${p['sensors']['mid360']['visual_proxy']['scan_window_radius_m']}"
-          length="${p['sensors']['mid360']['visual_proxy']['scan_window_height_m']}"/>
+          radius="${p['geometry']['mid360_visual_proxy']['scan_window_radius_m']}"
+          length="${p['geometry']['mid360_visual_proxy']['scan_window_height_m']}"/>
       </geometry>
       <material name="mid360_window_black"/>
     </visual>

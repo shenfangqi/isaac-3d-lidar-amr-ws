@@ -32,6 +32,15 @@ geometry:
     size_m: [0.225, 0.213, 0.010]
     # Places the calibrated MID-360 centre 0.110 m behind the front edge.
     position_from_base_link_m: [0.01406608, 0.0, 0.0061]
+  mid360_visual_proxy:
+    # Visual-only approximation inside Livox's official 65 x 65 x 60 mm
+    # envelope. These parts do not add collision, inertia or sensor offsets.
+    # Kept outside sensors.mid360 so visual edits do not change the
+    # extrinsics_hash of the accepted motion profiles.
+    mount_size_m: [0.058, 0.058, 0.006]
+    body_size_m: [0.065, 0.065, 0.040]
+    scan_window_radius_m: 0.028
+    scan_window_height_m: 0.014
   wheel_groups:
     front_idler:
       x_m: 0.111250
@@ -198,12 +207,10 @@ sensors:
       operating_temperature_c: [-20.0, 55.0]
       ingress_protection: IP67
     visual_proxy:
-      # Visual-only approximation inside Livox's official 65 x 65 x 60 mm
-      # envelope. These parts do not add collision, inertia or sensor offsets.
-      mount_size_m: [0.058, 0.058, 0.006]
-      body_size_m: [0.065, 0.065, 0.040]
-      scan_window_radius_m: 0.028
-      scan_window_height_m: 0.014
+      # Unused legacy value kept only because this section is hashed into the
+      # accepted motion profiles (extrinsics_hash). The visual model is
+      # geometry.mid360_visual_proxy.
+      radius_m: 0.025
 
 interfaces:
   wheel_ticks:
@@ -370,6 +377,7 @@ provenance:
     category: temporary_estimate
     status: TEMP_ESTIMATE_NOT_CALIBRATED
     scope:
+      - geometry.mid360_visual_proxy
       - sensors.mid360.visual_proxy
       - dynamics.calibration_status
       - dynamics.per_wheel_mass_kg

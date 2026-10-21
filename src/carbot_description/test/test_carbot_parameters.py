@@ -177,6 +177,7 @@ def test_temporary_values_are_explicitly_unvalidated(parameters):
     temporary_source = parameters["provenance"][marker]
     assert temporary_source["status"] == marker
     assert set(temporary_source["scope"]) == {
+        "geometry.mid360_visual_proxy",
         "sensors.mid360.visual_proxy",
         "dynamics.calibration_status",
         "dynamics.per_wheel_mass_kg",

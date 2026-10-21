@@ -196,7 +196,7 @@ def test_lidar_housing_top_matches_measured_height(description, parameters):
         "mid360_body_visual",
         "mid360_scan_window_visual",
     }
-    proxy = lidar["visual_proxy"]
+    proxy = parameters["geometry"]["mid360_visual_proxy"]
     mount_size = [
         float(value) for value in
         visuals["mid360_mount_visual"].find("geometry/box").attrib["size"].split()
