@@ -1,6 +1,7 @@
 """Publish Livox MID-360 acceleration using ROS SI units."""
 
 import math
+import time
 
 import rclpy
 from nav_msgs.msg import Odometry
@@ -11,6 +12,7 @@ from sensor_msgs.msg import Imu
 
 from .imu_units import (
     STANDARD_GRAVITY_MPS2,
+    InputGapMonitor,
     StationaryBiasEstimator,
     acceleration_g_to_mps2,
     covariance_with_fallback_diagonal,
@@ -40,8 +42,16 @@ class Mid360ImuAdapter(Node):
             [1.0e-4, 1.0e-4, 4.0e-6],
         )
         self.declare_parameter("gyro_z_uncalibrated_variance", 1.0e-2)
+        # FAST-LIO waits for IMU data past each LiDAR scan, so a pause here
+        # stalls its odometry (2026-10-21: four 2 s stalls, then a silence
+        # fault).  ERROR level lets nav_event_recorder keep the moment.
+        self.declare_parameter("input_gap_report_s", 0.5)
 
         input_topic = self.get_parameter("input_topic").value
+        self._input_topic = input_topic
+        self._input_gap = InputGapMonitor(
+            float(self.get_parameter("input_gap_report_s").value)
+        )
         output_topic = self.get_parameter("output_topic").value
         self._output_frame_id = str(
             self.get_parameter("output_frame_id").value
@@ -119,6 +129,16 @@ class Mid360ImuAdapter(Node):
         )
 
     def _on_imu(self, source):
+        gap = self._input_gap.update(
+            time.monotonic(),
+            source.header.stamp.sec + source.header.stamp.nanosec * 1e-9,
+        )
+        if gap is not None:
+            self.get_logger().error(
+                "MID-360 IMU input gap: %.2f s without %s "
+                "(header stamps advanced %.2f s)"
+                % (gap[0], self._input_topic, gap[1])
+            )
         converted = Imu()
         corrected_sec, corrected_nanosec = shift_ros_stamp(
             source.header.stamp.sec,
