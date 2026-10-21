@@ -3,6 +3,7 @@
 // half a core for 200 Hz IMU messages (2026-10-19), nearly all of it rclpy
 // per-message overhead.
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <memory>
 #include <stdexcept>
@@ -26,9 +27,13 @@ public:
     gyro_z_bias_(
       declare_parameter<int64_t>("gyro_z_bias_min_samples", 400),
       declare_parameter<int64_t>("gyro_z_bias_window_samples", 2000),
-      declare_parameter<double>("gyro_z_bias_max_abs_rad_s", 0.03))
+      declare_parameter<double>("gyro_z_bias_max_abs_rad_s", 0.03)),
+    // FAST-LIO waits for IMU data past each LiDAR scan, so a pause here
+    // stalls its odometry (2026-10-21: four 2 s stalls, then a silence
+    // fault).  ERROR level lets nav_event_recorder keep the moment.
+    input_gap_(declare_parameter<double>("input_gap_report_s", 0.5))
   {
-    const auto input_topic = declare_parameter<std::string>("input_topic", "/livox/imu");
+    input_topic_ = declare_parameter<std::string>("input_topic", "/livox/imu");
     const auto output_topic = declare_parameter<std::string>(
       "output_topic", "/mid360/imu/data_raw");
     output_frame_id_ = declare_parameter<std::string>("output_frame_id", "imu_link");
@@ -78,7 +83,7 @@ public:
     publisher_ = create_publisher<sensor_msgs::msg::Imu>(
       output_topic, rclcpp::SensorDataQoS());
     subscription_ = create_subscription<sensor_msgs::msg::Imu>(
-      input_topic, rclcpp::SensorDataQoS(),
+      input_topic_, rclcpp::SensorDataQoS(),
       [this](sensor_msgs::msg::Imu::ConstSharedPtr message) {on_imu(*message);});
     wheel_odom_subscription_ = create_subscription<nav_msgs::msg::Odometry>(
       wheel_odom_topic, 10,
@@ -87,7 +92,7 @@ public:
       get_logger(),
       "converting MID-360 acceleration from g to m/s^2: %s -> %s; frame=%s; "
       "timestamp correction=%+.9f s",
-      input_topic.c_str(), output_topic.c_str(), output_frame_id_.c_str(),
+      input_topic_.c_str(), output_topic.c_str(), output_frame_id_.c_str(),
       timestamp_correction_s_);
   }
 
@@ -101,6 +106,17 @@ private:
 
   void on_imu(const sensor_msgs::msg::Imu & source)
   {
+    const double arrival_s = std::chrono::duration<double>(
+      std::chrono::steady_clock::now().time_since_epoch()).count();
+    InputGap gap{};
+    if (input_gap_.update(
+        arrival_s, source.header.stamp.sec + source.header.stamp.nanosec * 1e-9, gap))
+    {
+      RCLCPP_ERROR(
+        get_logger(),
+        "MID-360 IMU input gap: %.2f s without %s (header stamps advanced %.2f s)",
+        gap.arrival_gap_s, input_topic_.c_str(), gap.stamp_gap_s);
+    }
     auto converted = std::make_unique<sensor_msgs::msg::Imu>();
     const auto stamp = shift_ros_stamp(
       source.header.stamp.sec, source.header.stamp.nanosec, timestamp_correction_s_);
@@ -140,6 +156,8 @@ private:
   }
 
   StationaryBiasEstimator gyro_z_bias_;
+  InputGapMonitor input_gap_;
+  std::string input_topic_;
   std::string output_frame_id_;
   double gravity_mps2_{};
   double timestamp_correction_s_{};

@@ -2,6 +2,7 @@ import pytest
 
 from carbot_hardware.imu_units import (
     STANDARD_GRAVITY_MPS2,
+    InputGapMonitor,
     StationaryBiasEstimator,
     acceleration_g_to_mps2,
     covariance_with_fallback_diagonal,
@@ -92,3 +93,20 @@ def test_reported_covariance_is_preserved():
     assert covariance_with_fallback_diagonal(source, [1.0, 2.0, 3.0]) == tuple(
         source
     )
+
+
+def test_input_gap_is_reported_once_the_stream_resumes():
+    monitor = InputGapMonitor(0.5)
+    assert monitor.update(10.0, 100.0) is None
+    assert monitor.update(10.005, 100.005) is None
+    # Delivery stalled: nothing arrived for 2 s, stamps kept advancing.
+    assert monitor.update(12.005, 100.010) == pytest.approx((2.0, 0.005))
+    # Samples lost at the source: stamps jumped while arrivals stayed regular.
+    assert monitor.update(12.010, 101.010) == pytest.approx((0.005, 1.0))
+    assert monitor.update(12.015, 101.015) is None
+
+
+def test_input_gap_threshold_must_be_positive():
+    for threshold in (0.0, -1.0, float("inf"), float("nan")):
+        with pytest.raises(ValueError):
+            InputGapMonitor(threshold)

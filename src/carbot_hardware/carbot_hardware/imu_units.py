@@ -91,6 +91,36 @@ def scale_covariance(covariance, scale):
     return tuple(float(value) * scale_squared for value in covariance)
 
 
+class InputGapMonitor:
+    """Report a pause in a sensor stream once the next message arrives."""
+
+    def __init__(self, threshold_s):
+        threshold_s = float(threshold_s)
+        if not math.isfinite(threshold_s) or threshold_s <= 0.0:
+            raise ValueError("threshold_s must be finite and positive")
+        self._threshold_s = threshold_s
+        self._previous = None
+
+    def update(self, arrival_s, stamp_s):
+        """
+        Return (arrival_gap_s, stamp_gap_s) after a pause, otherwise None.
+
+        ``arrival_s`` is a monotonic receive time and ``stamp_s`` the message
+        header time: a long arrival gap with a short stamp gap means delivery
+        stalled, a long stamp gap means samples were lost at the source.
+        """
+        arrival_s = float(arrival_s)
+        stamp_s = float(stamp_s)
+        gap = None
+        if self._previous is not None:
+            arrival_gap = arrival_s - self._previous[0]
+            stamp_gap = stamp_s - self._previous[1]
+            if arrival_gap > self._threshold_s or stamp_gap > self._threshold_s:
+                gap = (arrival_gap, stamp_gap)
+        self._previous = (arrival_s, stamp_s)
+        return gap
+
+
 def shift_ros_stamp(sec, nanosec, correction_s):
     """Add a signed correction to a ROS timestamp and normalize the result."""
     correction_s = float(correction_s)

@@ -101,6 +101,51 @@ inline std::array<double, 9> scale_covariance(const std::array<double, 9> & cova
   return result;
 }
 
+// Report a pause in a sensor stream once the next message arrives.  A long
+// arrival gap with a short stamp gap means delivery stalled; a long stamp gap
+// means samples were lost at the source.
+struct InputGap
+{
+  double arrival_gap_s;
+  double stamp_gap_s;
+};
+
+class InputGapMonitor
+{
+public:
+  explicit InputGapMonitor(double threshold_s)
+  : threshold_s_(threshold_s)
+  {
+    if (!(threshold_s > 0.0) || !std::isfinite(threshold_s)) {
+      throw std::invalid_argument("threshold_s must be finite and positive");
+    }
+  }
+
+  // arrival_s is a monotonic receive time, stamp_s the message header time.
+  bool update(double arrival_s, double stamp_s, InputGap & gap)
+  {
+    bool report = false;
+    if (has_previous_) {
+      const double arrival_gap = arrival_s - previous_arrival_s_;
+      const double stamp_gap = stamp_s - previous_stamp_s_;
+      if (arrival_gap > threshold_s_ || stamp_gap > threshold_s_) {
+        gap = {arrival_gap, stamp_gap};
+        report = true;
+      }
+    }
+    has_previous_ = true;
+    previous_arrival_s_ = arrival_s;
+    previous_stamp_s_ = stamp_s;
+    return report;
+  }
+
+private:
+  double threshold_s_;
+  bool has_previous_{false};
+  double previous_arrival_s_{};
+  double previous_stamp_s_{};
+};
+
 // Add a signed correction to a ROS timestamp and normalize the result.
 inline std::pair<int64_t, int64_t> shift_ros_stamp(int64_t sec, int64_t nanosec, double correction_s)
 {

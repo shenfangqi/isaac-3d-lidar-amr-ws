@@ -8,6 +8,8 @@
 
 #include "carbot_hardware_cpp/imu_units.hpp"
 
+using carbot_hardware_cpp::InputGap;
+using carbot_hardware_cpp::InputGapMonitor;
 using carbot_hardware_cpp::StationaryBiasEstimator;
 using carbot_hardware_cpp::covariance_with_fallback_diagonal;
 using carbot_hardware_cpp::scale_covariance;
@@ -73,4 +75,29 @@ TEST(ImuUnits, BiasEstimatorRejectsInvalidSettings)
   EXPECT_THROW(StationaryBiasEstimator(0, 4, 0.03), std::invalid_argument);
   EXPECT_THROW(StationaryBiasEstimator(5, 4, 0.03), std::invalid_argument);
   EXPECT_THROW(StationaryBiasEstimator(3, 4, 0.0), std::invalid_argument);
+}
+
+TEST(ImuUnits, InputGapIsReportedOnceTheStreamResumes)
+{
+  InputGapMonitor monitor(0.5);
+  InputGap gap{};
+  EXPECT_FALSE(monitor.update(10.0, 100.0, gap));
+  EXPECT_FALSE(monitor.update(10.005, 100.005, gap));
+  // Delivery stalled: nothing arrived for 2 s, stamps kept advancing.
+  ASSERT_TRUE(monitor.update(12.005, 100.010, gap));
+  EXPECT_NEAR(gap.arrival_gap_s, 2.0, 1e-9);
+  EXPECT_NEAR(gap.stamp_gap_s, 0.005, 1e-9);
+  // Samples lost at the source: stamps jumped while arrivals stayed regular.
+  ASSERT_TRUE(monitor.update(12.010, 101.010, gap));
+  EXPECT_NEAR(gap.arrival_gap_s, 0.005, 1e-9);
+  EXPECT_NEAR(gap.stamp_gap_s, 1.0, 1e-9);
+  EXPECT_FALSE(monitor.update(12.015, 101.015, gap));
+}
+
+TEST(ImuUnits, InputGapThresholdMustBePositive)
+{
+  EXPECT_THROW(InputGapMonitor(0.0), std::invalid_argument);
+  EXPECT_THROW(InputGapMonitor(-1.0), std::invalid_argument);
+  EXPECT_THROW(
+    InputGapMonitor(std::numeric_limits<double>::infinity()), std::invalid_argument);
 }
