@@ -33,6 +33,15 @@
   <material name="sensor_gray">
     <color rgba="0.16 0.17 0.18 1.0"/>
   </material>
+  <material name="mid360_mount_gray">
+    <color rgba="0.22 0.23 0.24 1.0"/>
+  </material>
+  <material name="mid360_body_gray">
+    <color rgba="0.10 0.11 0.12 1.0"/>
+  </material>
+  <material name="mid360_window_black">
+    <color rgba="0.015 0.02 0.025 1.0"/>
+  </material>
 
   <link name="base_footprint"/>
 
@@ -151,14 +160,30 @@
   <xacro:wheel side="right" group="rear_drive" y="${-track_y}"/>
 
   <link name="lidar_link">
-    <visual name="mid360_proxy_visual">
-      <origin xyz="0 0 ${lidar_housing_height / 2.0}" rpy="0 0 0"/>
+    <!-- Visual-only MID-360 envelope. Sensor origins and physical parameters
+         remain defined by the fixed joints and canonical calibration above. -->
+    <visual name="mid360_mount_visual">
+      <origin xyz="0 0 ${p['geometry']['mid360_visual_proxy']['mount_size_m'][2] / 2.0}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${p['geometry']['mid360_visual_proxy']['mount_size_m'][0]} ${p['geometry']['mid360_visual_proxy']['mount_size_m'][1]} ${p['geometry']['mid360_visual_proxy']['mount_size_m'][2]}"/>
+      </geometry>
+      <material name="mid360_mount_gray"/>
+    </visual>
+    <visual name="mid360_body_visual">
+      <origin xyz="0 0 ${p['geometry']['mid360_visual_proxy']['mount_size_m'][2] + p['geometry']['mid360_visual_proxy']['body_size_m'][2] / 2.0}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${p['geometry']['mid360_visual_proxy']['body_size_m'][0]} ${p['geometry']['mid360_visual_proxy']['body_size_m'][1]} ${p['geometry']['mid360_visual_proxy']['body_size_m'][2]}"/>
+      </geometry>
+      <material name="mid360_body_gray"/>
+    </visual>
+    <visual name="mid360_scan_window_visual">
+      <origin xyz="0 0 ${lidar_housing_height - p['geometry']['mid360_visual_proxy']['scan_window_height_m'] / 2.0}" rpy="0 0 0"/>
       <geometry>
         <cylinder
-          radius="${p['sensors']['mid360']['visual_proxy']['radius_m']}"
-          length="${lidar_housing_height}"/>
+          radius="${p['geometry']['mid360_visual_proxy']['scan_window_radius_m']}"
+          length="${p['geometry']['mid360_visual_proxy']['scan_window_height_m']}"/>
       </geometry>
-      <material name="sensor_gray"/>
+      <material name="mid360_window_black"/>
     </visual>
   </link>
   <joint name="base_link_to_lidar_link" type="fixed">

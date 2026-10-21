@@ -39,7 +39,7 @@ def tof_pattern(robot, spec, device):
     directions = torch.stack((torch.ones_like(vertical), horizontal, vertical), -1).reshape(-1, 3)
     directions = torch.nn.functional.normalize(directions, dim=-1)
     starts, rays = [], []
-    for _, px, py, pz, yaw in vl53l5cx_placements(robot['geometry']['body_visual_base_plate'], mount):
+    for _, px, py, pz, yaw in vl53l5cx_placements(robot['geometry'], mount):
         rotation = rotation_rpy(0, 0, math.radians(yaw), device)
         optical_offset = rotation @ torch.tensor([mount['board_size_m'][0]/2, 0., 0.], device=device)
         origin = torch.tensor([px, py, pz], device=device) + optical_offset
