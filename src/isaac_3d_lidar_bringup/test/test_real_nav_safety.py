@@ -20,6 +20,8 @@ def _load_yaml(path):
 def test_real_nav_limits_are_conservative():
     nav = _load_yaml(
         PACKAGE_DIR / 'config/nav2/carbot_navigation_real.yaml')
+    canonical = _load_yaml(
+        SOURCE_DIR / 'carbot_description/config/carbot_parameters.yaml')
 
     controller = nav['controller_server']['ros__parameters']['FollowPath']
     controller_server = nav['controller_server']['ros__parameters']
@@ -37,7 +39,14 @@ def test_real_nav_limits_are_conservative():
     assert controller['lookahead_dist'] <= 0.15
     assert controller['use_regulated_linear_velocity_scaling'] is True
     assert controller['regulated_linear_scaling_min_radius'] >= 0.40
-    assert 0.0 < controller['regulated_linear_scaling_min_speed'] <= 0.04
+    # A nonzero forward command below the track deadband does not move the
+    # robot (2026-10-21 stall next to a goal), so both speed floors stay
+    # above the measured deadband and below the cruise speed.
+    deadband = canonical['hardware_response']['track_deadband'][
+        'forward_min_sustainable_mps']
+    for floor in ('regulated_linear_scaling_min_speed',
+                  'min_approach_linear_velocity'):
+        assert deadband < controller[floor] <= 0.07
     assert controller['use_cost_regulated_linear_velocity_scaling'] is True
     assert controller['cost_scaling_dist'] <= 0.25
     assert controller['inflation_cost_scaling_factor'] == 3.0
